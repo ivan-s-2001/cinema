@@ -207,8 +207,8 @@ final class CinemaCatalog {
             if(cached!=null&&cached.expiresAt>System.currentTimeMillis())return new JSONObject(cached.json);
             try{
                 String filter=AVAILABLE+" AND serial:"+type.equals("series");
-                if(category.equals("animation"))filter+=" AND genre_name:\\"мультфильм\\"";
-                if(category.equals("scifi"))filter+=" AND genre_name:\\"фантастика\\"";
+                if(category.equals("animation"))filter+=" AND genre_name:\"мультфильм\"";
+                if(category.equals("scifi"))filter+=" AND genre_name:\"фантастика\"";
                 if(category.startsWith("top"))filter+=" AND rating_kinopoisk:[8 TO *]";
                 if(!search.trim().isEmpty())filter+=" AND "+Logic.searchQuery(search);
                 JSONObject result=Net.select("movie",filter,category.startsWith("new")?"release_date desc":"popularity desc",skip,24,FIELDS);
