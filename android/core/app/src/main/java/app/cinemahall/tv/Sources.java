@@ -25,18 +25,21 @@ final class Sources {
     }
     static final class Candidate {
         final String link,hash,quality,translation,languages,provider;
+        final List<String> technologyHints;
         final int seeds;
         final JSONObject episodeFiles;
         Candidate(JSONObject value){this(value,"zona");}
         Candidate(JSONObject value,String origin){
             provider=origin;
             if("zona".equals(origin)){
+                technologyHints=Logic.releaseTechnologyHints(value.optString("name",value.optString("title",value.optString("torrent_name"))));
                 link=value.optString("torrent_download_link");
                 String id=value.optString("hash");hash=id.isEmpty()?Logic.infoHash(link):id.toLowerCase(Locale.ROOT);
                 quality=Logic.qualityLabel(value.optString("resolution"));
                 translation=value.optString("translate_info").trim();languages=value.optString("languages_parser").toLowerCase(Locale.ROOT);seeds=value.optInt("seeds");
                 JSONObject mapping;try{mapping=new JSONObject(value.optString("episodes_map_auto","{}"));}catch(Exception ignored){mapping=new JSONObject();}episodeFiles=mapping;
             }else{
+                technologyHints=Logic.releaseTechnologyHints(value.optString("Title",value.optString("Name")));
                 String magnet=value.optString("Magnet");
                 link=Logic.validLink(magnet)?magnet:value.optString("Link");
                 String id=value.optString("Hash");hash=id.isEmpty()?Logic.infoHash(link):id.toLowerCase(Locale.ROOT);
