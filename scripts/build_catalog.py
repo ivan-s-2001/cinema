@@ -20,6 +20,8 @@ from pathlib import Path
 KINO = "https://kinoapi.lampac.dev/api/v1"
 TMDB = "https://api.themoviedb.org/3"
 ANILIST = "https://graphql.anilist.co"
+JIKAN = "https://api.jikan.moe/v4"
+_last_jikan_request = 0.0
 CINEMETA = "https://v3-cinemeta.strem.io"
 TVMAZE = "https://api.tvmaze.com"
 ZONA = "https://zsolr3.zonasearch.com/solr/torrent/select"
@@ -44,7 +46,7 @@ _opener = urllib.request.build_opener(SameHostRedirect())
 
 def fetch(url, *, key="", body=None, optional=False):
     """Small bounded HTTP client. Keys are sent in headers, never URLs or logs."""
-    global _last_kino_request
+    global _last_kino_request, _last_jikan_request
     headers = {"User-Agent": "CinemaHall/0.4", "Accept": "application/json"}
     if url.startswith(KINO + "/"):
         if not key:
@@ -57,6 +59,12 @@ def fetch(url, *, key="", body=None, optional=False):
         if delay > 0:
             time.sleep(delay)
         _last_kino_request = time.monotonic()
+    elif url.startswith(JIKAN + "/"):
+        # Public Jikan is rate limited. Run only in snapshot generation, never on the TV.
+        delay = 0.65 - (time.monotonic() - _last_jikan_request)
+        if delay > 0:
+            time.sleep(delay)
+        _last_jikan_request = time.monotonic()
     elif url.startswith(TMDB + "/"):
         if not key:
             return None
@@ -316,6 +324,30 @@ def enrich(row, tmdb_key=""):
             append_art(row, "poster", (media.get("coverImage") or {}).get("extraLarge"))
             append_art(row, "backdrop", media.get("bannerImage"), verified=True)
             row["sources"].append("anilist")
+    # Keyless MyAnimeList fallback via Jikan; exact MAL ID prevents false matches.
+    # Use only when anime metadata/artwork is incomplete, never replace verified images.
+    mal_id = ids.get("myAnimeList")
+    if mal_id and (not art["poster"] or not row["genres"] or not row.get("description")):
+        try:
+            mal_number = int(mal_id)
+        except (TypeError, ValueError):
+            mal_number = 0
+        if mal_number > 0:
+            response = fetch(f"{JIKAN}/anime/{mal_number}", optional=True) or {}
+            anime = response.get("data") or {}
+            if anime.get("mal_id") == mal_number:
+                row["aliases"] = distinct(row["aliases"] + [
+                    anime.get("title"), anime.get("title_english"), anime.get("title_japanese")
+                ] + [alias.get("title") for alias in (anime.get("titles") or []) if isinstance(alias, dict)])
+                row["genres"] = distinct(row["genres"] + [
+                    genre.get("name") for genre in (anime.get("genres") or [])
+                    if isinstance(genre, dict) and genre.get("name")
+                ])
+                if not row.get("description") and anime.get("synopsis"):
+                    row["description"] = anime["synopsis"].strip()
+                images = (anime.get("images") or {}).get("jpg") or {}
+                append_art(row, "poster", images.get("large_image_url") or images.get("image_url"))
+                row["sources"].append("jikan")
     if not art["poster"] or not art["backdropVerified"]:
         imdb = ids.get("imdb", "")
         if imdb.startswith("tt") and imdb[2:].isdigit():
