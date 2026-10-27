@@ -152,7 +152,8 @@ export async function handleAdmin(req, res, pool) {
     const [file, type] = FILES[path];
     const csp = "default-src 'none'; script-src 'self'; style-src 'self'; img-src https: data:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'";
     res.writeHead(200, { 'content-type': type, 'content-security-policy': csp,
-      'x-frame-options': 'DENY', 'x-content-type-options': 'nosniff', 'cache-control': 'no-store' });
+      'x-frame-options': 'DENY', 'x-content-type-options': 'nosniff',
+      'referrer-policy': 'no-referrer', 'cache-control': 'no-store' });
     res.end(readFileSync(join(directory, file)));
     return true;
   }
