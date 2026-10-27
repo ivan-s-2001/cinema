@@ -148,6 +148,26 @@ final class Sources {
         for(Candidate c:all)if((quality.isEmpty()||quality.equals(c.quality))&&(translation.isEmpty()||Logic.voiceKey(translation).equals(Logic.voiceKey(c.translation))))result.add(c);
         result.sort((a,b)->Integer.compare(b.score(autoTarget)+experienceScore(b),a.score(autoTarget)+experienceScore(a)));return result;
     }
+    /** Automatic playback tries distinct quality/voice combinations before exhausting
+     * one release family. Keeps the highest-ranked candidate first. */
+    static ArrayList<Candidate> automaticFallbacks(List<Candidate> all,String target){
+        ArrayList<Candidate> ranked=ordered(all,"","",target);
+        LinkedHashMap<String,ArrayDeque<Candidate>> groups=new LinkedHashMap<>();
+        for(Candidate c:ranked){
+            String group=c.quality+"|"+Logic.voiceKey(c.translation);
+            groups.computeIfAbsent(group,k->new ArrayDeque<>()).addLast(c);
+        }
+        ArrayList<Candidate> result=new ArrayList<>(ranked.size());
+        boolean more;
+        do{
+            more=false;
+            for(ArrayDeque<Candidate> candidates:groups.values()){
+                Candidate next=candidates.pollFirst();
+                if(next!=null){result.add(next);more=true;}
+            }
+        }while(more);
+        return result;
+    }
     /** One quality tab -> unique voice choices -> ordered source fallbacks. No torrent URLs in UI options. */
     static LinkedHashMap<String,LinkedHashMap<String,ArrayList<Candidate>>> grouped(List<Candidate> all,String target){
         TreeMap<String,LinkedHashMap<String,ArrayList<Candidate>>> levels=new TreeMap<>((a,b)->{
