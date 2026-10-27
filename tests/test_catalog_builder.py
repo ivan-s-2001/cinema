@@ -2,7 +2,7 @@
 import unittest
 from unittest.mock import patch
 
-from scripts.build_catalog import append_art, build, details, enrich, merge_catalog, normalize, split_snapshot, zona_availability
+from scripts.build_catalog import append_art, build, details, enrich, merge_catalog, normalize, sized_artwork, split_snapshot, zona_availability
 
 
 def record(kind="movie", imdb="tt0137523", kp=361, tmdb=550, name="Бойцовский клуб"):
@@ -19,6 +19,13 @@ def record(kind="movie", imdb="tt0137523", kp=361, tmdb=550, name="Бойцов�
 
 
 class CatalogTests(unittest.TestCase):
+    def test_tmdb_images_use_valid_sizes(self):
+        poster = "https://image.tmdb.org/t/p/original/poster.jpg"
+        wide = "https://image.tmdb.org/t/p/w1280/backdrop.jpg"
+        self.assertEqual(sized_artwork(poster, "poster"), "https://image.tmdb.org/t/p/w500/poster.jpg")
+        self.assertEqual(sized_artwork(wide, "backdrop"), "https://image.tmdb.org/t/p/original/backdrop.jpg")
+        self.assertEqual(sized_artwork("https://example.org/image.jpg", "backdrop"), "https://example.org/image.jpg")
+
     def test_art_aliases_voiceovers_are_not_streams(self):
         row = normalize(record())
         self.assertEqual(row["images"]["backdrop"], "https://image.tmdb.org/t/p/original/landscape.jpg")
