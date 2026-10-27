@@ -12,6 +12,10 @@ final class CinemaSnapshot {
     private JSONArray lookup;
     private final Map<String,JSONObject> byId=new HashMap<>();
     private boolean checked;
+    // Bounded parsed shelf cache: rapid D-pad navigation must not rescan or sort the full index.
+    private final LinkedHashMap<String,String> shelfCache=new LinkedHashMap<String,String>(20,.75f,true){
+        @Override protected boolean removeEldestEntry(Map.Entry<String,String> e){return size()>20;}
+    };
     private final LinkedHashMap<String,JSONArray> shards=new LinkedHashMap<String,JSONArray>(4,.75f,true){@Override protected boolean removeEldestEntry(Map.Entry<String,JSONArray> e){return size()>2;}};
     CinemaSnapshot(Context context){this.context=context;}
     private JSONObject index;
@@ -37,6 +41,9 @@ final class CinemaSnapshot {
     }
     synchronized JSONObject catalog(String type,String category,String query,int skip) throws Exception {
         init();if(index==null)return null;
+        String cacheKey=type+"|"+category+"|"+query+"|"+skip;
+        String cached=shelfCache.get(cacheKey);
+        if(cached!=null)return new JSONObject(cached);
         JSONArray all=search(),result=new JSONArray();String needle=words(query);ArrayList<JSONObject> matches=new ArrayList<>();
         for(int i=0;i<all.length();i++){
             JSONObject entry=all.getJSONObject(i);if(!entry.optString("type").equals(type.equals("series")?"tv":"movie"))continue;
@@ -55,7 +62,9 @@ final class CinemaSnapshot {
             matches.sort((a,b)->Double.compare(ratings.get(b.optString("id")),ratings.get(a.optString("id"))));
         }
         for(int i=skip;i<Math.min(matches.size(),skip+24);i++)result.put(compact(matches.get(i)));
-        return new JSONObject().put("metas",result).put("hasMore",skip+24<matches.size());
+        JSONObject response=new JSONObject().put("metas",result).put("hasMore",skip+24<matches.size());
+        shelfCache.put(cacheKey,response.toString());
+        return response;
     }
     private static double ratingValue(Object value){if(value instanceof Number)return ((Number)value).doubleValue();if(value instanceof JSONObject)return ((JSONObject)value).optDouble("value",((JSONObject)value).optDouble("rating",0));return 0;}
     private static double rating(JSONObject scores){if(scores==null)return 0;for(String key:new String[]{"kinopoisk","imdb","tmdb"}){Object v=scores.opt(key);if(v instanceof Number)return ((Number)v).doubleValue();if(v instanceof JSONObject){double value=((JSONObject)v).optDouble("value",0);if(value>0)return value;}}return 0;}
