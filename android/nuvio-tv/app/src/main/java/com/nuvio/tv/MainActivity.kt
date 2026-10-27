@@ -730,10 +730,8 @@ open class MainActivity : ComponentActivity() {
                     val effectiveExperienceMode = mainUiPrefs.experienceMode
                         ?: if (layoutChosen) ExperienceMode.ADVANCED else null
                     val needsExperienceSelection = effectiveExperienceMode == null
-                    val needsEssentialAddonSetup =
-                        effectiveExperienceMode == ExperienceMode.ESSENTIAL &&
-                            installedAddons.orEmpty().isEmpty() &&
-                            !mainUiPrefs.addonSetupSkipped
+                    // CinemaHall ships its own catalogue; third-party add-on onboarding is unnecessary.
+                    val needsEssentialAddonSetup = false
                     val pendingDeepLink by pendingDeepLinkUrl.collectAsState()
 
                     LaunchedEffect(pendingDeepLink) {
@@ -914,15 +912,8 @@ open class MainActivity : ComponentActivity() {
                                 }
                             }
                             is AppDeepLink.AddonInstall -> {
-                                navController.navigate(Screen.AddonManager.route) {
-                                    launchSingleTop = true
-                                }
-                                Toast.makeText(context, context.getString(R.string.addon_installing), Toast.LENGTH_SHORT).show()
-                                val installResult = deepLinkHandler.installAddon(deepLink.manifestUrl)
-                                if (pendingDeepLinkUrl.value == url) {
-                                    pendingDeepLinkUrl.value = null
-                                }
-                                Toast.makeText(context, installResult.message, Toast.LENGTH_LONG).show()
+                                // Ignore externally supplied manifests: only CinemaHall API is trusted.
+                                pendingDeepLinkUrl.value = null
                             }
                             null -> {
                                 pendingDeepLinkUrl.value = null
