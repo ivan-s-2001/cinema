@@ -779,6 +779,7 @@ private fun RightStreamSection(
     hazeState: HazeState?,
     modifier: Modifier = Modifier
 ) {
+    val cinemaStreams = streams.isNotEmpty() && streams.all { it.addonName == "CinemaHall" && it.name?.startsWith("CinemaHall · ") == true }
     val isRtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
     var enter by remember { mutableStateOf(false) }
     var firstStreamFocusRequestId by remember { mutableStateOf(0) }
@@ -924,7 +925,7 @@ private fun RightStreamSection(
                 // Addon filter chips
                 Box(modifier = Modifier.height(NuvioTheme.spacing.huge)) {
                     androidx.compose.animation.AnimatedVisibility(
-                        visible = sourceChips.isNotEmpty() || (!isLoading && availableAddons.isNotEmpty()),
+                        visible = !cinemaStreams && (sourceChips.isNotEmpty() || (!isLoading && availableAddons.isNotEmpty())),
                         enter = fadeIn(animationSpec = tween(300)),
                         exit = fadeOut(animationSpec = tween(300))
                     ) {
@@ -967,7 +968,9 @@ private fun RightStreamSection(
                             EmptyState()
                         }
                         else -> {
-                            StreamsList(
+                            if (cinemaStreams) {
+                                CinemaHallQualityVoicePicker(streams = streams, onStreamSelected = onStreamSelected)
+                            } else StreamsList(
                                 streams = streams,
                                 sharedStream = sharedStream,
                                 partySource = partySource,
@@ -995,6 +998,90 @@ private fun RightStreamSection(
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+
+/** CinemaHall playback options: quality first, voice second; releases stay internal to the API. */
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun CinemaHallQualityVoicePicker(
+    streams: List<Stream>,
+    onStreamSelected: (Stream) -> Unit
+) {
+    val order = remember { listOf("4K", "2K", "1080p", "720p", "576p", "480p", "360p", "240p") }
+    val groups = remember(streams) {
+        streams.groupBy { it.name.orEmpty().removePrefix("CinemaHall · ").trim().ifEmpty { "Не указано" } }
+            .toList()
+            .sortedWith(compareBy({ order.indexOf(it.first).let { rank -> if (rank < 0) 99 else rank } }, { it.first }))
+    }
+    var quality by remember(groups) { mutableStateOf(groups.firstOrNull()?.first.orEmpty()) }
+    val voices = groups.firstOrNull { it.first == quality }?.second.orEmpty()
+        .distinctBy { it.title.orEmpty().trim().lowercase() }
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.lg)
+    ) {
+        Text(
+            text = "Качество",
+            style = MaterialTheme.typography.titleMedium,
+            color = NuvioTheme.colors.TextPrimary
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)) {
+            items(groups, key = { it.first }) { entry ->
+                val selected = quality == entry.first
+                Card(
+                    onClick = { quality = entry.first },
+                    colors = CardDefaults.colors(
+                        containerColor = if (selected) NuvioTheme.colors.Secondary else NuvioTheme.colors.BackgroundCard,
+                        focusedContainerColor = NuvioTheme.colors.Secondary
+                    ),
+                    border = CardDefaults.border(focusedBorder = Border(
+                        border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs),
+                        shape = RoundedCornerShape(NuvioTheme.radii.sm)
+                    )),
+                    shape = CardDefaults.shape(shape = RoundedCornerShape(NuvioTheme.radii.sm))
+                ) {
+                    Text(
+                        text = entry.first,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (selected) NuvioTheme.colors.OnSecondary else NuvioTheme.colors.TextPrimary,
+                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 13.dp)
+                    )
+                }
+            }
+        }
+        Text(
+            text = "Озвучка",
+            style = MaterialTheme.typography.titleMedium,
+            color = NuvioTheme.colors.TextPrimary
+        )
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
+            modifier = Modifier.weight(1f)
+        ) {
+            items(voices, key = { it.stableKey() }) { stream ->
+                Card(
+                    onClick = { onStreamSelected(stream) },
+                    colors = CardDefaults.colors(
+                        containerColor = NuvioTheme.colors.BackgroundCard,
+                        focusedContainerColor = NuvioTheme.colors.Secondary
+                    ),
+                    border = CardDefaults.border(focusedBorder = Border(
+                        border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs),
+                        shape = RoundedCornerShape(NuvioTheme.radii.sm)
+                    )),
+                    shape = CardDefaults.shape(shape = RoundedCornerShape(NuvioTheme.radii.sm))
+                ) {
+                    Text(
+                        text = stream.title?.takeIf { it.isNotBlank() } ?: "Озвучка не указана",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = NuvioTheme.colors.TextPrimary,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)
+                    )
                 }
             }
         }
