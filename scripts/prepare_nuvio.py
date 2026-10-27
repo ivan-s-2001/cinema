@@ -10,6 +10,15 @@ TARGETS = {"tv": ("nuvio-tv", "c3f68d84a5e0ec8fea7a027443a9beca50d32c31"),
 def prepare(target):
     name, expected = TARGETS[target]
     directory = ROOT / "android" / name
+    # Vendored source trees are already integrated; legacy patches target submodules only.
+    if not (ROOT / ".gitmodules").exists():
+        module = "app" if target == "tv" else "androidApp"
+        if not (directory / "gradlew").is_file():
+            raise RuntimeError(f"{name}: vendored sources are missing")
+        ET.parse(directory / module / "src/main/AndroidManifest.xml")
+        (directory / "local.properties").touch(exist_ok=True)
+        print(f"{name}: using vendored sources")
+        return
     if not (directory / ".git").exists():
         subprocess.run(["git", "-C", str(ROOT), "submodule", "update", "--init", "--depth", "1", "--", f"android/{name}"], check=True)
     revision = subprocess.check_output(["git", "-C", str(directory), "rev-parse", "HEAD"], text=True).strip()

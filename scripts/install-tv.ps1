@@ -95,6 +95,7 @@ foreach ($BuildTarget in $BuildTargets) {
     if (Test-Path $BuildPatch) { $Patches += $BuildPatch }
     $ArtworkPatch = Join-Path $RepoRoot ('android\' + $ProjectName + '-artwork.patch')
     if (Test-Path $ArtworkPatch) { $Patches += $ArtworkPatch }
+    if (Test-Path (Join-Path $RepoRoot '.gitmodules')) {
     foreach ($Patch in $Patches) {
         $ErrorActionPreference = 'Continue'
         try {
@@ -107,6 +108,7 @@ foreach ($BuildTarget in $BuildTargets) {
             if (-not $CanApply) { throw "$ProjectName contains local changes. They were preserved; the integration patch could not be applied." }
             Invoke-Checked { git -C $AppRoot apply $Patch }
         }
+    }
     }
     $PropertiesPath = Join-Path $AppRoot 'local.properties'
     $ExistingProperties = if (Test-Path $PropertiesPath) { @(Get-Content -LiteralPath $PropertiesPath) } else { @() }

@@ -1,7 +1,7 @@
 name: CinemaHall Nuvio TV and Mobile
 on:
   push:
-    branches: [rewrite/streambert-android]
+    branches: [rewrite/streambert-android, feat/cinemahall-nuvio-quality-voice]
   pull_request:
   workflow_dispatch:
 concurrency:
@@ -41,7 +41,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [tv, mobile]
+        target: [tv]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4

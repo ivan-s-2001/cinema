@@ -444,6 +444,7 @@ internal fun PlayerRuntimeController.evaluatePostPlayOverlayVisibility(positionM
 }
 
 internal fun PlayerRuntimeController.showStreamSourceIndicator(stream: Stream) {
+    if (stream.addonName == "CinemaHall") return
     val chosenSource = (stream.name?.takeIf { it.isNotBlank() } ?: stream.addonName).trim()
     if (chosenSource.isBlank()) return
 
