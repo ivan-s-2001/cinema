@@ -1,0 +1,169 @@
+diff --git a/app/src/main/java/com/nuvio/tv/MainActivity.kt b/app/src/main/java/com/nuvio/tv/MainActivity.kt
+index 9b39c91..7ffa7d0 100644
+--- a/app/src/main/java/com/nuvio/tv/MainActivity.kt
++++ b/app/src/main/java/com/nuvio/tv/MainActivity.kt
+@@ -406,26 +406,11 @@ open class MainActivity : ComponentActivity() {
+             var focusedSplashTheme by remember { mutableStateOf<AppTheme?>(null) }
+             var onboardingCompletedThisSession by remember { mutableStateOf(false) }
+             var onboardingProfileSyncInProgress by remember { mutableStateOf(false) }
+-            val hasSeenAuthQrFlow = remember(appOnboardingDataStore) {
+-                appOnboardingDataStore.hasSeenAuthQrOnFirstLaunch.map<Boolean, Boolean?> { it }
+-            }
+-            val hasSeenAuthQrOnFirstLaunch by hasSeenAuthQrFlow.collectAsState(initial = null)
++            // CinemaHall uses local profiles; no Nuvio account onboarding.
++            val hasSeenAuthQrOnFirstLaunch: Boolean? = true
+             val authState by authManager.authState.collectAsState()
+             val context = LocalContext.current
+ 
+-            LaunchedEffect(authSessionNoticeDataStore, context) {
+-                authSessionNoticeDataStore.pendingNotice.collect { notice ->
+-                    if (notice == StartupAuthNotice.NUVIO) {
+-                        Toast.makeText(
+-                            context,
+-                            context.getString(R.string.auth_notice_nuvio_logged_out),
+-                            Toast.LENGTH_LONG
+-                        ).show()
+-                        authSessionNoticeDataStore.consumeNotice(notice)
+-                    }
+-                }
+-            }
+-
+             PartyEffects(partyRepository)
+ 
+             LaunchedEffect(hasSeenAuthQrOnFirstLaunch, authState) {
+@@ -740,50 +725,6 @@ open class MainActivity : ComponentActivity() {
+ 
+                     if (!surfaceContentReady) {
+                         // Still loading auth state; nothing to show yet.
+-                    } else if (
+-                        hasSeenAuthQrOnFirstLaunch == false &&
+-                        authState !is AuthState.FullAccount &&
+-                        !onboardingCompletedThisSession
+-                    ) {
+-                        startupDestination = StartupDestination.Setup
+-                        AuthQrSignInScreen(
+-                            onBackPress = { finish() },
+-                            onContinue = {
+-                                lifecycleScope.launch {
+-                                    val shouldRunRemoteOnboardingSync =
+-                                        authManager.authState.value is AuthState.FullAccount
+-
+-                                    if (shouldRunRemoteOnboardingSync) {
+-                                        if (onboardingProfileSyncInProgress) return@launch
+-                                        onboardingProfileSyncInProgress = true
+-                                        val maxAttempts = 3
+-                                        var synced = false
+-                                        for (attempt in 0 until maxAttempts) {
+-                                            val result = profileSyncService.pullFromRemote()
+-                                            if (result.isSuccess) {
+-                                                synced = true
+-                                                break
+-                                            }
+-                                            if (attempt < maxAttempts - 1) {
+-                                                delay(1_000)
+-                                            }
+-                                        }
+-                                        if (!synced) {
+-                                            android.util.Log.w(
+-                                                "MainActivity",
+-                                                "Onboarding profile sync failed after retries; continuing"
+-                                            )
+-                                        }
+-                                    }
+-                                    appOnboardingDataStore.setHasSeenAuthQrOnFirstLaunch(true)
+-                                    onboardingCompletedThisSession = true
+-                                    onboardingProfileSyncInProgress = false
+-                                }
+-                                if (authManager.authState.value is AuthState.FullAccount) {
+-                                    startupSyncService.requestSyncNow()
+-                                }
+-                            }
+-                        )
+                     } else {
+ 
+                     val shouldShowProfileSelection =
+diff --git a/app/src/main/java/com/nuvio/tv/core/auth/AuthManager.kt b/app/src/main/java/com/nuvio/tv/core/auth/AuthManager.kt
+index 2a7b20b..962e512 100644
+--- a/app/src/main/java/com/nuvio/tv/core/auth/AuthManager.kt
++++ b/app/src/main/java/com/nuvio/tv/core/auth/AuthManager.kt
+@@ -95,7 +95,7 @@ class AuthManager @Inject constructor(
+     private val startupAuthLock = Any()
+     private val authHttpClient = if (serverConfiguration.isCustom) customServerHttpClient else httpClient
+ 
+-    private val _authState = MutableStateFlow<AuthState>(AuthState.Loading)
++    private val _authState = MutableStateFlow<AuthState>(AuthState.SignedOut)
+     val authState: StateFlow<AuthState> = _authState.asStateFlow()
+ 
+     private var cachedEffectiveUserId: String? = null
+@@ -103,9 +103,7 @@ class AuthManager @Inject constructor(
+     private var startupAuthDiagnostics: AuthDiagnosticsSession? = null
+     private var startupAuthCompleted = false
+ 
+-    init {
+-        observeSessionStatus()
+-    }
++    // CinemaHall stays local: do not observe or restore Nuvio sessions.
+ 
+     private fun observeSessionStatus() {
+         scope.launch {
+diff --git a/app/src/main/java/com/nuvio/tv/core/di/SupabaseModule.kt b/app/src/main/java/com/nuvio/tv/core/di/SupabaseModule.kt
+index 5fb2631..c18074e 100644
+--- a/app/src/main/java/com/nuvio/tv/core/di/SupabaseModule.kt
++++ b/app/src/main/java/com/nuvio/tv/core/di/SupabaseModule.kt
+@@ -111,9 +111,9 @@ object SupabaseModule {
+                 }
+             }
+             install(Auth) {
+-                alwaysAutoRefresh = true
+-                autoLoadFromStorage = true
+-                autoSaveToStorage = true
++                alwaysAutoRefresh = false
++                autoLoadFromStorage = false
++                autoSaveToStorage = false
+                 enableLifecycleCallbacks = false
+             }
+             install(Postgrest)
+diff --git a/app/src/main/java/com/nuvio/tv/ui/navigation/NuvioNavHost.kt b/app/src/main/java/com/nuvio/tv/ui/navigation/NuvioNavHost.kt
+index be0e9e5..7237c7c 100644
+--- a/app/src/main/java/com/nuvio/tv/ui/navigation/NuvioNavHost.kt
++++ b/app/src/main/java/com/nuvio/tv/ui/navigation/NuvioNavHost.kt
+@@ -1399,21 +1399,15 @@ private fun PlaybackNavHost(
+         }
+ 
+         composable(Screen.Account.route) {
+-            AuthQrSignInScreen(
+-                onBackPress = { navController.popBackStack() }
+-            )
++            LaunchedEffect(Unit) { navController.popBackStack() }
+         }
+ 
+         composable(Screen.AuthSignIn.route) {
+-            AuthQrSignInScreen(
+-                onBackPress = { navController.popBackStack() }
+-            )
++            LaunchedEffect(Unit) { navController.popBackStack() }
+         }
+ 
+         composable(Screen.AuthQrSignIn.route) {
+-            AuthQrSignInScreen(
+-                onBackPress = { navController.popBackStack() }
+-            )
++            LaunchedEffect(Unit) { navController.popBackStack() }
+         }
+ 
+         composable(Screen.LayoutSettings.route) {
+diff --git a/app/src/main/java/com/nuvio/tv/ui/screens/settings/SettingsScreen.kt b/app/src/main/java/com/nuvio/tv/ui/screens/settings/SettingsScreen.kt
+index 9f75a94..83701ac 100644
+--- a/app/src/main/java/com/nuvio/tv/ui/screens/settings/SettingsScreen.kt
++++ b/app/src/main/java/com/nuvio/tv/ui/screens/settings/SettingsScreen.kt
+@@ -209,8 +209,8 @@ fun SettingsScreen(
+             isPrimaryProfile = isPrimaryProfileActive,
+             isEssentialMode = isEssentialMode,
+             isDebugBuild = BuildConfig.IS_DEBUG_BUILD,
+-            isWatchPartyAvailable = isWatchPartyAvailable
+-        )
++            isWatchPartyAvailable = false
++        ).filterNot { it == SettingsCategory.ACCOUNT || it == SettingsCategory.WATCH_PARTY }
+     }
+     val visibleSections = visibleCategories.map { category -> settingsSectionSpec(category) }
+ 
