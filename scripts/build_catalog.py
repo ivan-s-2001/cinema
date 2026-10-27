@@ -579,9 +579,9 @@ def split_snapshot(result, shard_size=250):
 def main():
     parser = argparse.ArgumentParser(description="Build a KinoAPI-led static metadata catalog")
     parser.add_argument("--pages", type=int, default=15, help="Popular pages per movie/TV type (100 titles each)")
-    parser.add_argument("--enrich", type=int, default=30, help="Maximum optional cross-provider enrichments")
-    parser.add_argument("--details", type=int, default=12, help="Popular detail cards with cast, recommendations and seasons")
-    parser.add_argument("--season-limit", type=int, default=3, help="Maximum seasons with full episode metadata per detailed show")
+    parser.add_argument("--enrich", type=int, default=100, help="Maximum optional cross-provider enrichments")
+    parser.add_argument("--details", type=int, default=48, help="Popular detail cards with cast, recommendations and seasons")
+    parser.add_argument("--season-limit", type=int, default=8, help="Maximum seasons with full episode metadata per detailed show")
     parser.add_argument("--output", default="catalog/index.json")
     parser.add_argument("--shard-size", type=int, default=250)
     parser.add_argument("--availability", type=int, default=200, help="Top KinoPoisk IDs to probe in Zona (0 disables)")
