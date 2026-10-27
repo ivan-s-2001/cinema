@@ -1,7 +1,7 @@
-name: CinemaHall Nuvio TV and Mobile
+name: CinemaHall Android TV
 on:
   push:
-    branches: [rewrite/streambert-android, feat/cinemahall-nuvio-quality-voice]
+    branches: [main, feat/cinemahall-nuvio-quality-voice]
   pull_request:
   workflow_dispatch:
 concurrency:
@@ -86,7 +86,7 @@ jobs:
         with:
           name: CinemaHall-bundled-catalogue
           path: android/core/app/src/main/assets/catalog/
-      - name: Build full upstream interface with our provider
+      - name: Build CinemaHall TV APK with catalogue
         shell: bash
         run: |
           if [ '${{ matrix.target }}' = 'tv' ]; then
@@ -98,5 +98,5 @@ jobs:
           fi
       - uses: actions/upload-artifact@v4
         with:
-          name: CinemaHall-Nuvio-${{ matrix.target }}
+          name: CinemaHall-TV-debug
           path: android/nuvio-*/**/build/outputs/apk/full/debug/*.apk
