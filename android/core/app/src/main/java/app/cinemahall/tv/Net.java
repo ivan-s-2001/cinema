@@ -7,7 +7,8 @@ import java.nio.charset.StandardCharsets;
 
 final class Net {
     static final String CATALOG = "https://zsolr3.zonasearch.com/solr/";
-    static final String ENGINE = "http://127.0.0.1:18990";
+    static int ENGINE_PORT = 18990;
+    static String ENGINE = "http://127.0.0.1:18990";
     static String enc(String s) {
         try { return URLEncoder.encode(s, "UTF-8"); }
         catch (UnsupportedEncodingException impossible) { throw new AssertionError(impossible); }

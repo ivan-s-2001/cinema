@@ -27,7 +27,7 @@ public final class TorrentService extends Service {
         try {
             File data = new File(getFilesDir(), "torrserver"); data.mkdirs();
             File executable = new File(getApplicationInfo().nativeLibraryDir, "libtorrserver.so");
-            ProcessBuilder builder = new ProcessBuilder(executable.toString(), "-p", "18990", "-i", "127.0.0.1", "-d", data.toString());
+            ProcessBuilder builder = new ProcessBuilder(executable.toString(), "-p", String.valueOf(Net.ENGINE_PORT), "-i", "127.0.0.1", "-d", data.toString());
             builder.redirectErrorStream(true).redirectOutput(new File(getCacheDir(), "torrserver.log"));
             builder.environment().put("GOMEMLIMIT", "192MiB");
             synchronized (this) {

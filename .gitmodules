@@ -1,3 +1,6 @@
-[submodule "web/streambert"]
-	path = web/streambert
-	url = https://github.com/truelockmc/streambert.git
+[submodule "android/nuvio-tv"]
+	path = android/nuvio-tv
+	url = https://github.com/NuvioMedia/NuvioTV.git
+[submodule "android/nuvio-mobile"]
+	path = android/nuvio-mobile
+	url = https://github.com/NuvioMedia/NuvioMobile.git

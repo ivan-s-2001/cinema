@@ -1,7 +1,8 @@
 ﻿#Requires -Version 5.1
 [CmdletBinding()]
 param(
-    [string]$TvAddress = '192.168.8.118:5555',
+    [Alias('DeviceAddress')][string]$TvAddress = '192.168.8.118:5555',
+    [ValidateSet('tv','mobile','both')][string]$Target = 'tv',
     [switch]$BuildOnly
 )
 $ErrorActionPreference = 'Stop'
@@ -76,43 +77,58 @@ if (-not (Test-Path $SdkManager)) {
 $env:ANDROID_HOME = $SdkRoot
 $env:ANDROID_SDK_ROOT = $SdkRoot
 Invoke-Checked { 1..100 | ForEach-Object { 'y' } | & $SdkManager "--sdk_root=$SdkRoot" --licenses }
-Invoke-Checked { & $SdkManager "--sdk_root=$SdkRoot" 'platform-tools' 'platforms;android-35' 'build-tools;35.0.0' }
-$AppRoot = Join-Path $RepoRoot 'android\core'
-('sdk.dir=' + $SdkRoot.Replace('\','/')) | Set-Content -Encoding ASCII (Join-Path $AppRoot 'local.properties')
-$GradleRoot = Join-Path $ToolsRoot 'gradle-8.9'
-if (-not (Test-Path "$GradleRoot\bin\gradle.bat")) {
-    $zip = Join-Path $ToolsRoot 'gradle-8.9.zip'
-    $checksum = (Get-RemoteText 'https://services.gradle.org/distributions/gradle-8.9-bin.zip.sha256').Trim()
-    if ($checksum -notmatch '^[a-fA-F0-9]{64}$') { throw 'Invalid Gradle checksum response.' }
-    Download-Verified 'https://services.gradle.org/distributions/gradle-8.9-bin.zip' $zip $checksum
-    Expand-Archive -LiteralPath $zip -DestinationPath $ToolsRoot -Force
+Invoke-Checked { & $SdkManager "--sdk_root=$SdkRoot" 'platform-tools' 'platforms;android-36' 'build-tools;36.0.0' }
+if ($Target -ne 'tv') {
+    Invoke-Checked { & $SdkManager "--sdk_root=$SdkRoot" 'platforms;android-37.1' }
 }
-$Gradle = Join-Path $GradleRoot 'bin\gradle.bat'
+$BuildTargets = if ($Target -eq 'both') { @('tv','mobile') } else { @($Target) }
+foreach ($BuildTarget in $BuildTargets) {
+    $ProjectName = if ($BuildTarget -eq 'tv') { 'nuvio-tv' } else { 'nuvio-mobile' }
+    $AppRoot = Join-Path $RepoRoot ('android\' + $ProjectName)
+    Write-Host "Preparing $ProjectName" -ForegroundColor Cyan
+    Invoke-Checked { git -C $RepoRoot submodule update --init --depth 1 -- ('android/' + $ProjectName) }
+    $Patch = Join-Path $RepoRoot ('android\' + $ProjectName + '.patch')
+    $ErrorActionPreference = 'Continue'
+    try {
+        git -C $AppRoot apply --reverse --check $Patch 2>$null
+        $AlreadyApplied = ($LASTEXITCODE -eq 0)
+        git -C $AppRoot apply --check $Patch 2>$null
+        $CanApply = ($LASTEXITCODE -eq 0)
+    } finally { $ErrorActionPreference = 'Stop' }
+    if (-not $AlreadyApplied) {
+        if (-not $CanApply) { throw "$ProjectName contains local changes. They were preserved; the integration patch could not be applied." }
+        Invoke-Checked { git -C $AppRoot apply $Patch }
+    }
+    ('sdk.dir=' + $SdkRoot.Replace('\','/')) | Set-Content -Encoding ASCII (Join-Path $AppRoot 'local.properties')
+}
 
 Write-Host '[3/6] Встроенный TorrServer, проверка SHA256' -ForegroundColor Cyan
 $engines = @(
     @{ Abi='arm64-v8a'; Name='TorrServer-android-arm64'; Hash='93250bb1850e69663c6758398be515c2c429595cb4692c6eccb367f2236868d5' }, @{ Abi='armeabi-v7a'; Name='TorrServer-android-arm7'; Hash='e775001edf7bfb2adebfde0ba36780357c0951f12203adb367bd69b2b45522b6' }
 )
 foreach ($engine in $engines) {
-    $dir = Join-Path $AppRoot ('app\src\main\jniLibs\' + $engine.Abi)
+    $dir = Join-Path $RepoRoot ('android\core\app\src\main\jniLibs\' + $engine.Abi)
     New-Item -ItemType Directory -Force $dir | Out-Null
     Download-Verified ('https://github.com/YouROK/TorrServer/releases/download/MatriX.147.1/' + $engine.Name) (Join-Path $dir 'libtorrserver.so') $engine.Hash
 }
 
-Write-Host '[4/6] Проверка логики и сборка CinemaHall Preview' -ForegroundColor Cyan
-Push-Location $RepoRoot
-try {
-    New-Item -ItemType Directory -Force 'build\check' | Out-Null
-    Invoke-Checked { & "$JavaRoot\bin\javac.exe" -encoding UTF-8 -d 'build\check' 'android\core\app\src\main\java\app\cinemahall\tv\Logic.java' 'tests\LogicCheck.java' }
-    Invoke-Checked { & "$JavaRoot\bin\java.exe" -cp 'build\check' 'app.cinemahall.tv.LogicCheck' }
+Write-Host '[4/6] Build CinemaHall on Nuvio' -ForegroundColor Cyan
+$BuiltApks = @()
+foreach ($BuildTarget in $BuildTargets) {
+    $ProjectName = if ($BuildTarget -eq 'tv') { 'nuvio-tv' } else { 'nuvio-mobile' }
+    $ModuleName = if ($BuildTarget -eq 'tv') { 'app' } else { 'androidApp' }
+    $AppRoot = Join-Path $RepoRoot ('android\' + $ProjectName)
     Push-Location $AppRoot
     try {
-        Invoke-Checked { & $Gradle --no-daemon ':app:assembleDebug' }
+        Invoke-Checked { & '.\gradlew.bat' --no-daemon '--max-workers=2' '-Dorg.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8' (':' + $ModuleName + ':assembleFullDebug') }
     } finally { Pop-Location }
-} finally { Pop-Location }
-$Apk = Join-Path $AppRoot 'app\build\outputs\apk\debug\app-debug.apk'
-if (-not (Test-Path $Apk)) { throw "APK не найден: $Apk" }
-if ($BuildOnly) { Write-Host "APK готов: $Apk" -ForegroundColor Green; return }
+    $Output = Join-Path $AppRoot ($ModuleName + '\build\outputs\apk\full\debug')
+    $ApkFile = Get-ChildItem -LiteralPath $Output -Filter '*.apk' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if (-not $ApkFile) { throw "APK not found: $Output" }
+    $BuiltApks += @{ Path=$ApkFile.FullName; Package=('app.cinemahall.' + $BuildTarget) }
+    Write-Host ("APK: " + $ApkFile.FullName) -ForegroundColor Green
+}
+if ($BuildOnly) { return }
 
 Write-Host "[5/6] Подключение к ТВ $TvAddress. Разрешите отладку на экране телевизора." -ForegroundColor Cyan
 $Adb = Join-Path $SdkRoot 'platform-tools\adb.exe'
@@ -129,11 +145,11 @@ for ($attempt=0; $attempt -lt 45; $attempt++) {
 }
 if (-not $ready) { throw 'ТВ не авторизовал ADB за 90 секунд. Подтвердите разрешение на ТВ и запустите скрипт повторно.' }
 
-Write-Host '[6/6] Установка и запуск CinemaHall' -ForegroundColor Cyan
-$ErrorActionPreference = 'Continue'
-try { $install = & $Adb -s $TvAddress install -r $Apk 2>&1; $installCode = $LASTEXITCODE } finally { $ErrorActionPreference = 'Stop' }
-$install | ForEach-Object { Write-Host $_ }
-if ($installCode -ne 0) { throw "Installation failed. Existing data was preserved. APK: $Apk. $($install -join ' ')" }
-Invoke-Checked { & $Adb -s $TvAddress shell am start -n 'app.cinemahall.next/app.cinemahall.tv.MainActivity' }
-Write-Host "Готово. CinemaHall установлен и запущен на $TvAddress" -ForegroundColor Green
-Write-Host "Следующий запуск обновит приложение с сохранением данных. APK: $Apk"
+Write-Host '[6/6] Install and launch CinemaHall' -ForegroundColor Cyan
+foreach ($BuiltApk in $BuiltApks) {
+    $Apk = $BuiltApk.Path
+    Invoke-Checked { & $Adb -s $TvAddress install -r $Apk }
+    # Resolve each project's real launcher rather than hard-coding upstream Activity names.
+    Invoke-Checked { & $Adb -s $TvAddress shell monkey -p $BuiltApk.Package -c android.intent.category.LAUNCHER 1 }
+}
+Write-Host "CinemaHall installed. Existing upstream apps were preserved." -ForegroundColor Green

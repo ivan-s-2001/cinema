@@ -11,3 +11,6 @@ __pycache__/
 /catalog/
 
 **/src/main/jniLibs/
+
+**/node_modules/
+/android/core/app/src/main/assets/catalog/

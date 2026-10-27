@@ -1,0 +1,163 @@
+diff --git a/androidApp/build.gradle.kts b/androidApp/build.gradle.kts
+index e126f59..ab21813 100644
+--- a/androidApp/build.gradle.kts
++++ b/androidApp/build.gradle.kts
+@@ -66,7 +66,7 @@ android {
+     }
+ 
+     defaultConfig {
+-        applicationId = "com.nuvio.app"
++        applicationId = "app.cinemahall.mobile"
+         minSdk = libs.versions.android.minSdk.get().toInt()
+         targetSdk = libs.versions.android.targetSdk.get().toInt()
+         versionCode = releaseAppVersionCode
+@@ -145,13 +145,13 @@ android {
+ 
+ androidComponents {
+     onVariants(selector().withBuildType("debug")) { variant ->
+-        variant.applicationId.set("com.nuviodebug.com")
++        variant.applicationId.set("app.cinemahall.mobile")
+     }
+ }
+ 
+ sentry {
+     includeProguardMapping.set(true)
+-    autoUploadProguardMapping.set(sentryMappingUploadEnabled)
++    autoUploadProguardMapping.set(false)
+     uploadNativeSymbols.set(false)
+     autoUploadNativeSymbols.set(false)
+     includeNativeSources.set(false)
+@@ -184,3 +184,7 @@ dependencies {
+     androidTestImplementation("androidx.compose.ui:ui-test-junit4:${libs.versions.composeMultiplatform.get()}")
+     debugImplementation("androidx.compose.ui:ui-test-manifest:${libs.versions.composeMultiplatform.get()}")
+ }
++
++dependencies { implementation(project(":cinemahall-provider")) }
++
++android { packaging { jniLibs { keepDebugSymbols += "**/libtorrserver.so" } } }
+diff --git a/androidApp/src/debug/res/values/strings.xml b/androidApp/src/debug/res/values/strings.xml
+index 0e9eb7a..f0f6a05 100644
+--- a/androidApp/src/debug/res/values/strings.xml
++++ b/androidApp/src/debug/res/values/strings.xml
+@@ -1,4 +1,4 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <resources>
+-    <string name="app_name">Nuvio Debug</string>
++    <string name="app_name">CinemaHall</string>
+ </resources>
+diff --git a/androidApp/src/main/AndroidManifest.xml b/androidApp/src/main/AndroidManifest.xml
+index a73b22a..94ec8e2 100644
+--- a/androidApp/src/main/AndroidManifest.xml
++++ b/androidApp/src/main/AndroidManifest.xml
+@@ -8,7 +8,7 @@
+     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+ 
+-    <application
++    <application android:extractNativeLibs="true"
+         android:name="com.nuvio.app.NuvioApplication"
+         android:allowBackup="false"
+         android:enableOnBackInvokedCallback="false"
+diff --git a/composeApp/src/androidMain/kotlin/com/nuvio/app/features/addons/AddonPlatform.android.kt b/composeApp/src/androidMain/kotlin/com/nuvio/app/features/addons/AddonPlatform.android.kt
+index 29d28f4..cbd9e0b 100644
+--- a/composeApp/src/androidMain/kotlin/com/nuvio/app/features/addons/AddonPlatform.android.kt
++++ b/composeApp/src/androidMain/kotlin/com/nuvio/app/features/addons/AddonPlatform.android.kt
+@@ -46,6 +46,7 @@ actual object AddonStorage {
+             .map { it.trim() }
+             .filter { it.isNotEmpty() }
+             .toList()
++            .let { urls -> listOf("http://127.0.0.1:18992/manifest.json") + urls.filterNot { it.trimEnd('/') == "http://127.0.0.1:18992/manifest.json" } }
+ 
+     actual fun saveInstalledAddonUrls(profileId: Int, urls: List<String>) {
+         preferences
+diff --git a/composeApp/src/androidMain/res/values-bn/strings.xml b/composeApp/src/androidMain/res/values-bn/strings.xml
+index d3ad692..f21b65a 100644
+--- a/composeApp/src/androidMain/res/values-bn/strings.xml
++++ b/composeApp/src/androidMain/res/values-bn/strings.xml
+@@ -1,4 +1,4 @@
+ <?xml version='1.0' encoding='utf-8'?>
+ <resources>
+-    <string name="app_name">Nuvio</string>
++    <string name="app_name">CinemaHall</string>
+ </resources>
+\ No newline at end of file
+diff --git a/composeApp/src/androidMain/res/values-es/strings.xml b/composeApp/src/androidMain/res/values-es/strings.xml
+index f5bd09e..f0f6a05 100644
+--- a/composeApp/src/androidMain/res/values-es/strings.xml
++++ b/composeApp/src/androidMain/res/values-es/strings.xml
+@@ -1,4 +1,4 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <resources>
+-    <string name="app_name">Nuvio</string>
++    <string name="app_name">CinemaHall</string>
+ </resources>
+diff --git a/composeApp/src/androidMain/res/values/strings.xml b/composeApp/src/androidMain/res/values/strings.xml
+index ca8ee55..0b93410 100644
+--- a/composeApp/src/androidMain/res/values/strings.xml
++++ b/composeApp/src/androidMain/res/values/strings.xml
+@@ -1,3 +1,3 @@
+ <resources>
+-    <string name="app_name">Nuvio</string>
++    <string name="app_name">CinemaHall</string>
+ </resources>
+\ No newline at end of file
+diff --git a/composeApp/src/commonMain/kotlin/com/nuvio/app/features/addons/AddonRepository.kt b/composeApp/src/commonMain/kotlin/com/nuvio/app/features/addons/AddonRepository.kt
+index cd5a3df..ccf5167 100644
+--- a/composeApp/src/commonMain/kotlin/com/nuvio/app/features/addons/AddonRepository.kt
++++ b/composeApp/src/commonMain/kotlin/com/nuvio/app/features/addons/AddonRepository.kt
+@@ -121,7 +121,7 @@ object AddonRepository {
+                 }
+                 .decodeList<AddonRow>()
+ 
+-            val rowsByUrl = linkedMapOf<String, AddonRow>()
++            val rowsByUrl = linkedMapOf<String, AddonRow>("http://127.0.0.1:18992/manifest.json" to AddonRow("http://127.0.0.1:18992/manifest.json", "CinemaHall", true, -1))
+             rows.forEach { row ->
+                 val manifestUrl = ensureManifestSuffix(row.url)
+                 if (!rowsByUrl.containsKey(manifestUrl)) {
+diff --git a/composeApp/src/commonMain/kotlin/com/nuvio/app/features/updater/AppUpdaterRepository.kt b/composeApp/src/commonMain/kotlin/com/nuvio/app/features/updater/AppUpdaterRepository.kt
+index f90e8fe..d2ff440 100644
+--- a/composeApp/src/commonMain/kotlin/com/nuvio/app/features/updater/AppUpdaterRepository.kt
++++ b/composeApp/src/commonMain/kotlin/com/nuvio/app/features/updater/AppUpdaterRepository.kt
+@@ -40,7 +40,7 @@ internal object AppUpdaterRepository {
+     suspend fun getLatestChannelUpdate(channel: UpdateChannel): Result<AppUpdate> = runCatching {
+         val response = httpRequestRaw(
+             method = "GET",
+-            url = "https://api.github.com/repos/NuvioMedia/NuvioMobile/${releasePath(channel)}",
++            url = "https://api.github.com/repos/ivan-s-2001/cinema/${releasePath(channel)}",
+             headers = mapOf(
+                 "Accept" to "application/vnd.github+json",
+                 "User-Agent" to "NuvioMobile",
+diff --git a/gradle/libs.versions.toml b/gradle/libs.versions.toml
+index 133b620..03c0ba2 100644
+--- a/gradle/libs.versions.toml
++++ b/gradle/libs.versions.toml
+@@ -2,7 +2,7 @@
+ agp = "9.2.0"
+ android-compileSdk = "37"
+ android-compileSdkMinor = "1"
+-android-minSdk = "24"
++android-minSdk = "26"
+ android-targetSdk = "36"
+ androidx-activity = "1.12.2"
+ androidx-navigation3 = "1.2.0"
+diff --git a/gradle/wrapper/gradle-wrapper.properties b/gradle/wrapper/gradle-wrapper.properties
+index c61a118..fd5e7a4 100644
+--- a/gradle/wrapper/gradle-wrapper.properties
++++ b/gradle/wrapper/gradle-wrapper.properties
+@@ -5,3 +5,5 @@ networkTimeout=10000
+ validateDistributionUrl=true
+ zipStoreBase=GRADLE_USER_HOME
+ zipStorePath=wrapper/dists
++
++distributionSha256Sum=2ab2958f2a1e51120c326cad6f385153bb11ee93b3c216c5fccebfdfbb7ec6cb
+diff --git a/settings.gradle.kts b/settings.gradle.kts
+index 884dc8e..05ad053 100644
+--- a/settings.gradle.kts
++++ b/settings.gradle.kts
+@@ -30,3 +30,6 @@ dependencyResolutionManagement {
+ 
+ include(":composeApp")
+ include(":androidApp")
++
++include(":cinemahall-provider")
++project(":cinemahall-provider").projectDir = file("../provider")

@@ -1,11 +1,13 @@
 # Third-party components
 
-## Streambert
+## Nuvio TV and Nuvio Mobile
 
-The React frontend and provider definitions are adapted from Streambert.
-Source: https://github.com/truelockmc/streambert
-Revision: 1a4bf7e665a7fd54c6107d62e258346c24ccd66f
-License: GPL-3.0. The original notices and source history are preserved in the submodule. Its Electron desktop process cannot run as an Android runtime, so the Android port needs its own bridge and native player.
+The native interfaces and players are the original Nuvio applications, adapted through checked-in patches rather than recreated screens.
+
+- https://github.com/NuvioMedia/NuvioTV — revision c3f68d84a5e0ec8fea7a027443a9beca50d32c31, GPL-3.0.
+- https://github.com/NuvioMedia/NuvioMobile — revision 61658f366f985fc7758f0942a14c1754c69aca68, GPL-3.0.
+
+Each upstream retains its licence, authorship and dependency notices in its submodule. Nuvio's optional cloud/API services are not supplied as CinemaHall services. Source and integration changes remain available under GPL-3.0.
 
 ## TorrServer
 
@@ -15,16 +17,15 @@ https://github.com/YouROK/TorrServer/releases/tag/MatriX.147.1
 - ARM64 SHA256: 93250bb1850e69663c6758398be515c2c429595cb4692c6eccb367f2236868d5
 - ARMv7 SHA256: e775001edf7bfb2adebfde0ba36780357c0951f12203adb367bd69b2b45522b6
 
-Executables are packaged as libtorrserver.so for nativeLibraryDir extraction and run as subprocesses. They are not loaded through JNI.
+Packaged as libtorrserver.so for nativeLibraryDir extraction; not loaded through JNI.
 
-## Metadata
+## Our metadata adapters
 
-- Zona: independently implemented catalogue requests; no proprietary application code is bundled.
-- TMDB: upstream Streambert's catalogue/images require a free, user-supplied read token. https://developer.themoviedb.org/
-- AniList: upstream Streambert anime metadata, https://anilist.gitbook.io/anilist-apiv2-docs/
-- Cinemeta: public Stremio metadata add-on, https://v3-cinemeta.strem.io/manifest.json. Images remain subject to their respective owners.
-- TVmaze: episode metadata, CC BY-SA 4.0, https://www.tvmaze.com/api. The source show URL and attribution accompany detailed episode metadata.
+- KinoAPI: user-provided key used by our aggregation pipeline, not embedded in clients.
+- Zona: independently implemented catalogue/source requests; no proprietary application code.
+- TMDB: optional user-provided token in our aggregation pipeline.
+- Cinemeta: public metadata fallback, https://v3-cinemeta.strem.io/manifest.json.
+- TVmaze: episode metadata, CC BY-SA 4.0; attribution and show URL accompany detailed episode metadata.
+- AniList: anime metadata in our aggregation pipeline, https://anilist.gitbook.io/anilist-apiv2-docs/.
 
-## CinemaHall
-
-Adapters and packaging changes: GPL-3.0 (LICENSE). Existing CinemaHall notices are kept in the Android core assets. New native components will declare their own third-party dependencies before APK release.
+Images remain subject to their respective owners. CinemaHall adapters and packaging changes are GPL-3.0 (LICENSE).
