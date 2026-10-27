@@ -43,7 +43,7 @@ final class CinemaSnapshot {
             if(!needle.isEmpty()&&!words(entry.optString("title")+" "+entry.optJSONArray("aliases")).contains(needle))continue;
             // Shards are needed for genre-specific lists; do not mislabel the same shelf as another category.
             if(category.equals("animation")||category.equals("scifi")){
-                JSONObject row=raw("ch:snapshot:"+entry.getString("id"));String genres=row==null?"":words(row.optString("genres"));
+                String genres=words(entry.optString("genres"));
                 if(!genres.contains(category.equals("animation")?"мульт":"фантаст"))continue;
             }
             matches.add(entry);
@@ -51,12 +51,13 @@ final class CinemaSnapshot {
         if(category.startsWith("new"))matches.sort((a,b)->Integer.compare(b.optInt("year"),a.optInt("year")));
         // Top shelves use the snapshot's real ratings rather than a relabelled popularity list.
         if(category.startsWith("top")){
-            Map<String,Double> ratings=new HashMap<>();for(JSONObject e:matches){JSONObject row=raw("ch:snapshot:"+e.getString("id"));JSONObject scores=row==null?null:row.optJSONObject("ratings");ratings.put(e.getString("id"),rating(scores));}
+            Map<String,Double> ratings=new HashMap<>();for(JSONObject e:matches){ratings.put(e.getString("id"),ratingValue(e.opt("rating")));}
             matches.sort((a,b)->Double.compare(ratings.get(b.optString("id")),ratings.get(a.optString("id"))));
         }
         for(int i=skip;i<Math.min(matches.size(),skip+24);i++)result.put(compact(matches.get(i)));
         return new JSONObject().put("metas",result).put("hasMore",skip+24<matches.size());
     }
+    private static double ratingValue(Object value){if(value instanceof Number)return ((Number)value).doubleValue();if(value instanceof JSONObject)return ((JSONObject)value).optDouble("value",((JSONObject)value).optDouble("rating",0));return 0;}
     private static double rating(JSONObject scores){if(scores==null)return 0;for(String key:new String[]{"kinopoisk","imdb","tmdb"}){Object v=scores.opt(key);if(v instanceof Number)return ((Number)v).doubleValue();if(v instanceof JSONObject){double value=((JSONObject)v).optDouble("value",0);if(value>0)return value;}}return 0;}
     private static String words(String value){return value.toLowerCase(Locale.ROOT).replace('ё','е').replaceAll("[^\\p{L}\\p{N}]+"," ").trim();}
     private JSONObject compact(JSONObject entry) throws Exception {
