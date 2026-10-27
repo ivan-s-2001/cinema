@@ -1,5 +1,6 @@
 import http from 'node:http';
 import mariadb from 'mariadb';
+import { handleAdmin, startAdminScheduler } from './admin.mjs';
 
 const pool=mariadb.createPool({
   host:'127.0.0.1', port:3306,
@@ -25,6 +26,7 @@ async function query(sql,params=[]){
 const allowedKind=new Set(['movie','series']);
 const server=http.createServer(async(req,res)=>{
  try{
+  if(await handleAdmin(req,res,pool))return;
   if(req.method!=='GET'){reply(res,405,{error:'Method not allowed'});return;}
   const url=new URL(req.url,'http://localhost');
   const route=url.pathname;
@@ -70,5 +72,8 @@ const server=http.createServer(async(req,res)=>{
 });
 server.requestTimeout=10000;
 server.headersTimeout=8000;
-server.listen(port,host,()=>console.log('CinemaHall API listening on '+host+':'+port));
+server.listen(port,host,()=>{
+ console.log('CinemaHall API listening on '+host+':'+port);
+ startAdminScheduler(pool);
+});
 process.on('SIGTERM',()=>server.close(()=>pool.end()));
