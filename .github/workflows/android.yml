@@ -53,6 +53,8 @@ jobs:
             fi
           fi
       - uses: actions/download-artifact@v4
+        id: cached-catalogue
+        continue-on-error: true
         if: steps.snapshot.outputs.available != 'true'
         with:
           name: CinemaHall-bundled-catalogue
@@ -62,8 +64,12 @@ jobs:
       - id: fallback
         if: steps.snapshot.outputs.available != 'true'
         run: |
-          test -s catalog/index.json
-          echo "available=true" >> "$GITHUB_OUTPUT"
+          if [ -s catalog/index.json ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Cached catalogue unavailable; building with live catalogue fallback."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/upload-artifact@v4
         if: steps.snapshot.outputs.available == 'true' || steps.fallback.outputs.available == 'true'
         with:

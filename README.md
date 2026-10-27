@@ -26,7 +26,7 @@ Nuvio's optional third-party account/integration screens are retained, but Cinem
 Git is required; Python and Android Studio are not required by the Windows script.
 
 ```powershell
-git clone --branch feat/cinemahall-nuvio-quality-voice --single-branch https://github.com/ivan-s-2001/cinema.git cinemahall
+git clone --branch main --single-branch https://github.com/ivan-s-2001/cinema.git cinemahall
 cd cinemahall
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-tv.ps1 -TvAddress "192.168.8.118:5555"
 ```

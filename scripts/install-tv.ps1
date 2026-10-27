@@ -182,7 +182,26 @@ foreach ($BuiltApk in $BuiltApks) {
     $Apk = Join-Path $BuiltApk.Output $SelectedApk.outputFile
     Write-Host ("Installing: " + $Apk) -ForegroundColor Cyan
     Invoke-Checked { & $Adb -s $TvAddress install -r $Apk }
-    # Resolve each project's real launcher rather than hard-coding upstream Activity names.
-    Invoke-Checked { & $Adb -s $TvAddress shell monkey -p $BuiltApk.Package -c android.intent.category.LAUNCHER 1 }
+    # TV launchers may expose only LEANBACK_LAUNCHER. Resolve the component
+    # before starting it; monkey can hang or fail even after a successful install.
+    $Categories = if ($BuiltApk.Package -eq 'app.cinemahall.tv') {
+        @('android.intent.category.LEANBACK_LAUNCHER', 'android.intent.category.LAUNCHER')
+    } else { @('android.intent.category.LAUNCHER') }
+    $Component = $null
+    foreach ($Category in $Categories) {
+        $Resolved = & $Adb -s $TvAddress shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c $Category $BuiltApk.Package
+        if ($LASTEXITCODE -ne 0) { throw 'Не удалось определить Activity приложения через ADB.' }
+        $Component = $Resolved | ForEach-Object { $_.Trim() } | Where-Object {
+            $_ -match ('^' + [regex]::Escape($BuiltApk.Package) + '/[^\s]+$')
+        } | Select-Object -Last 1
+        if ($Component) { break }
+    }
+    if (-not $Component) { throw ("Не найдена стартовая Activity: " + $BuiltApk.Package) }
+    $LaunchOutput = & $Adb -s $TvAddress shell am start -W -n $Component
+    $LaunchExitCode = $LASTEXITCODE
+    $LaunchOutput | ForEach-Object { Write-Host $_ }
+    if ($LaunchExitCode -ne 0 -or ($LaunchOutput -match '^\s*(Error:|Error type|Exception)')) {
+        throw ("Не удалось запустить приложение: " + $Component)
+    }
 }
 Write-Host "CinemaHall installed. Existing upstream apps were preserved." -ForegroundColor Green
