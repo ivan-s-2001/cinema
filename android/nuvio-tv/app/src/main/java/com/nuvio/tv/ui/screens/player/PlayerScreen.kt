@@ -2912,7 +2912,7 @@ private fun PlayerControlsOverlay(
                         )
                     }
 
-                    if (uiState.chapters.isNotEmpty() && !isLivePlayback) {
+                    if (uiState.chapters.isNotEmpty() && !isLivePlayback && uiState.showMoreDialog) {
                         ControlButton(
                             icon = Icons.AutoMirrored.Filled.Toc,
                             contentDescription = stringResource(R.string.player_chapters),
@@ -2945,7 +2945,7 @@ private fun PlayerControlsOverlay(
                         )
                     }
 
-                    if (onShowPartyPanel != null) {
+                    if (onShowPartyPanel != null && (partyActive || uiState.showMoreDialog)) {
                         ControlButton(
                             icon = Icons.Rounded.Groups,
                             contentDescription = stringResource(R.string.party_title),
