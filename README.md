@@ -1,56 +1,35 @@
-# CinemaHall — TV + Mobile
+# CinemaHall — Streambert Android
 
-CinemaHall 0.4.0 использует **готовое приложение ARVIO** как основу: главную, карточки, сезоны/эпизоды, навигацию и плеер для Android TV, телефона и планшета. Собственная оболочка прототипа удалена из текущей версии; она доступна в истории Git.
+CinemaHall is being rebuilt for **Android TV and Android phones** using one upstream visual/code base: [Streambert](https://github.com/truelockmc/streambert). The remaining native components are **TorrServer** and a small provider adapter for external catalogues. ARVIO and the old JetStream prototype are not part of this branch.
 
-Upstream: https://github.com/ProdigyV21/ARVIO
-Зафиксированная версия: `814638307236adb8eb572ed343f126de46b61b27`.
+> **Development status:** the pinned upstream Streambert source and the existing Zona/TorrServer adapter are in this branch. Streambert is an **Electron desktop app**, so this branch is **not yet an Android APK**. The Electron IPC bridge, playback layer and D-pad/touch navigation must be ported and tested before replacing `main`. Do not deploy this branch as an update to the current app.
 
-## Устройство проекта
+## Sources and responsibilities
 
-- `android/arvio/` — полный исходный Android-проект ARVIO, закреплённый git submodule.
-- `android/arvio.patch` — изменения конфигурации и точек подключения CinemaHall. Накладываются на закреплённую версию; исходная структура UI сохраняется.
-- `android/overlay/` — наш адаптер каталога и локального воспроизведения, встроенный TorrServer и проверки.
-- `scripts/install-tv.ps1` — автоматическая сборка и установка на ТВ из Windows PowerShell 5.1.
+| Component | Responsibility |
+| --- | --- |
+| `web/streambert/` | Pinned React frontend: home, search, title details, seasons, library, source definitions |
+| `android/core/` | Reusable native Java adapters for Zona, metadata matching and TorrServer |
+| `scripts/fetch_engine.py` | Fetches verified TorrServer MatriX.147.1 binaries for ARM64/ARMv7 |
+| `tests/LogicCheck.java` | Existing Java checks for episode identification, video quality and source ordering |
 
-Каталог Zona подключён через штатный механизм native add-on ARVIO. Собственные ID `ch:` сохраняются при открытии карточек, выборе серий и запуске видео; они не смешиваются с TMDB ID. Cinemeta и TVmaze используются для дополнительных изображений и метаданных. Внешние аккаунты для основного сценария не нужны; облачные интеграции upstream не настроены как сервисы CinemaHall.
+### API plan
 
-Кнопка «Смотреть» использует автоматический выбор. Панель вариантов в готовом плеере адаптирована под «Качество и озвучка»: вкладки доступных разрешений, внутри — варианты озвучки этих разрешений. Технические ссылки и раздачи адаптер не возвращает в UI. На ТВ с поддержкой 4K автоматическая цель движка — 4K, на остальных устройствах — 1080p. Наличие источников не гарантирует успешного воспроизведения каждого фильма.
+Metadata sources are queried independently, then matched by stable identifiers instead of merging records solely on title. A failure in an optional metadata API must not block the catalogue:
 
-Встроенный движок: TorrServer MatriX.147.1, ARM64 + ARMv7. Локальные порты: 18990 (движок) и 18991 (подготовка воспроизведения), только `127.0.0.1`. RAM-кеш движка 96 МиБ. Бинарники скачиваются отдельно и проверяются SHA256.
+- **TMDB** — posters, wide backdrops, genres, overviews, credits; user-supplied free read token.
+- **Zona API** — catalogue availability and source/quality information; unofficial, with no uptime guarantee.
+- **Cinemeta** — fallback metadata and images, particularly IMDb-backed matching.
+- **TVmaze** — seasons, episodes and stills with attribution.
+- **AniList** — anime titles and metadata.
+- **Streambert providers** — optional video-source candidates; an embedded player URL is *not* automatically a direct video stream. Each integration needs source-specific validation.
 
-## Windows: собрать и установить на ТВ
+Quality/voice grouping must use **actual playable options**: Auto, 4K, 2K, 1080p, 720p, 576p, 480p, 360p and below if available. Within each resolution, identical dubbing tracks are deduplicated across sources. The user's selection on a title page and in the player must represent the same option. Failures should fall back to another eligible source without displaying torrents or technical URLs.
 
-```powershell
-git clone --recurse-submodules https://github.com/ivan-s-2001/cinema.git
-cd cinema
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-tv.ps1 -TvAddress "192.168.8.118:5555"
-```
+## Android migration constraints
 
-Для существующей копии: `git pull --ff-only`, затем тот же `install-tv.ps1`.
+The original Streambert uses Electron IPC, desktop windows, local downloads, and Chromium interception, none of which work unchanged on Android. The Android port will retain the React UI where practical, replace Electron with a minimal native bridge, use the native Media3 player, and run TorrServer only when preparing playback. Phone layout and TV D-pad focus must both be verified on hardware. The Android runtime must not include the Electron binary.
 
-Скрипт получает JDK 17, Android SDK 36, исходную базу и движок; применяет адаптер, собирает APK, подключается по ADB и открывает приложение. Python и Android Studio для Windows-сценария не требуются. Первая сборка скачивает большие зависимости. Для компиляции большой базы Kotlin выделено 4 ГБ; Gradle — 2 ГБ, параллельная сборка отключена.
+The original production Android application is still on `main` until this branch builds, its functions are reconnected and the replacement is tested. Previous versions remain recoverable from Git history.
 
-ТВ и ПК должны быть в общей сети. На телевизоре включите сетевую отладку и подтвердите первое подключение. Для закрытого репозитория потребуется авторизация GitHub. При конфликте подписи скрипт спрашивает подтверждение перед удалением установленного приложения и локальных данных. Последующие сборки на одном ПК используют его постоянный debug-ключ; сохраняйте `%USERPROFILE%\.android\debug.keystore`.
-
-Один APK для TV и телефона: `android/arvio/app/build/outputs/apk/sideload/debug/app-sideload-debug.apk`. Пакет `app.cinemahall.tv`; Activity `com.arflix.tv.MainActivity`. `-BuildOnly` собирает без установки.
-
-## Linux / CI
-
-```sh
-git submodule update --init --depth 1
-python3 scripts/prepare_android.py
-python3 scripts/fetch_engine.py
-cd android/arvio
-./gradlew :app:assembleSideloadDebug
-./gradlew :app:testSideloadDebugUnitTest --tests app.cinemahall.tv.CinemaQualityTabsTest
-```
-
-CI публикует универсальный APK в Artifacts. Минимальная версия основной sideload-сборки — Android 8.0; SDK 36 и JDK 17.
-
-## Проверки и лицензии
-
-Сборка APK прошла; 2 теста адаптации прошли. История/избранное старого прототипа не перенесены в формат ARVIO; исходные локальные файлы при обновлении без удаления приложения сохраняются.
-
-Текущий результат проверок: [VERIFICATION.md](VERIFICATION.md). Приложение необходимо испытать на реальных TV и телефоне: сборка не подтверждает правильную работу всех внешних источников и форматов устройства.
-
-ARVIO — Apache-2.0; адаптеры CinemaHall и встроенный TorrServer — GPL-3.0. Уведомления upstream сохранены, дополнительные лицензии упакованы в APK. Подробнее: [THIRD_PARTY.md](THIRD_PARTY.md).
+License: GPL-3.0. See [THIRD_PARTY.md](THIRD_PARTY.md).

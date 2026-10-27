@@ -1,11 +1,11 @@
 # Third-party components
 
-## ARVIO
+## Streambert
 
-The complete Android application is used as the TV, phone and tablet foundation.
-Source: https://github.com/ProdigyV21/ARVIO
-Revision: 814638307236adb8eb572ed343f126de46b61b27
-License: Apache-2.0. Original license, attribution and dependency notices remain in the pinned source. CinemaHall modifications are kept as a separate patch and overlay. Screens, player UI, icons and navigation must not be described as original CinemaHall designs.
+The React frontend and provider definitions are adapted from Streambert.
+Source: https://github.com/truelockmc/streambert
+Revision: 1a4bf7e665a7fd54c6107d62e258346c24ccd66f
+License: GPL-3.0. The original notices and source history are preserved in the submodule. Its Electron desktop process cannot run as an Android runtime, so the Android port needs its own bridge and native player.
 
 ## TorrServer
 
@@ -20,9 +20,11 @@ Executables are packaged as libtorrserver.so for nativeLibraryDir extraction and
 ## Metadata
 
 - Zona: independently implemented catalogue requests; no proprietary application code is bundled.
+- TMDB: upstream Streambert's catalogue/images require a free, user-supplied read token. https://developer.themoviedb.org/
+- AniList: upstream Streambert anime metadata, https://anilist.gitbook.io/anilist-apiv2-docs/
 - Cinemeta: public Stremio metadata add-on, https://v3-cinemeta.strem.io/manifest.json. Images remain subject to their respective owners.
 - TVmaze: episode metadata, CC BY-SA 4.0, https://www.tvmaze.com/api. The source show URL and attribution accompany detailed episode metadata.
 
 ## CinemaHall
 
-Adapters and packaging changes: GPL-3.0 (LICENSE). The upstream Apache-2.0 components keep their original notices and terms. GPL text and CinemaHall-NOTICE are included in APK assets. Other dependencies retain the versions and terms documented by the pinned upstream application.
+Adapters and packaging changes: GPL-3.0 (LICENSE). Existing CinemaHall notices are kept in the Android core assets. New native components will declare their own third-party dependencies before APK release.

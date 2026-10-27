@@ -1,5 +1,5 @@
 package app.cinemahall.tv;
-import com.arflix.tv.R;
+import app.cinemahall.tv.R;
 
 import android.app.*;
 import android.content.*;

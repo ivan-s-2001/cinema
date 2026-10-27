@@ -1,4 +1,3 @@
-[submodule "android/arvio"]
-	path = android/arvio
-	url = https://github.com/ProdigyV21/ARVIO.git
-	shallow = true
+[submodule "web/streambert"]
+	path = web/streambert
+	url = https://github.com/truelockmc/streambert.git
