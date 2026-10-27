@@ -132,9 +132,11 @@ final class CinemaCatalog {
                     String voiceKey=Logic.voiceKey(voice);
                     String voiceLabel=voice.isEmpty()?"Озвучка не указана":voice;
                     String url=base+"/play/"+playToken+"/"+Net.enc(titleId)+"/"+Net.enc(episode)+"/"+Net.enc(q.getKey())+"/"+Net.enc(voiceKey)+"/video.mkv";
-                    voiceOptions.put(new JSONObject().put("id",voiceKey).put("name",voiceLabel).put("streamIndex",streams.length()));
+                    voiceOptions.put(new JSONObject().put("id",voiceKey).put("name",voiceLabel).put("streamIndex",streams.length())
+                        .put("technologyHints",new JSONArray(candidate.technologyHints)).put("hintsVerified",false));
                     // Existing Nuvio clients still receive their standard stream contract.
                     streams.put(new JSONObject().put("name","CinemaHall · "+q.getKey()).put("title",voiceLabel).put("url",url)
+                        .put("technologyHints",new JSONArray(candidate.technologyHints)).put("hintsVerified",false)
                         .put("behaviorHints",new JSONObject().put("bingeGroup","cinemahall:"+q.getKey()+":"+voiceKey)));
                 }
                 qualities.put(new JSONObject().put("id",q.getKey()).put("label",q.getKey()).put("voices",voiceOptions));
