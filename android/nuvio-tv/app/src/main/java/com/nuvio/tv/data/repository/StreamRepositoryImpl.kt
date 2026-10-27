@@ -110,12 +110,10 @@ class StreamRepositoryImpl @Inject constructor(
                     videoId = videoId,
                     season = season,
                     episode = episode,
-                    addons = if (isNativeServerRequest) emptyList() else sourceConfiguration.addons,
+                    addons = sourceConfiguration.addons.filter { CinemaHallSourcePolicy.isOwnCatalog(it.baseUrl, it.id) },
                     debridSettings = sourceConfiguration.debridSettings,
-                    hasCompatiblePlugins = !isNativeServerRequest &&
-                        sourceConfiguration.pluginsEnabled &&
-                        sourceConfiguration.enabledScrapers.any { scraper -> scraper.supportsType(type) },
-                    serverSources = serverStreams.sources(type, videoId, season, episode, forceRefresh)
+                    hasCompatiblePlugins = false,
+                    serverSources = emptyList()
                 )
             }
         )
@@ -636,6 +634,9 @@ class StreamRepositoryImpl @Inject constructor(
         type: String,
         videoId: String
     ): NetworkResult<List<Stream>> {
+        if (!CinemaHallSourcePolicy.isOwnCatalog(addon.baseUrl, addon.id)) {
+            return NetworkResult.Error("Потоки доступны только через CinemaHall API")
+        }
         val cleanBaseUrl = addon.baseUrl.trimEnd('/')
         val queryStart = cleanBaseUrl.indexOf('?')
         val basePath = if (queryStart >= 0) cleanBaseUrl.substring(0, queryStart).trimEnd('/') else cleanBaseUrl
