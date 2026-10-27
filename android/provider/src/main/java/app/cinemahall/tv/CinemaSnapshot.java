@@ -41,9 +41,9 @@ final class CinemaSnapshot {
         for(int i=0;i<all.length();i++){
             JSONObject entry=all.getJSONObject(i);if(!entry.optString("type").equals(type.equals("series")?"tv":"movie"))continue;
             if(!needle.isEmpty()&&!words(entry.optString("title")+" "+entry.optJSONArray("aliases")).contains(needle))continue;
-            // Shards are needed for genre-specific lists; do not mislabel the same shelf as another category.
+            // New indexes contain genres; older snapshots fall back to detail shards.
             if(category.equals("animation")||category.equals("scifi")){
-                JSONObject row=raw("ch:snapshot:"+entry.getString("id"));String genres=row==null?"":words(row.optString("genres"));
+                JSONObject row=entry.has("genres")?entry:raw("ch:snapshot:"+entry.getString("id"));String genres=row==null?"":words(row.optString("genres"));
                 if(!genres.contains(category.equals("animation")?"мульт":"фантаст"))continue;
             }
             matches.add(entry);
@@ -51,7 +51,7 @@ final class CinemaSnapshot {
         if(category.startsWith("new"))matches.sort((a,b)->Integer.compare(b.optInt("year"),a.optInt("year")));
         // Top shelves use the snapshot's real ratings rather than a relabelled popularity list.
         if(category.startsWith("top")){
-            Map<String,Double> ratings=new HashMap<>();for(JSONObject e:matches){JSONObject row=raw("ch:snapshot:"+e.getString("id"));JSONObject scores=row==null?null:row.optJSONObject("ratings");ratings.put(e.getString("id"),rating(scores));}
+            Map<String,Double> ratings=new HashMap<>();for(JSONObject e:matches){double score;if(e.has("topRating"))score=e.optDouble("topRating",0);else{JSONObject row=raw("ch:snapshot:"+e.getString("id"));score=rating(row==null?null:row.optJSONObject("ratings"));}ratings.put(e.getString("id"),score);}
             matches.sort((a,b)->Double.compare(ratings.get(b.optString("id")),ratings.get(a.optString("id"))));
         }
         for(int i=skip;i<Math.min(matches.size(),skip+24);i++)result.put(compact(matches.get(i)));

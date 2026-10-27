@@ -512,10 +512,26 @@ def stable_id(row):
     raise ValueError("Title without a stable identifier")
 
 
+def rating_for_sort(scores):
+    for key in ("kinopoisk", "imdb", "tmdb"):
+        value = (scores or {}).get(key)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return float(value)
+        if isinstance(value, dict):
+            try:
+                number = float(value.get("value") or 0)
+            except (TypeError, ValueError):
+                continue
+            if number > 0:
+                return number
+    return 0.0
+
+
 def compact(row):
     return {"id": stable_id(row), "type": row["type"], "ids": row["ids"],
             "title": row["title"], "aliases": row["aliases"], "year": row["year"],
-            "poster": row["images"]["poster"]}
+            "poster": row["images"]["poster"], "genres": row.get("genres") or [],
+            "topRating": rating_for_sort(row.get("ratings"))}
 
 
 def split_snapshot(result, shard_size=250):

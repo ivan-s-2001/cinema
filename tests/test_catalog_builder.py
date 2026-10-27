@@ -19,6 +19,16 @@ def record(kind="movie", imdb="tt0137523", kp=361, tmdb=550, name="Бойцов�
 
 
 class CatalogTests(unittest.TestCase):
+    def test_compact_index_contains_genres_and_rating_for_fast_shelves(self):
+        row = normalize(record())
+        row["genres"] = ["фантастика", "драма"]
+        row["ratings"] = {"kinopoisk": {"value": 8.2}, "imdb": 9.0}
+        snapshot = {"titles": [row], "version": 2, "generatedAt": "", "count": 1,
+                    "quality": {}, "filters": {}, "releaseCalendar": []}
+        entry = split_snapshot(snapshot, shard_size=50)["search.json"][0]
+        self.assertEqual(entry["genres"], ["фантастика", "драма"])
+        self.assertEqual(entry["topRating"], 8.2)
+
     def test_tmdb_still_and_poster_paths(self):
         self.assertEqual(tmdb_image_url("/still.jpg"), "https://image.tmdb.org/t/p/original/still.jpg")
         self.assertEqual(tmdb_image_url("https://example.org/still.jpg"), "https://example.org/still.jpg")
