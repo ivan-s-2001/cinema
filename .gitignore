@@ -8,3 +8,4 @@ app/src/main/jniLibs/**/*.so
 app/src/main/jniLibs/**/*.download
 __pycache__/
 *.pyc
+/catalog/

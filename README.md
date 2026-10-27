@@ -11,6 +11,8 @@ CinemaHall is being rebuilt for **Android TV and Android phones** using one upst
 | `web/streambert/` | Pinned React frontend: home, search, title details, seasons, library, source definitions |
 | `android/core/` | Reusable native Java adapters for Zona, metadata matching and TorrServer |
 | `scripts/fetch_engine.py` | Fetches verified TorrServer MatriX.147.1 binaries for ARM64/ARMv7 |
+| `scripts/build_catalog.py` | Builds a compact, deduplicated catalogue snapshot from KinoAPI and optional fallback providers |
+| `.github/workflows/catalog.yml` | Tests aggregation on PRs; manually builds a downloadable snapshot using GitHub Actions secrets |
 | `tests/LogicCheck.java` | Existing Java checks for episode identification, video quality and source ordering |
 
 ### API plan
@@ -28,6 +30,14 @@ Metadata sources are queried independently, then matched by stable identifiers i
 Quality/voice grouping must use **actual playable options**: Auto, 4K, 2K, 1080p, 720p, 576p, 480p, 360p and below if available. Within each resolution, identical dubbing tracks are deduplicated across sources. The user's selection on a title page and in the player must represent the same option. Failures should fall back to another eligible source without displaying torrents or technical URLs.
 
 `android/core/.../KinoApi.java` enriches Zona titles through the precise Kinopoisk ID and only reads the key from the Android app-private setting `cinemahall_settings/kinoapi_key`. The future Settings screen needs to supply this value at runtime; no secret is currently stored in the repository. KinoAPI's voiceover labels **must not** be presented as playable tracks until a separate playback source confirms the track.
+
+### Shared TV/mobile catalogue snapshot
+
+The metadata builder uses **KinoAPI** for popular movies, TV, anime and latest releases. It matches duplicates across TMDB/Kinopoisk/IMDb/anime IDs and preserves all known Russian/English/original aliases. It chooses genuine landscape artwork for banners and keeps studio/voiceover labels separate from verified playback options. Selected detail cards also include KinoAPI actors, recommendations, TV seasons and episode/anime mappings. Only a bounded number of missing-art entries are enriched through **Cinemeta**, **TVmaze** (series), **AniList** (anime) and optional **TMDB** (`append_to_response=images,external_ids,videos`, with full-resolution candidates). Provider failure never blocks the entire catalogue.
+
+Use **Actions → Catalogue index → Run workflow** once the workflow is available on the default branch. It reads the existing `KINOAPI_KEY` GitHub Actions secret, optionally `TMDB_READ_TOKEN`, and uploads the resulting `cinemahall-catalog` JSON artifact for both Android clients. The secret does not enter the artifact or APK. This is currently an **offline index generator**, not a deployed endpoint or a working Android frontend.
+
+For local generation only, set `KINOAPI_KEY` in your shell environment and run `python3 scripts/build_catalog.py --pages 3 --enrich 30 --details 12`. Unit checks run without keys via `python3 -m unittest discover -s tests -p 'test_catalog_builder.py'`. Increase `--pages` in manageable batches (up to 50 per type); KinoAPI has a 6-requests-per-second key limit. The index is deliberately capped instead of attempting to mirror its million-title database into a GitHub artifact.
 
 ## Android migration constraints
 
