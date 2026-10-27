@@ -129,7 +129,7 @@ final class CinemaCatalog {
             if(!preferred.isEmpty()){
                 Sources.Candidate best=preferred.get(0);
                 String voiceKey=Logic.voiceKey(best.translation);
-                String autoUrl=base+"/play/"+playToken+"/"+Net.enc(titleId)+"/"+Net.enc(episode)+"/"+Net.enc(best.quality)+"/"+Net.enc(voiceKey)+"/video.mkv";
+                String autoUrl=base+"/play/"+playToken+"/"+Net.enc(titleId)+"/"+Net.enc(episode)+"/auto/auto/video.mkv";
                 streams.put(new JSONObject().put("name","CinemaHall · Авто")
                     .put("title","Смотреть · рекомендуемое")
                     .put("url",autoUrl).put("technologyHints",new JSONArray(best.technologyHints))
@@ -263,10 +263,13 @@ final class CinemaCatalog {
         String[] parsed=identity(parts[2]);if(!parsed[1].isEmpty()||(!parts[3].isEmpty()&&!parts[3].matches("S[0-9]{1,3}E[0-9]{1,4}")))throw new Exception("Invalid playback identity");
         JSONObject film=snapshot.document(parts[2]);if(film==null)film=document(parts[2]);engine();
         ArrayList<String> names=new ArrayList<>();for(String field:new String[]{"name_rus","name_original","name_eng"})names.add(film.optString(field));
-        List<Sources.Candidate> candidates=Sources.ordered(Sources.load(film.optString("id"),parts[3],names,film.optInt("year")),parts[4],parts[5],"1080p");
+        boolean automatic="auto".equals(parts[4])&&"auto".equals(parts[5]);
+        List<Sources.Candidate> candidates=Sources.ordered(
+            Sources.load(film.optString("id"),parts[3],names,film.optInt("year")),
+            automatic?"":parts[4],automatic?"":parts[5],"1080p");
         // last segment is video container hint; supplied by our own stream URL only.
         Exception failure=null;
-        for(Sources.Candidate candidate:candidates.subList(0,Math.min(4,candidates.size()))){String hash="";
+        for(Sources.Candidate candidate:candidates.subList(0,Math.min(automatic?8:4,candidates.size()))){String hash="";
             try{
                 JSONObject added=Net.json(Net.ENGINE+"/torrents",new JSONObject().put("action","add").put("link",candidate.link).put("save_to_db",false));hash=added.getString("hash");JSONArray files=added.optJSONArray("file_stats");
                 for(int i=0;(files==null||files.length()==0)&&i<30;i++){Thread.sleep(400);files=Net.json(Net.ENGINE+"/torrents",new JSONObject().put("action","get").put("hash",hash)).optJSONArray("file_stats");}
