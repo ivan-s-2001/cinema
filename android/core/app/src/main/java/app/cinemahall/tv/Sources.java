@@ -88,7 +88,7 @@ final class Sources {
         ArrayList<Candidate> previous=cached(cacheKey,System.currentTimeMillis());
         if(previous!=null)return previous;
         String exact=Logic.catalogEpisode(episode==null?"":episode);
-        String fields="hash,torrent_download_link,resolution,size_bytes,translate_info,languages_parser,seeds,episodes_map_auto,name,title,torrent_name";
+        String fields="hash,torrent_download_link,resolution,size_bytes,translate_info,languages_parser,seeds,episodes_map_auto";
         ArrayList<Candidate> result=new ArrayList<>();HashSet<String>seen=new HashSet<>();
         Exception zonaError=null;
         try {if(hasKinopoisk){
