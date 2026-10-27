@@ -33,6 +33,16 @@ class CatalogTests(unittest.TestCase):
         self.assertIn("Fight Club", row["aliases"])
         self.assertIn("Fight Club original", row["aliases"])
 
+    def test_later_russian_title_replaces_english_display_name(self):
+        first = record()
+        first["title"] = {"en": "Fight Club", "original": "Fight Club"}
+        later = record()
+        later["title"] = {"ru": "Бойцовский клуб", "en": "Fight Club"}
+        merged = merge_catalog([[first], [later]])
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(merged[0]["title"], "Бойцовский клуб")
+        self.assertIn("Fight Club", merged[0]["aliases"])
+
     def test_art_aliases_voiceovers_are_not_streams(self):
         row = normalize(record())
         self.assertEqual(row["images"]["backdrop"], "https://image.tmdb.org/t/p/original/landscape.jpg")
