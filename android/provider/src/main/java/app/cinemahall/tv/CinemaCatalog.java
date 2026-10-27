@@ -268,9 +268,10 @@ final class CinemaCatalog {
         JSONObject film=snapshot.document(parts[2]);if(film==null)film=document(parts[2]);engine();
         ArrayList<String> names=new ArrayList<>();for(String field:new String[]{"name_rus","name_original","name_eng"})names.add(film.optString(field));
         boolean automatic="auto".equals(parts[4])&&"auto".equals(parts[5]);
-        List<Sources.Candidate> candidates=Sources.ordered(
-            Sources.load(film.optString("id"),parts[3],names,film.optInt("year")),
-            automatic?"":parts[4],automatic?"":parts[5],"1080p");
+        List<Sources.Candidate> available=Sources.load(film.optString("id"),parts[3],names,film.optInt("year"));
+        List<Sources.Candidate> candidates=automatic
+            ? Sources.automaticFallbacks(available,"1080p")
+            : Sources.ordered(available,parts[4],parts[5],"1080p");
         // last segment is video container hint; supplied by our own stream URL only.
         Exception failure=null;
         for(Sources.Candidate candidate:candidates.subList(0,Math.min(automatic?8:4,candidates.size()))){String hash="";
