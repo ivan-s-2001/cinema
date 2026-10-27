@@ -17,6 +17,7 @@ CinemaHall is being rebuilt for **Android TV and Android phones** using one upst
 
 Metadata sources are queried independently, then matched by stable identifiers instead of merging records solely on title. A failure in an optional metadata API must not block the catalogue:
 
+- **KinoAPI** — Russian-language title data, Kinopoisk/TMDB/IMDb identifiers, original-resolution image candidates, ratings, episodes and descriptive voiceovers. Requires a user-supplied key configured on the device; the key must not be committed or included in the APK. KinoAPI returns **no playable video URLs**.
 - **TMDB** — posters, wide backdrops, genres, overviews, credits; user-supplied free read token.
 - **Zona API** — catalogue availability and source/quality information; unofficial, with no uptime guarantee.
 - **Cinemeta** — fallback metadata and images, particularly IMDb-backed matching.
@@ -25,6 +26,8 @@ Metadata sources are queried independently, then matched by stable identifiers i
 - **Streambert providers** — optional video-source candidates; an embedded player URL is *not* automatically a direct video stream. Each integration needs source-specific validation.
 
 Quality/voice grouping must use **actual playable options**: Auto, 4K, 2K, 1080p, 720p, 576p, 480p, 360p and below if available. Within each resolution, identical dubbing tracks are deduplicated across sources. The user's selection on a title page and in the player must represent the same option. Failures should fall back to another eligible source without displaying torrents or technical URLs.
+
+`android/core/.../KinoApi.java` enriches Zona titles through the precise Kinopoisk ID and only reads the key from the Android app-private setting `cinemahall_settings/kinoapi_key`. The future Settings screen needs to supply this value at runtime; no secret is currently stored in the repository. KinoAPI's voiceover labels **must not** be presented as playable tracks until a separate playback source confirms the track.
 
 ## Android migration constraints
 

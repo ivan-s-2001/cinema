@@ -24,6 +24,12 @@ final class Metadata {
             }
             boolean serial=film.optBoolean("serial");String type=serial?"series":"movie";
             JSONObject meta=null;
+            // Device-private setting; do not embed an API key in Git or the shipped APK.
+            String kinoKey=context.getSharedPreferences("cinemahall_settings",0).getString("kinoapi_key","");
+            if(!kinoKey.isEmpty())try{
+                JSONObject titleData=KinoApi.byKinopoisk(film.optString("id"),kinoKey);
+                if(titleData!=null)KinoApi.enrich(result,titleData,details);
+            }catch(Exception ignored){}
             // Exact normalized title AND original release year: never take the first fuzzy hit.
             String title=film.optString("name_original");if(title.isEmpty())title=film.optString("name_rus");
             JSONArray hits=null;
@@ -34,11 +40,13 @@ final class Metadata {
             }
             if(meta!=null&&meta.optString("id").matches("tt[0-9]+")){
                 String imdb=meta.getString("id");
-                result.put("imdb",imdb).put("background",meta.optString("background")).put("poster",meta.optString("poster"));
+                if(result.optString("imdb").isEmpty())result.put("imdb",imdb);
+                if(result.optString("background").isEmpty())result.put("background",meta.optString("background"));
+                if(result.optString("poster").isEmpty())result.put("poster",meta.optString("poster"));
                 if(details){
                     try{
                         JSONObject full=Net.json(CINEMETA+"/meta/"+type+"/"+imdb+".json",null).getJSONObject("meta");
-                        for(String field:new String[]{"background","poster","cast","director","imdbRating"})if(full.has(field))result.put(field,full.get(field));
+                        for(String field:new String[]{"background","poster","cast","director","imdbRating"})if(full.has(field)&&!result.has(field))result.put(field,full.get(field));
                     }catch(Exception ignored){}
                 }
             }

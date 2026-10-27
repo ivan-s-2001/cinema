@@ -13,9 +13,16 @@ final class Net {
         catch (UnsupportedEncodingException impossible) { throw new AssertionError(impossible); }
     }
     static byte[] request(String url, JSONObject body, int limit) throws Exception {
+        return request(url, body, limit, "");
+    }
+    static byte[] request(String url, JSONObject body, int limit, String apiKey) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         c.setConnectTimeout(10000); c.setReadTimeout(15000);
         c.setRequestProperty("User-Agent", "CinemaHall/0.3");
+        if (!apiKey.isEmpty()) {
+            c.setInstanceFollowRedirects(false); // Never forward credentials to a redirected host.
+            c.setRequestProperty("X-API-Key", apiKey);
+        }
         try {
             if (body != null) {
                 c.setRequestMethod("POST"); c.setDoOutput(true);
@@ -38,6 +45,10 @@ final class Net {
     static JSONObject json(String url, JSONObject body) throws Exception {
         byte[] bytes = request(url, body, 8 * 1024 * 1024);
         return bytes.length == 0 ? new JSONObject() : new JSONObject(new String(bytes, StandardCharsets.UTF_8));
+    }
+    static JSONObject json(String url, String apiKey) throws Exception {
+        byte[] bytes = request(url, null, 8 * 1024 * 1024, apiKey);
+        return new JSONObject(new String(bytes, StandardCharsets.UTF_8));
     }
     static JSONObject select(String core, String query, String sort, int start, int rows, String fields) throws Exception {
         return json(CATALOG + core + "/select?wt=json&q=" + enc(query) + "&sort=" + enc(sort)
