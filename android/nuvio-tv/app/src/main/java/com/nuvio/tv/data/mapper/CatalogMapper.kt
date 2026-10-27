@@ -1,6 +1,7 @@
 package com.nuvio.tv.data.mapper
 
 import com.nuvio.tv.data.remote.dto.MetaPreviewDto
+import com.nuvio.tv.domain.model.CinemaRating
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
@@ -21,6 +22,8 @@ fun MetaPreviewDto.toDomainOrNull(catalogType: String, sourceAddonBaseUrl: Strin
         description = description,
         releaseInfo = releaseInfo,
         imdbRating = imdbRating?.toFloatOrNull(),
+        cinemaRatings = cinemaRatings.orEmpty().filter { it.value > 0 && it.scale > 0 && it.value <= it.scale }
+            .map { CinemaRating(it.source, it.label, it.value, it.scale) },
         genres = genres ?: emptyList(),
         runtime = runtime,
         status = status?.trim()?.takeIf { it.isNotBlank() },

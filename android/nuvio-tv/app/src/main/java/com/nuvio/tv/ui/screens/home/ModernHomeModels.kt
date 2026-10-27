@@ -65,7 +65,8 @@ data class HeroPreview(
      *  even after navigation away and back. */
     val frozenBackdropUrl: String? = null,
     /** Same idea for the logo URL. */
-    val frozenLogoUrl: String? = null
+    val frozenLogoUrl: String? = null,
+    val kinopoiskRatingText: String? = null
 )
 
 @Immutable
@@ -493,6 +494,8 @@ internal fun buildCatalogItem(
         runtimeText = formatHeroRuntime(item.runtime),
         imdbText = item.imdbRating
             ?.let { String.format("%.1f", it) },
+        kinopoiskRatingText = item.cinemaRatings.firstOrNull { it.source == "kinopoisk" }
+            ?.let { String.format(java.util.Locale.ROOT, "%.1f", it.value) },
         ageRatingText = item.ageRating,
         statusText = item.status,
         countryText = item.country,

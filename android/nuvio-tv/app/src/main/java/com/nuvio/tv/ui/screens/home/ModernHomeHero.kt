@@ -501,7 +501,7 @@ private fun HeroTitleContent(
             val runtimeText = preview.runtimeText
             val yearText = preview.yearText
             val hasTrailingMeta = !runtimeText.isNullOrBlank() ||
-                !yearText.isNullOrBlank() ||
+                !yearText.isNullOrBlank() || !preview.kinopoiskRatingText.isNullOrBlank() ||
                 reserveImdbInPrimaryWithHighlight
 
             if (hasLeadingMeta) {
@@ -545,6 +545,10 @@ private fun HeroTitleContent(
                             color = NuvioTheme.colors.TextSecondary,
                             maxLines = 1
                         )
+                    }
+                    preview.kinopoiskRatingText?.let { rating ->
+                        Text(text = "КП $rating", style = labelMedium,
+                            color = NuvioTheme.colors.TextSecondary, maxLines = 1)
                     }
                     if (reserveImdbInPrimaryWithHighlight) {
                         HeroImdbMeta(

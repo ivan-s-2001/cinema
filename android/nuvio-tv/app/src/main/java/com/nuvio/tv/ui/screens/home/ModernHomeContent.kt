@@ -735,6 +735,9 @@ fun ModernHomeContent(
                                 ?: activeCarouselItem?.heroPreview?.runtimeText,
                             imdbText = enrichedItem.imdbRating
                                 ?.let { String.format(java.util.Locale.US, "%.1f", it) },
+                            kinopoiskRatingText = enrichedItem.cinemaRatings.firstOrNull { it.source == "kinopoisk" }
+                                ?.let { String.format(java.util.Locale.ROOT, "%.1f", it.value) }
+                                ?: activeCarouselItem?.heroPreview?.kinopoiskRatingText,
                             ageRatingText = enrichedItem.ageRating,
                             statusText = enrichedItem.status,
                             countryText = enrichedItem.country,

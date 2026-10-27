@@ -1012,6 +1012,7 @@ private fun HomeViewModel.updateCatalogItemWithMeta(itemId: String, meta: Meta) 
         logo = meta.logo ?: currentItem.logo,
         description = meta.description ?: currentItem.description,
         imdbRating = meta.imdbRating ?: currentItem.imdbRating,
+        cinemaRatings = meta.cinemaRatings.ifEmpty { currentItem.cinemaRatings },
         genres = if (meta.genres.isNotEmpty()) meta.genres else currentItem.genres,
         runtime = meta.runtime ?: currentItem.runtime,
         status = meta.status ?: currentItem.status,
