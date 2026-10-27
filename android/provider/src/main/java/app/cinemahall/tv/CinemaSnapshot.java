@@ -16,6 +16,9 @@ final class CinemaSnapshot {
     private final LinkedHashMap<String,String> shelfCache=new LinkedHashMap<String,String>(20,.75f,true){
         @Override protected boolean removeEldestEntry(Map.Entry<String,String> e){return size()>20;}
     };
+    private final LinkedHashMap<String,Map<String,JSONObject>> shardIndex=new LinkedHashMap<String,Map<String,JSONObject>>(4,.75f,true){
+        @Override protected boolean removeEldestEntry(Map.Entry<String,Map<String,JSONObject>> e){return size()>2;}
+    };
     private final LinkedHashMap<String,JSONArray> shards=new LinkedHashMap<String,JSONArray>(4,.75f,true){@Override protected boolean removeEldestEntry(Map.Entry<String,JSONArray> e){return size()>2;}};
     CinemaSnapshot(Context context){this.context=context;}
     private JSONObject index;
@@ -28,13 +31,24 @@ final class CinemaSnapshot {
     }
     private JSONArray search() throws Exception {if(lookup==null){lookup=new JSONArray(read("search.json"));for(int i=0;i<lookup.length();i++){JSONObject entry=lookup.getJSONObject(i);byId.put(entry.getString("id"),entry);}}return lookup;}
     private JSONArray shard(String path) throws Exception {JSONArray data=shards.get(path);if(data==null){data=new JSONArray(read(path));shards.put(path,data);}return data;}
+    private JSONObject shardRow(String path,String id) throws Exception {
+        Map<String,JSONObject> cached=shardIndex.get(path);
+        if(cached==null){
+            cached=new HashMap<>();
+            JSONArray data=shard(path);
+            for(int i=0;i<data.length();i++){
+                JSONObject row=data.getJSONObject(i);
+                cached.put(stableId(row),row);
+            }
+            shardIndex.put(path,cached);
+        }
+        return cached.get(id);
+    }
     private JSONObject raw(String id) throws Exception {
         init();if(index==null||!id.startsWith("ch:snapshot:"))return null;
         String wanted=id.substring(12);search();JSONObject entry=byId.get(wanted);
         if(entry==null)return null;
-        JSONArray cards=shard(entry.getString("shard"));
-        for(int i=0;i<cards.length();i++){JSONObject row=cards.getJSONObject(i);if(wanted.equals(stableId(row)))return row;}
-        return null;
+        return shardRow(entry.getString("shard"),wanted);
     }
     static String stableId(JSONObject row) throws JSONException {
         JSONObject ids=row.getJSONObject("ids");for(String source:new String[]{"tmdb","kinopoisk","imdb","myAnimeList","shikimori"})if(!ids.optString(source).isEmpty())return row.getString("type")+":"+source+":"+ids.getString(source)+(row.optString("collisionSuffix").isEmpty()?"":":"+row.optString("collisionSuffix"));throw new JSONException("No id");
