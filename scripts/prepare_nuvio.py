@@ -30,7 +30,7 @@ def ensure_sdk_properties(directory):
             value = sdk.resolve().as_posix()
             lines = [line for line in current.splitlines()
                      if not line.strip().startswith("sdk.dir=")]
-            properties.write_text("\\n".join(lines + ["sdk.dir=" + value]) + "\\n", encoding="utf-8")
+            properties.write_text("\n".join(lines + ["sdk.dir=" + value]) + "\n", encoding="utf-8")
             print(f"Android SDK: {sdk}")
             return
     raise RuntimeError(f"Android SDK not found: check ANDROID_HOME or sdk.dir in {properties}")
