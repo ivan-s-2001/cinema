@@ -96,21 +96,17 @@ final class CinemaSnapshot {
         String age=row.optString("ageRating").trim();if(!age.isEmpty())target.put("app_extras",new JSONObject().put("certificationLocal",age));
     }
     private JSONObject compact(JSONObject entry) throws Exception {
-        JSONObject result=new JSONObject().put("id","ch:snapshot:"+entry.getString("id")).put("type",entry.optString("type").equals("tv")?"series":"movie").put("name",entry.optString("title")).put("poster",cleanImage(entry.optString("poster"))).put("releaseInfo",displayYear(entry.optInt("year")));
-        JSONObject row=raw("ch:snapshot:"+entry.getString("id"));JSONObject images=row==null?null:row.optJSONObject("images");
-        if(images!=null){
-            String poster=cleanImage(images.optString("poster"));
-            if(!poster.isEmpty())result.put("poster",poster);
-            String logo=cleanImage(images.optString("logo"));if(!logo.isEmpty())result.put("logo",logo);
-            String backdrop=cleanImage(images.optString("backdrop"));
-            if(images.optBoolean("backdropVerified")&&!backdrop.isEmpty()&&!backdrop.equals(result.optString("poster")))result.put("background",backdrop);
-        }
-        if(row!=null){
-            appendMetadata(result,row);
-            if(!row.optString("titleRu").trim().isEmpty()||result.optString("name").trim().isEmpty())result.put("name",title(row));
-            String summary=row.optString("description").trim();
-            if(!summary.isEmpty())result.put("description",summary);
-        }
+        // Home rows must be index-only. Reading full 250-title shards per card causes UI stalls.
+        JSONObject result=new JSONObject()
+            .put("id","ch:snapshot:"+entry.getString("id"))
+            .put("type",entry.optString("type").equals("tv")?"series":"movie")
+            .put("name",title(entry))
+            .put("poster",cleanImage(entry.optString("poster")))
+            .put("releaseInfo",displayYear(entry.optInt("year")));
+        String backdrop=cleanImage(entry.optString("background"));
+        if(!backdrop.isEmpty()&&!backdrop.equals(result.optString("poster")))result.put("background",backdrop);
+        if(entry.optJSONArray("genres")!=null)result.put("genres",entry.optJSONArray("genres"));
+        if(entry.optDouble("topRating",0)>0)result.put("imdbRating",String.format(Locale.ROOT,"%.1f",entry.optDouble("topRating")));
         return result;
     }
     JSONObject detail(String id) throws Exception {
