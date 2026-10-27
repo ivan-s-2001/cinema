@@ -5,7 +5,7 @@ const key = process.env.KINOAPI_KEY || '';
 const mode = process.argv[2] || 'daily';
 const pages = Number(process.argv[3] || (mode === 'bootstrap' ? 50 : 3));
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
-const completed = status => /^(released|ended|finished|completed|canceled|cancelled|завершен[а-я]*|законч[а-я]*|вышел|вышло)$/i.test(String(status || '').trim());
+const completed = status => /^(released|ended|finished|completed|canceled|cancelled|заверш[её]н[а-я]*|законч[а-я]*|вышел|вышло)$/i.test(String(status || '').trim());
 const validUrl = value => {
   if (typeof value !== 'string' || value.length > 2048) return '';
   try {
@@ -31,8 +31,8 @@ function normalize(raw) {
   const title = raw.title || {}, images = raw.images || {}, release = raw.release || {};
   const aliases = distinct([title.ru, title.en, title.original]);
   if (!aliases.length) return null;
-  const poster = [images.poster, ...(images.posters || []), images.kinopoisk?.poster].map(validUrl).find(Boolean) || '';
-  const backdrop = [images.backdrop, ...(images.backdrops || [])].map(validUrl).find(v => v && v !== poster) || '';
+  const poster = [images.poster, ...(Array.isArray(images.posters) ? images.posters : []), images.kinopoisk?.poster].map(validUrl).find(Boolean) || '';
+  const backdrop = [images.backdrop, ...(Array.isArray(images.backdrops) ? images.backdrops : [])].map(validUrl).find(v => v && v !== poster) || '';
   const year = Number(release.year);
   const id = 'ch:snapshot:' + raw.type + ':' + chosen + ':' + ids[chosen];
   const payload = {
@@ -106,11 +106,17 @@ async function store(db, raw, force = false) {
   const curator = old.curator || {};
   const locked = new Set(Array.isArray(curator.fields) ? curator.fields : []);
   const field = (name, value) => locked.has(name) && previous ? previous[name] : value;
+  const oldImages = old.images || {};
   const payload = {
     ...old, ...row, ratings: { ...(old.ratings || {}), ...(row.ratings || {}) },
-    images: { ...(old.images || {}), ...row.images },
+    sources: distinct([...(Array.isArray(old.sources) ? old.sources : []), ...row.sources]),
+    images: { ...oldImages, poster: row.poster || previous?.poster || oldImages.poster || '',
+      backdrop: row.backdrop || previous?.backdrop || oldImages.backdrop || '',
+      backdropVerified: Boolean(row.backdrop || oldImages.backdropVerified) },
     curator
   };
+  row.poster = payload.images.poster;
+  row.backdrop = payload.images.backdrop;
   for (const name of ['title', 'description', 'year', 'poster', 'backdrop']) {
     payload[name] = field(name, row[name]);
     if (name === 'poster' || name === 'backdrop') payload.images[name] = payload[name];
