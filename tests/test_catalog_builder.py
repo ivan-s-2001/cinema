@@ -1,8 +1,8 @@
 """Offline data-merging tests; never require API credentials or network access."""
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-from scripts.build_catalog import append_art, build, details, enrich, merge_catalog, normalize, split_snapshot, zona_availability, tmdb_image_url, enrich_zona_metadata
+from scripts.build_catalog import append_art, build, details, enrich, fetch, merge_catalog, normalize, split_snapshot, zona_availability, tmdb_image_url, enrich_zona_metadata
 
 
 def record(kind="movie", imdb="tt0137523", kp=361, tmdb=550, name="Бойцовский клуб"):
@@ -19,6 +19,21 @@ def record(kind="movie", imdb="tt0137523", kp=361, tmdb=550, name="Бойцов�
 
 
 class CatalogTests(unittest.TestCase):
+    @patch("scripts.build_catalog.time.sleep")
+    @patch("scripts.build_catalog._opener.open")
+    def test_retry_when_chunked_http_response_is_interrupted(self, open_response, sleep):
+        from http.client import IncompleteRead
+        broken = MagicMock()
+        broken.__enter__.return_value.headers.get.return_value = "0"
+        broken.__enter__.return_value.read.side_effect = IncompleteRead(b'{"partial":')
+        good = MagicMock()
+        good.__enter__.return_value.headers.get.return_value = "0"
+        good.__enter__.return_value.read.return_value = b'{"ok": true}'
+        open_response.side_effect = [broken, good]
+        self.assertEqual(fetch("https://example.org/data"), {"ok": True})
+        self.assertEqual(open_response.call_count, 2)
+        sleep.assert_called_once()
+
     def test_compact_index_contains_genres_and_rating_for_fast_shelves(self):
         row = normalize(record())
         row["genres"] = ["фантастика", "драма"]
