@@ -468,6 +468,8 @@ def compact(row):
     return {"id": stable_id(row), "type": row["type"], "ids": row["ids"],
             "title": row["title"], "aliases": row["aliases"], "year": row["year"],
             "poster": row["images"]["poster"],
+            "genres": row["genres"], "rating": next((v for k in ("kinopoisk", "imdb", "tmdb")
+                if (v := row["ratings"].get(k)) is not None), 0),
             "background": (row["images"]["backdrop"] if row["images"]["backdropVerified"] and
                            row["images"]["backdrop"] != row["images"]["poster"] else "")}
 
