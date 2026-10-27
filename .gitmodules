@@ -2,3 +2,6 @@
 	path = android/arvio
 	url = https://github.com/ProdigyV21/ARVIO.git
 	shallow = true
+[submodule "android/streamflix"]
+	path = android/streamflix
+	url = https://github.com/settimio/streamflix-reborn.git
