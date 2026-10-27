@@ -27,10 +27,22 @@ jobs:
       - name: Build TV + mobile APK
         working-directory: android/arvio
         run: ./gradlew :app:assembleSideloadDebug --no-daemon
+      - name: Build lightweight ARVIO Play flavor for size comparison
+        working-directory: android/arvio
+        run: ./gradlew :app:assemblePlayDebug --no-daemon
+      - name: Compare APK sizes
+        working-directory: android/arvio
+        run: |
+          ls -lh app/build/outputs/apk/sideload/debug/*.apk
+          ls -lh app/build/outputs/apk/play/debug/*.apk
       - name: Check CinemaHall quality tabs and catalog contract
         working-directory: android/arvio
         run: ./gradlew :app:testSideloadDebugUnitTest --tests app.cinemahall.tv.CinemaQualityTabsTest --no-daemon
       - uses: actions/upload-artifact@v4
         with:
-          name: CinemaHall-TV-Mobile-debug
+          name: CinemaHall-TV-Mobile-full-debug
           path: android/arvio/app/build/outputs/apk/sideload/debug/*.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CinemaHall-TV-Mobile-light-debug
+          path: android/arvio/app/build/outputs/apk/play/debug/*.apk
