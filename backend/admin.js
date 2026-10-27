@@ -164,7 +164,7 @@ function showEditor(record) {
 async function selectTitle(id) {
   creating = false; selectedId = id;
   try {
-    const data = await api('titles/' + encodeURIComponent(id));
+    const data = await api('titles/' + id);
     showEditor(data.title);
     document.querySelectorAll('.record').forEach(button => button.classList.remove('active'));
     if (window.innerWidth < 1000) $('editor').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -193,7 +193,7 @@ $('editor').addEventListener('submit', async event => {
         if (JSON.stringify(values[key]) !== JSON.stringify(original[key])) changes[key] = values[key];
       }
       if (!Object.keys(changes).length) { message.textContent = 'Нет изменений'; return; }
-      await api('titles/' + encodeURIComponent(selectedId), { method: 'PATCH', body: JSON.stringify(changes) });
+      await api('titles/' + selectedId, { method: 'PATCH', body: JSON.stringify(changes) });
       id = selectedId;
     }
     message.textContent = 'Сохранено';
