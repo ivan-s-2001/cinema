@@ -55,7 +55,6 @@ import com.nuvio.tv.ui.screens.settings.TrackingSettingsScreen
 import com.nuvio.tv.ui.screens.settings.TmdbSettingsScreen
 import com.nuvio.tv.ui.screens.stream.StreamScreen
 import com.nuvio.tv.ui.screens.home.ContinueWatchingItem
-import com.nuvio.tv.ui.screens.account.AuthQrSignInScreen
 import com.nuvio.tv.ui.screens.cast.CastDetailScreen
 import com.nuvio.tv.ui.screens.profile.ProfileSelectionMode
 import com.nuvio.tv.ui.screens.profile.ProfileSelectionScreen
@@ -1249,7 +1248,7 @@ private fun PlaybackNavHost(
                 showBuiltInHeader = !hideBuiltInHeaders,
                 onNavigateToAddons = { navController.navigate(Screen.AddonManager.route) },
                 onNavigateToPlugins = { navController.navigate(Screen.Plugins.route) },
-                onNavigateToAuthQrSignIn = { navController.navigate(Screen.AuthQrSignIn.route) },
+                onNavigateToAuthQrSignIn = { navController.navigate(Screen.ManageProfiles.route) },
                 onNavigateToManageProfiles = { navController.navigate(Screen.ManageProfiles.route) },
                 onNavigateToSupportersContributors = {
                     navController.navigate(Screen.SupportersContributors.route)
@@ -1399,19 +1398,25 @@ private fun PlaybackNavHost(
         }
 
         composable(Screen.Account.route) {
-            AuthQrSignInScreen(
+            ProfileSelectionScreen(
+                onProfileSelected = {},
+                screenMode = ProfileSelectionMode.Management,
                 onBackPress = { navController.popBackStack() }
             )
         }
 
         composable(Screen.AuthSignIn.route) {
-            AuthQrSignInScreen(
+            ProfileSelectionScreen(
+                onProfileSelected = {},
+                screenMode = ProfileSelectionMode.Management,
                 onBackPress = { navController.popBackStack() }
             )
         }
 
         composable(Screen.AuthQrSignIn.route) {
-            AuthQrSignInScreen(
+            ProfileSelectionScreen(
+                onProfileSelected = {},
+                screenMode = ProfileSelectionMode.Management,
                 onBackPress = { navController.popBackStack() }
             )
         }
