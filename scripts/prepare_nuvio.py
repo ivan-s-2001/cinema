@@ -2,6 +2,7 @@
 from pathlib import Path
 import argparse
 import subprocess
+import xml.etree.ElementTree as ET
 ROOT = Path(__file__).resolve().parents[1]
 TARGETS = {"tv": ("nuvio-tv", "c3f68d84a5e0ec8fea7a027443a9beca50d32c31"),
            "mobile": ("nuvio-mobile", "61658f366f985fc7758f0942a14c1754c69aca68")}
@@ -24,6 +25,8 @@ def prepare(target):
         print(f"{name}: integration applied")
     else:
         raise RuntimeError(f"{name}: patch does not match; local edits were preserved")
+    module = "app" if target == "tv" else "androidApp"
+    ET.parse(directory / module / "src/main/AndroidManifest.xml")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

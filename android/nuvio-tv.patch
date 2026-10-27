@@ -78,19 +78,6 @@ index f4a6336..82fd93f 100644
 -    <string name="app_name">Nuvio Debug</string>
 +    <string name="app_name">CinemaHall</string>
  </resources>
-diff --git a/app/src/main/AndroidManifest.xml b/app/src/main/AndroidManifest.xml
-index df93d3b..4422b62 100644
---- a/app/src/main/AndroidManifest.xml
-+++ b/app/src/main/AndroidManifest.xml
-@@ -31,7 +31,7 @@
-         android:name="android.software.leanback"
-         android:required="false" />
- 
--    <application
-+    <application android:extractNativeLibs="true"
-         android:name=".NuvioApplication"
-         android:allowBackup="false"
-         android:banner="@mipmap/banner"
 diff --git a/app/src/main/java/com/nuvio/tv/data/local/AddonPreferences.kt b/app/src/main/java/com/nuvio/tv/data/local/AddonPreferences.kt
 index 9a90a94..56fb1be 100644
 --- a/app/src/main/java/com/nuvio/tv/data/local/AddonPreferences.kt
