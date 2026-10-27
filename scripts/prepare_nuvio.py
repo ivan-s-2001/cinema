@@ -15,16 +15,20 @@ def prepare(target):
     revision = subprocess.check_output(["git", "-C", str(directory), "rev-parse", "HEAD"], text=True).strip()
     if revision != expected:
         raise RuntimeError(f"{name}: expected {expected}, got {revision}; update the submodule checkout first")
-    patch = ROOT / "android" / f"{name}.patch"
-    def can_apply(*options):
-        return subprocess.run(["git", "-C", str(directory), "apply", *options, str(patch)], capture_output=True).returncode == 0
-    if can_apply("--reverse", "--check"):
-        print(f"{name}: integration already applied")
-    elif can_apply("--check"):
-        subprocess.run(["git", "-C", str(directory), "apply", str(patch)], check=True)
-        print(f"{name}: integration applied")
-    else:
-        raise RuntimeError(f"{name}: patch does not match; local edits were preserved")
+    patches = [ROOT / "android" / f"{name}.patch"]
+    local_patch = ROOT / "android" / f"{name}-local.patch"
+    if local_patch.exists():
+        patches.append(local_patch)
+    for patch in patches:
+        def can_apply(*options):
+            return subprocess.run(["git", "-C", str(directory), "apply", *options, str(patch)], capture_output=True).returncode == 0
+        if can_apply("--reverse", "--check"):
+            print(f"{name}: integration already applied")
+        elif can_apply("--check"):
+            subprocess.run(["git", "-C", str(directory), "apply", str(patch)], check=True)
+            print(f"{name}: integration applied")
+        else:
+            raise RuntimeError(f"{name}: patch does not match; local edits were preserved")
     # Mobile runtime config declares this as an input even when no service keys are configured.
     (directory / "local.properties").touch(exist_ok=True)
     module = "app" if target == "tv" else "androidApp"
