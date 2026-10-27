@@ -1158,20 +1158,20 @@ private fun ModernCarouselCard(
     val baseImageUrl = if (focusedPosterBackdropExpandEnabled && isBackdropExpanded) {
         if (useLandscapeOverlayTreatment) {
             if (effectiveIgnoreLandscapePoster) {
-                effectiveBackdropUrl ?: item.heroPreview.backdrop ?: item.imageUrl ?: item.heroPreview.poster
+                effectiveBackdropUrl ?: item.heroPreview.backdrop
             } else {
-                item.metaPreview?.landscapePoster ?: effectiveBackdropUrl ?: item.heroPreview.backdrop ?: item.imageUrl ?: item.heroPreview.poster
+                item.metaPreview?.landscapePoster ?: effectiveBackdropUrl ?: item.heroPreview.backdrop
             }
         } else if (useLandscapeAsExpanded) {
             item.metaPreview?.landscapePoster
         } else {
-            item.heroPreview.backdrop ?: item.imageUrl ?: item.heroPreview.poster
+            item.heroPreview.backdrop
         }
     } else if (useLandscapeOverlayTreatment && !isCollectionFolder) {
         if (effectiveIgnoreLandscapePoster) {
-            effectiveBackdropUrl ?: item.heroPreview.poster
+            effectiveBackdropUrl
         } else {
-            item.metaPreview?.landscapePoster ?: effectiveBackdropUrl ?: item.heroPreview.poster
+            item.metaPreview?.landscapePoster ?: effectiveBackdropUrl
         }
     } else if (isCollectionFolder && !payload?.coverEmoji.isNullOrBlank()) {
         // Emoji cover folders: never fall back to backdrop for the card poster
@@ -1224,7 +1224,7 @@ private fun ModernCarouselCard(
             val isLandscapeCustomPoster = useLandscapeOverlayTreatment && !effectiveIgnoreLandscapePoster && !item.metaPreview?.landscapePoster.isNullOrBlank()
             val fallbackUrl = if (isLandscapeCustomPoster) {
                 // Landscape custom poster -> fall back to original backdrop
-                item.metaPreview?.background ?: item.heroPreview.backdrop ?: item.metaPreview?.rawPosterUrl
+                item.metaPreview?.backdropUrl ?: item.heroPreview.backdrop
             } else {
                 item.metaPreview?.rawPosterUrl
             }
