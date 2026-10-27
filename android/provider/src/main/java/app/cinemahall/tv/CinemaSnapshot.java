@@ -132,7 +132,7 @@ final class CinemaSnapshot {
         JSONObject details=row.optJSONObject("details");JSONArray seasons=details==null?null:details.optJSONArray("seasons"),videos=new JSONArray();
         if(seasons!=null)for(int s=0;s<seasons.length();s++){
             JSONObject season=seasons.getJSONObject(s);int sn=season.optInt("number");JSONArray episodes=season.optJSONArray("episodes");if(episodes==null)continue;
-            for(int e=0;e<episodes.length();e++){JSONObject ep=episodes.getJSONObject(e);int en=ep.optInt("number");if(sn<1||en<1)continue;videos.put(new JSONObject().put("id",id+":"+sn+":"+en).put("season",sn).put("episode",en).put("title",ep.optString("name")).put("overview",ep.optString("overview")).put("thumbnail",ep.optString("still")));}
+            for(int e=0;e<episodes.length();e++){JSONObject ep=episodes.getJSONObject(e);int en=ep.optInt("number");if(sn<1||en<1)continue;videos.put(new JSONObject().put("id",id+":"+sn+":"+en).put("season",sn).put("episode",en).put("title",ep.optString("name")).put("overview",ep.optString("overview")).put("thumbnail",CinemaCatalog.episodeStill(ep)));}
         }
         result.put("videos",videos);return result;
     }
