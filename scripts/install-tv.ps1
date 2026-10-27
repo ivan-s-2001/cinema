@@ -15,6 +15,11 @@ function Invoke-Checked([scriptblock]$Command) {
     & $Command
     if ($LASTEXITCODE -ne 0) { throw "Команда завершилась с ошибкой $LASTEXITCODE : $Command" }
 }
+function Get-RemoteText([string]$Url) {
+    $content = (Invoke-WebRequest -UseBasicParsing -Uri $Url -TimeoutSec 120).Content
+    if ($content -is [byte[]]) { return [Text.Encoding]::UTF8.GetString($content) }
+    return [string]$content
+}
 function Download-Verified([string]$Url, [string]$Destination, [string]$Checksum, [string]$Algorithm = 'SHA256') {
     if ((Test-Path $Destination) -and ((Get-FileHash $Destination -Algorithm $Algorithm).Hash -eq $Checksum)) { return }
     $part = "$Destination.part"
@@ -51,7 +56,7 @@ $SdkRoot = Join-Path $ToolsRoot 'android-sdk'
 $SdkManager = Join-Path $SdkRoot 'cmdline-tools\12.0\bin\sdkmanager.bat'
 if (-not (Test-Path $SdkManager)) {
     # Fixed version, compatible with JDK 17. Obtain its checksum from Google's repository metadata.
-    [xml]$index = (Invoke-WebRequest -UseBasicParsing 'https://dl.google.com/android/repository/repository2-1.xml' -TimeoutSec 120).Content
+    [xml]$index = Get-RemoteText 'https://dl.google.com/android/repository/repository2-1.xml'
     $toolPackage = $index.SelectSingleNode("//*[local-name()='remotePackage' and @path='cmdline-tools;12.0']")
     if (-not $toolPackage) { throw 'В официальном индексе Google нет cmdline-tools 12.0.' }
     $win = $toolPackage.SelectSingleNode("archives/archive[host-os='windows']/complete")
@@ -77,7 +82,7 @@ $AppRoot = Join-Path $RepoRoot 'android\core'
 $GradleRoot = Join-Path $ToolsRoot 'gradle-8.9'
 if (-not (Test-Path "$GradleRoot\bin\gradle.bat")) {
     $zip = Join-Path $ToolsRoot 'gradle-8.9.zip'
-    $checksum = (Invoke-WebRequest -UseBasicParsing 'https://services.gradle.org/distributions/gradle-8.9-bin.zip.sha256').Content.Trim()
+    $checksum = (Get-RemoteText 'https://services.gradle.org/distributions/gradle-8.9-bin.zip.sha256').Trim()
     if ($checksum -notmatch '^[a-fA-F0-9]{64}$') { throw 'Invalid Gradle checksum response.' }
     Download-Verified 'https://services.gradle.org/distributions/gradle-8.9-bin.zip' $zip $checksum
     Expand-Archive -LiteralPath $zip -DestinationPath $ToolsRoot -Force
