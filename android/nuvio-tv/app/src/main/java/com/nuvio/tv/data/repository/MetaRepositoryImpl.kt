@@ -141,6 +141,10 @@ class MetaRepositoryImpl @Inject constructor(
         type: String,
         id: String
     ): Flow<NetworkResult<Meta>> = flow {
+        if (!id.startsWith("ch:") || !CinemaHallSourcePolicy.isOwnCatalog(addonBaseUrl, "app.cinemahall.catalog")) {
+            emit(NetworkResult.Error("Карточка доступна только через CinemaHall API"))
+            return@flow
+        }
         ServerItemRef.parse(id)?.let { ref ->
             emitAll(serverMeta(ref))
             return@flow
@@ -240,6 +244,10 @@ class MetaRepositoryImpl @Inject constructor(
         id: String,
         sourceAddonBaseUrl: String?
     ): Flow<NetworkResult<Meta>> = flow {
+        if (!id.startsWith("ch:")) {
+            emit(NetworkResult.Error("Карточка доступна только через CinemaHall API"))
+            return@flow
+        }
         ServerItemRef.parse(id)?.let { ref ->
             emitAll(serverMeta(ref))
             return@flow
@@ -501,6 +509,10 @@ class MetaRepositoryImpl @Inject constructor(
         type: String,
         id: String
     ): Flow<NetworkResult<Meta>> = flow {
+        if (!id.startsWith("ch:")) {
+            emit(NetworkResult.Error("Карточка доступна только через CinemaHall API"))
+            return@flow
+        }
         ServerItemRef.parse(id)?.let { ref ->
             emitAll(serverMeta(ref))
             return@flow

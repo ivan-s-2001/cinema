@@ -5,7 +5,7 @@ on:
   pull_request:
   workflow_dispatch:
 concurrency:
-  group: cinemahall-nuvio-${{ github.ref }}
+  group: cinemahall-nuvio-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: true
 permissions:
   contents: read
