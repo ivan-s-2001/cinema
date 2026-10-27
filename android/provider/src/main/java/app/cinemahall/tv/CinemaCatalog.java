@@ -280,8 +280,9 @@ final class CinemaCatalog {
                     else if(parts[3].equals(Logic.episodeKey(path))||(!candidate.episodeFile(parts[3]).isEmpty()&&path.endsWith(candidate.episodeFile(parts[3])))){selected=file;break;}
                 }
                 if(selected==null)throw new Exception("Episode not found");
+                Sources.recordOutcome(candidate,true);
                 return new Reply("",Net.ENGINE+"/stream/video?link="+Net.enc(hash)+"&index="+selected.getInt("id")+"&play");
-            }catch(Exception error){failure=error;if(!hash.isEmpty())try{Net.json(Net.ENGINE+"/torrents",new JSONObject().put("action","rem").put("hash",hash));}catch(Exception ignored){}}
+            }catch(Exception error){failure=error;Sources.recordOutcome(candidate,false);if(!hash.isEmpty())try{Net.json(Net.ENGINE+"/torrents",new JSONObject().put("action","rem").put("hash",hash));}catch(Exception ignored){}}
         }
         throw new Exception("No playable source",failure);
     }
