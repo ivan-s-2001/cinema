@@ -23,8 +23,10 @@ final class CinemaCatalog {
         new LinkedHashMap<String,ShelfCacheEntry>(24,.75f,true){
             @Override protected boolean removeEldestEntry(Map.Entry<String,ShelfCacheEntry> e){return size()>24;}
         });
+    // Striped locks coalesce identical concurrent shelf requests without serializing unrelated rows.
+    private final Object[] shelfLocks=new Object[16];
     static final class Reply {final String body,location;Reply(String body){this.body=body;this.location=null;}Reply(String body,String location){this.body=body;this.location=location;}}
-    CinemaCatalog(Context context){this.context=context;this.base=CinemaServer.base(context);snapshot=new CinemaSnapshot(context);}
+    CinemaCatalog(Context context){this.context=context;this.base=CinemaServer.base(context);snapshot=new CinemaSnapshot(context);for(int i=0;i<shelfLocks.length;i++)shelfLocks[i]=new Object();}
     static JSONObject manifest() throws JSONException {
         JSONArray rows=new JSONArray();for(String[] row:ROWS)rows.put(new JSONObject().put("id",row[0]).put("name",row[1]).put("type",row[2]).put("pageSize",24).put("showInHome",true).put("extra",new JSONArray().put(new JSONObject().put("name","skip")).put(new JSONObject().put("name","search"))));
         return new JSONObject().put("id","app.cinemahall.catalog").put("name","CinemaHall").put("version","0.6.0")
@@ -129,16 +131,34 @@ final class CinemaCatalog {
     }
     private JSONObject catalog(String type,String category,String search,int skip) throws Exception {
         String cacheKey=type+"|"+category+"|"+search+"|"+skip;
-        ShelfCacheEntry cached=liveShelfCache.get(cacheKey);
-        if(cached!=null&&cached.expiresAt>System.currentTimeMillis())return new JSONObject(cached.json);
-        String filter=AVAILABLE+" AND serial:"+type.equals("series");
-        if(category.equals("animation"))filter+=" AND genre_name:\"мультфильм\"";if(category.equals("scifi"))filter+=" AND genre_name:\"фантастика\"";
-        if(category.startsWith("top"))filter+=" AND rating_kinopoisk:[8 TO *]";if(!search.trim().isEmpty())filter+=" AND "+Logic.searchQuery(search);
-        JSONObject result=Net.select("movie",filter,category.startsWith("new")?"release_date desc":"popularity desc",skip,24,FIELDS);JSONArray rows=new JSONArray(),values=result.getJSONArray("docs");
-        for(int i=0;i<values.length();i++){JSONObject film=values.getJSONObject(i);docs.put("ch:"+film.getString("id"),film);rows.put(meta(film,false));}
-        JSONObject response=new JSONObject().put("metas",rows).put("hasMore",skip+values.length()<result.optInt("numFound"));
-        liveShelfCache.put(cacheKey,new ShelfCacheEntry(response.toString(),System.currentTimeMillis()+120000L));
-        return response;
+        ShelfCacheEntry recent=liveShelfCache.get(cacheKey);
+        if(recent!=null&&recent.expiresAt>System.currentTimeMillis())return new JSONObject(recent.json);
+        // Waiting callers reuse the first successful response, even after a cold start.
+        synchronized(shelfLocks[(cacheKey.hashCode() & 0x7fffffff)%shelfLocks.length]){
+            ShelfCacheEntry cached=liveShelfCache.get(cacheKey);
+            if(cached!=null&&cached.expiresAt>System.currentTimeMillis())return new JSONObject(cached.json);
+            try{
+                String filter=AVAILABLE+" AND serial:"+type.equals("series");
+                if(category.equals("animation"))filter+=" AND genre_name:\\"мультфильм\\"";
+                if(category.equals("scifi"))filter+=" AND genre_name:\\"фантастика\\"";
+                if(category.startsWith("top"))filter+=" AND rating_kinopoisk:[8 TO *]";
+                if(!search.trim().isEmpty())filter+=" AND "+Logic.searchQuery(search);
+                JSONObject result=Net.select("movie",filter,category.startsWith("new")?"release_date desc":"popularity desc",skip,24,FIELDS);
+                JSONArray values=result.getJSONArray("docs"),rows=new JSONArray();
+                for(int i=0;i<values.length();i++){
+                    JSONObject film=values.getJSONObject(i);
+                    docs.put("ch:"+film.getString("id"),film);
+                    rows.put(meta(film,false));
+                }
+                JSONObject response=new JSONObject().put("metas",rows).put("hasMore",skip+values.length()<result.optInt("numFound"));
+                liveShelfCache.put(cacheKey,new ShelfCacheEntry(response.toString(),System.currentTimeMillis()+120000L));
+                return response;
+            }catch(Exception failed){
+                // Keep the previous complete shelf through temporary Zona outages.
+                if(cached!=null)return new JSONObject(cached.json);
+                throw failed;
+            }
+        }
     }
     private JSONObject document(String id) throws Exception {
         if(!id.matches("ch:[0-9]{1,12}"))throw new Exception("Unknown identity");JSONObject old=docs.get(id);if(old!=null)return old;
