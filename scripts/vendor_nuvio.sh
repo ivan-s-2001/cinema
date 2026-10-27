@@ -34,7 +34,7 @@ download_source() {
   mkdir -p "$destination"
   curl --fail --location --silent --show-error --retry 4 --retry-all-errors \
     --connect-timeout 20 --max-time 300 \
-    "https://api.github.com/repos/${repository}/tarball/${sha}" -o "$archive"
+    "https://codeload.github.com/${repository}/tar.gz/${sha}" -o "$archive"
   tar -xzf "$archive" -C "$destination" --strip-components=1
   rm -f "$archive"
   test -n "$(find "$destination" -type f -print -quit)" || { echo "::error::Empty tree $destination"; exit 1; }
@@ -52,6 +52,8 @@ done
 for entry in "${entries[@]}"; do
   IFS='|' read -r directory repository sha <<< "$entry"
   gitlinks="$(curl --fail --silent --show-error \
+    -H "Authorization: Bearer ${GITHUB_TOKEN:?GITHUB_TOKEN missing}" \
+    -H "Accept: application/vnd.github+json" \
     "https://api.github.com/repos/${repository}/git/trees/${sha}?recursive=1" \
     | python3 -c 'import json,sys; data=json.load(sys.stdin); assert not data.get("truncated"); print(chr(10).join(x["path"] for x in data["tree"] if x["mode"]=="160000"))')"
   if [ -n "$gitlinks" ]; then
