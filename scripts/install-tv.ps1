@@ -68,10 +68,10 @@ if (-not (Test-Path $SdkManager)) {
     $stage = Join-Path $ToolsRoot 'sdk-unpack'
     if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
     Expand-Archive -LiteralPath $zip -DestinationPath $stage -Force
-    $target = Join-Path $SdkRoot 'cmdline-tools\23.0'
-    New-Item -ItemType Directory -Force (Split-Path $target -Parent) | Out-Null
-    if (Test-Path $target) { Remove-Item -Recurse -Force $target }
-    Move-Item (Join-Path $stage 'cmdline-tools') $target
+    $CmdlineToolsDir = Join-Path $SdkRoot 'cmdline-tools\23.0'
+    New-Item -ItemType Directory -Force (Split-Path $CmdlineToolsDir -Parent) | Out-Null
+    if (Test-Path $CmdlineToolsDir) { Remove-Item -Recurse -Force $CmdlineToolsDir }
+    Move-Item (Join-Path $stage 'cmdline-tools') $CmdlineToolsDir
     Remove-Item -Recurse -Force $stage
 }
 $env:ANDROID_HOME = $SdkRoot
