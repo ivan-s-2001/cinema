@@ -10,6 +10,26 @@ concurrency:
 permissions:
   contents: read
 jobs:
+  verify-tv:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: '16111833'
+          packages: 'platform-tools'
+      - uses: gradle/actions/setup-gradle@v4
+      - run: python3 scripts/prepare_nuvio.py --target tv
+      - run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - run: python3 scripts/check_provider.py
+      - name: Compile and test TV
+        working-directory: android/nuvio-tv
+        run: bash ./gradlew :app:compileFullDebugKotlin :app:testFullDebugUnitTest --tests "com.nuvio.tv.ui.screens.stream.CinemaQualityTest" --tests "com.nuvio.tv.ui.screens.settings.SettingsCatalogTest" --tests "com.nuvio.tv.ui.util.HeroMetadataFormatterTest" --no-daemon --max-workers=2
   catalogue:
     runs-on: ubuntu-latest
     outputs:
