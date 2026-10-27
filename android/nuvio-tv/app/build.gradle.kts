@@ -223,8 +223,9 @@ android {
 
     buildTypes {
         debug {
-            signingConfig = signingConfigs.getByName("release")
-            isDebuggable = parseBooleanProperty(providers.gradleProperty("debuggable").orNull)
+            // Local CinemaHall debug APK uses Android SDK debug keystore, never upstream release keys.
+            signingConfig = signingConfigs.getByName("debug")
+            isDebuggable = true
             isMinifyEnabled = false
 
             buildConfigField("boolean", "IS_DEBUG_BUILD", "true")
