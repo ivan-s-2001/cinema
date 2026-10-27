@@ -124,6 +124,18 @@ final class CinemaCatalog {
             List<Sources.Candidate> candidates=Sources.load(film.optString("id"),episode,names,film.optInt("year"));
             JSONArray streams=new JSONArray();
             JSONArray qualities=new JSONArray();
+            // A single ready-to-play option first; detailed quality/voice choices remain available.
+            ArrayList<Sources.Candidate> preferred=Sources.ordered(candidates,"","","1080p");
+            if(!preferred.isEmpty()){
+                Sources.Candidate best=preferred.get(0);
+                String voiceKey=Logic.voiceKey(best.translation);
+                String autoUrl=base+"/play/"+playToken+"/"+Net.enc(titleId)+"/"+Net.enc(episode)+"/"+Net.enc(best.quality)+"/"+Net.enc(voiceKey)+"/video.mkv";
+                streams.put(new JSONObject().put("name","CinemaHall · Авто")
+                    .put("title","Смотреть · рекомендуемое")
+                    .put("url",autoUrl).put("technologyHints",new JSONArray(best.technologyHints))
+                    .put("hintsVerified",false)
+                    .put("behaviorHints",new JSONObject().put("bingeGroup","cinemahall:auto")));
+            }
             for(Map.Entry<String,LinkedHashMap<String,ArrayList<Sources.Candidate>>> q:Sources.grouped(candidates,"1080p").entrySet()){
                 JSONArray voiceOptions=new JSONArray();
                 for(ArrayList<Sources.Candidate> voices:q.getValue().values()){
@@ -132,7 +144,7 @@ final class CinemaCatalog {
                     String voiceKey=Logic.voiceKey(voice);
                     String voiceLabel=voice.isEmpty()?"Озвучка не указана":voice;
                     String url=base+"/play/"+playToken+"/"+Net.enc(titleId)+"/"+Net.enc(episode)+"/"+Net.enc(q.getKey())+"/"+Net.enc(voiceKey)+"/video.mkv";
-                    voiceOptions.put(new JSONObject().put("id",voiceKey).put("name",voiceLabel).put("streamIndex",streams.length())
+                    voiceOptions.put(new JSONObject().put("id",voiceKey).put("name",voiceLabel).put("sourceCount",voices.size()).put("streamIndex",streams.length())
                         .put("technologyHints",new JSONArray(candidate.technologyHints)).put("hintsVerified",false));
                     // Existing Nuvio clients still receive their standard stream contract.
                     streams.put(new JSONObject().put("name","CinemaHall · "+q.getKey()).put("title",voiceLabel).put("url",url)
