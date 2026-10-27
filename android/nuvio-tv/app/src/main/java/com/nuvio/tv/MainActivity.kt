@@ -734,18 +734,8 @@ open class MainActivity : ComponentActivity() {
                     val needsEssentialAddonSetup = false
                     val pendingDeepLink by pendingDeepLinkUrl.collectAsState()
 
-                    LaunchedEffect(pendingDeepLink) {
-                        val url = pendingDeepLink ?: return@LaunchedEffect
-                        val deepLink = DeepLinkParser.parse(url)
-                        if (deepLink is AppDeepLink.AddonInstall && (needsEssentialAddonSetup || !layoutChosen)) {
-                            Toast.makeText(context, context.getString(R.string.addon_installing), Toast.LENGTH_SHORT).show()
-                            val installResult = deepLinkHandler.installAddon(deepLink.manifestUrl)
-                            if (pendingDeepLinkUrl.value == url) {
-                                pendingDeepLinkUrl.value = null
-                            }
-                            Toast.makeText(context, installResult.message, Toast.LENGTH_LONG).show()
-                        }
-                    }
+                    // External add-on manifest links are never installed by CinemaHall.
+                    // Navigation handles these deep links by dismissing them safely.
 
                     if (needsEssentialAddonSetup) {
                         startupDestination = StartupDestination.Setup
