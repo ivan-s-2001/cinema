@@ -293,7 +293,17 @@ class AddonRepositoryImpl(
         }
         .stateIn(syncScope, SharingStarted.Eagerly, emptyList<Addon>())
 
-    override fun getInstalledAddons(): Flow<List<Addon>> = installedAddonsFlow
+    // The Nuvio add-on transport remains an internal compatibility layer only.
+    // Always register CinemaHall's embedded API; installed third-party add-ons
+    // are intentionally excluded from home, search and playback discovery.
+    override fun getInstalledAddons(): Flow<List<Addon>> = flow {
+        val result = fetchAddon("http://127.0.0.1:18991")
+        emit(
+            if (result is NetworkResult.Success &&
+                CinemaHallSourcePolicy.isOwnCatalog(result.data.baseUrl, result.data.id)
+            ) listOf(result.data.copy(enabled = true)) else emptyList()
+        )
+    }
 
     override suspend fun fetchAddon(baseUrl: String): NetworkResult<Addon> {
         val cleanBaseUrl = canonicalizeUrl(baseUrl)
