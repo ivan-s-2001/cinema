@@ -31,7 +31,7 @@ cd cinema-pr3
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-tv.ps1 -TvAddress "192.168.8.118:5555"
 ```
 
-For an existing checkout, run `git pull --ff-only` first. The script initializes the pinned submodule, applies only the integration patch, downloads verified JDK/SDK/TorrServer packages, builds the full application, installs via ADB, and resolves its actual launcher. It never uninstalls existing apps. If a submodule contains incompatible local modifications, it stops without resetting them. After an integration patch changes, use a fresh checkout if an older patch is still applied.
+For an existing checkout, run `git pull --ff-only` first. The script initializes the pinned submodule, applies only the integration patch, downloads verified JDK 21 / command-line tools 23 / SDK / TorrServer packages, builds the full application, installs via ADB, and resolves its actual launcher. It never uninstalls existing apps. If a submodule contains incompatible local modifications, it stops without resetting them. After an integration patch changes, use a fresh checkout if an older patch is still applied.
 
 Other targets:
 

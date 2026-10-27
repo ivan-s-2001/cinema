@@ -31,13 +31,13 @@ function Download-Verified([string]$Url, [string]$Destination, [string]$Checksum
     } finally { if (Test-Path $part) { Remove-Item -Force $part } }
 }
 
-Write-Host '[1/6] Java 17' -ForegroundColor Cyan
-$JavaRoot = Join-Path $ToolsRoot 'jdk17'
+Write-Host '[1/6] Java 21' -ForegroundColor Cyan
+$JavaRoot = Join-Path $ToolsRoot 'jdk21'
 if (-not (Test-Path "$JavaRoot\bin\javac.exe")) {
-    $assets = Invoke-RestMethod 'https://api.adoptium.net/v3/assets/latest/17/hotspot?architecture=x64&image_type=jdk&os=windows&vendor=eclipse'
+    $assets = Invoke-RestMethod 'https://api.adoptium.net/v3/assets/latest/21/hotspot?architecture=x64&image_type=jdk&os=windows&vendor=eclipse'
     $package = @($assets)[0].binary.package
-    if (-not $package.checksum -or -not $package.link) { throw 'Adoptium не вернул JDK 17.' }
-    $archive = Join-Path $ToolsRoot 'jdk17.zip'
+    if (-not $package.checksum -or -not $package.link) { throw 'Adoptium не вернул JDK 21.' }
+    $archive = Join-Path $ToolsRoot 'jdk21.zip'
     Download-Verified $package.link $archive $package.checksum
     $stage = Join-Path $ToolsRoot 'jdk-unpack'
     if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
@@ -54,21 +54,21 @@ Invoke-Checked { & "$JavaRoot\bin\javac.exe" -version }
 
 Write-Host '[2/6] Android SDK; принятие лицензий SDK для сборки' -ForegroundColor Cyan
 $SdkRoot = Join-Path $ToolsRoot 'android-sdk'
-$SdkManager = Join-Path $SdkRoot 'cmdline-tools\12.0\bin\sdkmanager.bat'
+$SdkManager = Join-Path $SdkRoot 'cmdline-tools\23.0\bin\sdkmanager.bat'
 if (-not (Test-Path $SdkManager)) {
-    # Fixed version, compatible with JDK 17. Obtain its checksum from Google's repository metadata.
-    [xml]$index = Get-RemoteText 'https://dl.google.com/android/repository/repository2-1.xml'
-    $toolPackage = $index.SelectSingleNode("//*[local-name()='remotePackage' and @path='cmdline-tools;12.0']")
-    if (-not $toolPackage) { throw 'В официальном индексе Google нет cmdline-tools 12.0.' }
+    # Fixed version, compatible with JDK 21. Obtain its checksum from Google's repository metadata.
+    [xml]$index = Get-RemoteText 'https://dl.google.com/android/repository/repository2-3.xml'
+    $toolPackage = $index.SelectSingleNode("//*[local-name()='remotePackage' and @path='cmdline-tools;23.0']")
+    if (-not $toolPackage) { throw 'В официальном индексе Google нет cmdline-tools 23.0.' }
     $win = $toolPackage.SelectSingleNode("archives/archive[host-os='windows']/complete")
-    if (-not $win) { throw 'В индексе Google нет Windows-архива cmdline-tools 12.0.' }
+    if (-not $win) { throw 'В индексе Google нет Windows-архива cmdline-tools 23.0.' }
     $url = 'https://dl.google.com/android/repository/' + $win.SelectSingleNode('url').InnerText
-    $zip = Join-Path $ToolsRoot 'android-commandlinetools-12.zip'
+    $zip = Join-Path $ToolsRoot 'android-commandlinetools-23.zip'
     Download-Verified $url $zip $win.SelectSingleNode('checksum').InnerText 'SHA1'
     $stage = Join-Path $ToolsRoot 'sdk-unpack'
     if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
     Expand-Archive -LiteralPath $zip -DestinationPath $stage -Force
-    $target = Join-Path $SdkRoot 'cmdline-tools\12.0'
+    $target = Join-Path $SdkRoot 'cmdline-tools\23.0'
     New-Item -ItemType Directory -Force (Split-Path $target -Parent) | Out-Null
     if (Test-Path $target) { Remove-Item -Recurse -Force $target }
     Move-Item (Join-Path $stage 'cmdline-tools') $target
