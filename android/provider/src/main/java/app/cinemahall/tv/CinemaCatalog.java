@@ -60,13 +60,24 @@ final class CinemaCatalog {
             engine();ArrayList<String> names=new ArrayList<>();for(String field:new String[]{"name_rus","name_original","name_eng"})names.add(film.optString(field));
             List<Sources.Candidate> candidates=Sources.load(film.optString("id"),episode,names,film.optInt("year"));
             JSONArray streams=new JSONArray();
-            for(Map.Entry<String,LinkedHashMap<String,ArrayList<Sources.Candidate>>> q:Sources.grouped(candidates,"1080p").entrySet())for(ArrayList<Sources.Candidate> voices:q.getValue().values()){
-                Sources.Candidate candidate=voices.get(0);String voice=candidate.translation;
-                String url=base+"/play/"+playToken+"/"+Net.enc(titleId)+"/"+Net.enc(episode)+"/"+Net.enc(q.getKey())+"/"+Net.enc(Logic.voiceKey(voice))+"/video.mkv";
-                streams.put(new JSONObject().put("name","CinemaHall · "+q.getKey()).put("title",(voice.isEmpty()?"Озвучка не указана":voice)+"\nКачество заявлено источником").put("url",url)
-                    .put("behaviorHints",new JSONObject().put("bingeGroup","cinemahall:"+q.getKey()+":"+Logic.voiceKey(voice))));
+            JSONArray qualities=new JSONArray();
+            for(Map.Entry<String,LinkedHashMap<String,ArrayList<Sources.Candidate>>> q:Sources.grouped(candidates,"1080p").entrySet()){
+                JSONArray voiceOptions=new JSONArray();
+                for(ArrayList<Sources.Candidate> voices:q.getValue().values()){
+                    Sources.Candidate candidate=voices.get(0);
+                    String voice=candidate.translation;
+                    String voiceKey=Logic.voiceKey(voice);
+                    String voiceLabel=voice.isEmpty()?"Озвучка не указана":voice;
+                    String url=base+"/play/"+playToken+"/"+Net.enc(titleId)+"/"+Net.enc(episode)+"/"+Net.enc(q.getKey())+"/"+Net.enc(voiceKey)+"/video.mkv";
+                    voiceOptions.put(new JSONObject().put("id",voiceKey).put("name",voiceLabel).put("streamIndex",streams.length()));
+                    // Existing Nuvio clients still receive their standard stream contract.
+                    streams.put(new JSONObject().put("name","CinemaHall · "+q.getKey()).put("title",voiceLabel).put("url",url)
+                        .put("behaviorHints",new JSONObject().put("bingeGroup","cinemahall:"+q.getKey()+":"+voiceKey)));
+                }
+                qualities.put(new JSONObject().put("id",q.getKey()).put("label",q.getKey()).put("voices",voiceOptions));
             }
-            return new Reply(new JSONObject().put("streams",streams).toString());
+            // CinemaHall's own UI uses qualities[]; the native Nuvio adapter uses streams[].
+            return new Reply(new JSONObject().put("streams",streams).put("qualities",qualities).toString());
         }
         throw new Exception("Unknown route");
     }
