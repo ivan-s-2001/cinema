@@ -4,6 +4,7 @@ import android.content.*;
 import org.json.*;
 import java.util.*;
 import java.net.URLDecoder;
+import java.util.concurrent.*;
 
 /** Own catalogue/metadata/search/streams behind the clients' normal add-on contract. */
 final class CinemaCatalog {
@@ -25,6 +26,33 @@ final class CinemaCatalog {
         });
     // Striped locks coalesce identical concurrent shelf requests without serializing unrelated rows.
     private final Object[] shelfLocks=new Object[16];
+    // Episode previews are refreshed off the request thread, with bounded concurrency.
+    private final ExecutorService episodeEnrichment=Executors.newSingleThreadExecutor(r->{
+        Thread thread=new Thread(r,"cinemahall-episode-artwork");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private final Map<String,Long> episodeRefresh=Collections.synchronizedMap(
+        new LinkedHashMap<String,Long>(64,.75f,true){
+            @Override protected boolean removeEldestEntry(Map.Entry<String,Long> e){return size()>64;}
+        });
+    private void refreshEpisodeArtwork(JSONObject source){
+        String id=source.optString("imdb");
+        if(id.isEmpty())id=source.optString("id");
+        if(id.isEmpty())return;
+        final String key=id;
+        final long now=System.currentTimeMillis();
+        synchronized(episodeRefresh){
+            Long last=episodeRefresh.get(key);
+            if(last!=null&&now-last<3600000L)return;
+            episodeRefresh.put(key,now);
+        }
+        final JSONObject film=source;
+        episodeEnrichment.execute(()->{
+            try{Metadata.load(context,film,true);}
+            catch(Exception error){android.util.Log.w("CinemaHall","Episode artwork enrichment failed",error);}
+        });
+    }
     static final class Reply {final String body,location;Reply(String body){this.body=body;this.location=null;}Reply(String body,String location){this.body=body;this.location=location;}}
     CinemaCatalog(Context context){this.context=context;this.base=CinemaServer.base(context);snapshot=new CinemaSnapshot(context);for(int i=0;i<shelfLocks.length;i++)shelfLocks[i]=new Object();}
     static JSONObject manifest() throws JSONException {
@@ -62,6 +90,7 @@ final class CinemaCatalog {
                     if(missing){
                         JSONObject enrichment=Metadata.cachedDetails(context,source);
                         JSONArray episodes=enrichment.optJSONArray("episodes");
+                        if(episodes==null||episodes.length()==0)refreshEpisodeArtwork(source);
                         Map<String,JSONObject> existing=new HashMap<>();
                         for(int i=0;i<videos.length();i++){JSONObject video=videos.getJSONObject(i);existing.put(video.optInt("season")+":"+video.optInt("episode"),video);}
                         if(episodes!=null)for(int i=0;i<episodes.length();i++){
