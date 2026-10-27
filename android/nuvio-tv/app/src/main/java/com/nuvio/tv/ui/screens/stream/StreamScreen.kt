@@ -1010,9 +1010,10 @@ private fun RightStreamSection(
 /** CinemaHall playback options: quality first, voice second; releases stay internal to the API. */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun CinemaHallQualityVoicePicker(
+internal fun CinemaHallQualityVoicePicker(
     streams: List<Stream>,
-    onStreamSelected: (Stream) -> Unit
+    onStreamSelected: (Stream) -> Unit,
+    firstTabFocusRequester: FocusRequester? = null
 ) {
     val order = remember { listOf("4K", "2K", "1080p", "720p", "576p", "480p", "360p", "240p") }
     val groups = remember(streams) {
@@ -1037,6 +1038,7 @@ private fun CinemaHallQualityVoicePicker(
                 val selected = quality == entry.first
                 Card(
                     onClick = { quality = entry.first },
+                    modifier = if (entry == groups.firstOrNull() && firstTabFocusRequester != null) Modifier.focusRequester(firstTabFocusRequester) else Modifier,
                     colors = CardDefaults.colors(
                         containerColor = if (selected) NuvioTheme.colors.Secondary else NuvioTheme.colors.BackgroundCard,
                         focusedContainerColor = NuvioTheme.colors.Secondary

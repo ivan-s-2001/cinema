@@ -941,9 +941,9 @@ fun ClassicHomeContent(
 internal fun MetaPreview.toClassicFocusArtwork(useBackdrop: Boolean, useLandscape: Boolean = false): ClassicFocusArtwork {
     return ClassicFocusArtwork(
         imageUrl = if (useLandscape) {
-            landscapePoster ?: background ?: poster
+            landscapePoster ?: background
         } else if (useBackdrop) {
-            background ?: landscapePoster ?: poster
+            background ?: landscapePoster
         } else {
             poster ?: landscapePoster ?: background
         },

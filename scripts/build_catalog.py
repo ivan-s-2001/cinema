@@ -101,6 +101,12 @@ def image_url(value):
     return value if isinstance(value, str) and value.startswith("https://") else ""
 
 
+def tmdb_image_url(value):
+    if isinstance(value, str) and value.startswith("/") and not value.startswith("//"):
+        return "https://image.tmdb.org/t/p/original" + value
+    return image_url(value)
+
+
 def title_id(raw):
     return {k: str(v) for k, v in (raw or {}).items() if k in ID_FIELDS and v is not None and str(v).strip()}
 
@@ -353,7 +359,7 @@ def details(row, key, season_limit=3):
                     continue
                 summary = {
                     "number": number, "name": season.get("name_ru") or season.get("name_en") or f"Сезон {number}",
-                    "poster": image_url(season.get("poster_path")), "count": season.get("episode_count"),
+                    "poster": tmdb_image_url(season.get("poster_path")), "count": season.get("episode_count"),
                     "animeMappings": season.get("anime_mappings") or [],
                 }
                 if len(bundle["seasons"]) < season_limit:
@@ -362,7 +368,7 @@ def details(row, key, season_limit=3):
                         summary["episodes"] = [{"number": e.get("episode_number"),
                                                 "name": e.get("name_ru") or e.get("name_en") or "",
                                                 "overview": e.get("overview_ru") or e.get("overview_en") or "",
-                                                "date": e.get("air_date"), "still": image_url(e.get("still_path")),
+                                                "date": e.get("air_date"), "still": tmdb_image_url(e.get("still_path")),
                                                 "animeMapping": e.get("anime_mapping")}
                                                for e in (episodes.get("data") or [])[:100]]
                 bundle["seasons"].append(summary)

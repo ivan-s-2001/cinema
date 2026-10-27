@@ -40,13 +40,28 @@ final class CinemaCatalog {
             JSONObject bundled=snapshot.detail(id);
             if(bundled!=null&&parts[1].equals("series")){
                 JSONObject source=snapshot.document(id);
-                if(source!=null&&source.optString("id").matches("[0-9]{1,12}"))try{
-                    JSONObject film=document("ch:"+source.getString("id"));JSONArray videos=bundled.getJSONArray("videos");
-                    mergeKnownEpisodes(id,videos,film.optString("episodes"));
-                    // The enrichment budget limits descriptions, never the actual series navigation.
-                    if(videos.length()==0){JSONObject live=meta(film,true);JSONArray extra=live.optJSONArray("videos");
-                        if(extra!=null)for(int i=0;i<extra.length();i++){JSONObject ep=extra.getJSONObject(i);ep.put("id",id+":"+ep.getInt("season")+":"+ep.getInt("episode"));videos.put(ep);}
-                        if(live.optString("description").contains("TVmaze"))bundled.put("description",live.getString("description"));}
+                if(source!=null)try{
+                    JSONArray videos=bundled.getJSONArray("videos");
+                    if(source.optString("id").matches("[0-9]{1,12}"))try{
+                        JSONObject film=document("ch:"+source.getString("id"));
+                        mergeKnownEpisodes(id,videos,film.optString("episodes"));
+                    }catch(Exception optional){}
+                    boolean missing=videos.length()==0;
+                    for(int i=0;i<videos.length()&&!missing;i++)missing=videos.getJSONObject(i).optString("thumbnail").isEmpty();
+                    if(missing){
+                        JSONObject enrichment=Metadata.load(context,source,true);
+                        JSONArray episodes=enrichment.optJSONArray("episodes");
+                        Map<String,JSONObject> existing=new HashMap<>();
+                        for(int i=0;i<videos.length();i++){JSONObject video=videos.getJSONObject(i);existing.put(video.optInt("season")+":"+video.optInt("episode"),video);}
+                        if(episodes!=null)for(int i=0;i<episodes.length();i++){
+                            JSONObject episode=episodes.optJSONObject(i);if(episode==null)continue;
+                            int season=episode.optInt("season"),number=episode.optInt("number");if(season<1||number<1)continue;
+                            String key=season+":"+number;JSONObject video=existing.get(key);
+                            if(video==null){video=new JSONObject().put("id",id+":"+season+":"+number).put("season",season).put("episode",number).put("title",episode.optString("name"));videos.put(video);existing.put(key,video);}
+                            JSONObject image=episode.optJSONObject("image");
+                            if(video.optString("thumbnail").isEmpty()&&image!=null&&!image.optString("original").isEmpty())video.put("thumbnail",image.optString("original"));
+                        }
+                    }
                     bundled.put("videos",videos);
                 }catch(Exception optional){} // Keep the base card if optional episode enrichment fails.
             }

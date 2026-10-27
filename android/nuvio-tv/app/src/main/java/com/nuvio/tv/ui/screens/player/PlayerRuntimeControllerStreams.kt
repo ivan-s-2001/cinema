@@ -15,6 +15,7 @@ import com.nuvio.tv.domain.model.AddonStreams
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.model.StreamDebridCacheState
 import com.nuvio.tv.domain.model.Video
+import com.nuvio.tv.ui.screens.stream.cinemaPreferredStream
 import com.nuvio.tv.domain.model.enabledAddons
 import com.nuvio.tv.ui.components.SourceChipItem
 import com.nuvio.tv.ui.components.SourceChipStatus
@@ -1219,7 +1220,7 @@ internal fun PlayerRuntimeController.loadStreamsForEpisode(video: Video, forceRe
     val requestKey = buildEpisodeRequestKey(type = type, video = video)
     val state = _uiState.value
     val hasCachedPayload = state.episodeAllStreams.isNotEmpty() || state.episodeStreamsError != null
-    if (!forceRefresh && requestKey == episodeStreamsCacheRequestKey && hasCachedPayload) {
+    if (!forceRefresh && requestKey == episodeStreamsCacheRequestKey && hasCachedPayload && !video.id.startsWith("ch:")) {
         _uiState.update {
             it.copy(
                 showEpisodeStreams = true,
@@ -1259,6 +1260,9 @@ internal fun PlayerRuntimeController.loadStreamsForEpisode(video: Video, forceRe
             )
         }
 
+        val cinemaAutoPlay = video.id.startsWith("ch:")
+        val preferredQuality = if (cinemaAutoPlay) playerSettingsDataStore.playerSettings.first().cinemaPreferredQuality else "BEST"
+        var cinemaSelected = false
         val installedAddons = streamAddonsFor(video.id)
         val installedAddonOrder = installedAddons.map { it.displayName }
         val installedAddonNames = installedAddonOrder.toSet()
@@ -1279,6 +1283,14 @@ internal fun PlayerRuntimeController.loadStreamsForEpisode(video: Video, forceRe
                 is NetworkResult.Success -> {
                     val addonStreams = StreamAutoPlaySelector.orderAddonStreams(result.data, installedAddonOrder, preferredServerNames)
                     val allStreams = addonStreams.flatMap { it.streams }
+                    if (cinemaAutoPlay && !cinemaSelected) {
+                        val selected = cinemaPreferredStream(allStreams, preferredQuality)
+                        if (selected != null) {
+                            cinemaSelected = true
+                            switchToEpisodeStream(selected, forcedTargetVideo = video)
+                            return@collect
+                        }
+                    }
                     val availableAddons = addonStreams.map { it.addonName }
                     val currentFilter = _uiState.value.episodeSelectedAddonFilter
                     val filteredStreams = if (currentFilter == null) {

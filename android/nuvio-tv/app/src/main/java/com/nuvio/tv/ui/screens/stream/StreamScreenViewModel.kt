@@ -412,7 +412,7 @@ class StreamScreenViewModel @Inject constructor(
                 directAutoPlayFlowEnabledForSession = false
                 autoPlayHandledForSession = true
             } else if (!directAutoPlayModeInitializedForSession) {
-                directAutoPlayFlowEnabledForSession = shouldUseDirectAutoPlayFlow(
+                directAutoPlayFlowEnabledForSession = videoId.startsWith("ch:") || shouldUseDirectAutoPlayFlow(
                     playerPreference = playerSettings.playerPreference,
                     streamAutoPlayMode = playerSettings.streamAutoPlayMode
                 )
@@ -431,7 +431,7 @@ class StreamScreenViewModel @Inject constructor(
             }
 
             if (
-                playerSettings.streamAutoPlayMode == StreamAutoPlayMode.REGEX_MATCH &&
+                !videoId.startsWith("ch:") && playerSettings.streamAutoPlayMode == StreamAutoPlayMode.REGEX_MATCH &&
                 !StreamAutoPlayPolicy.isRegexSelectionConfigured(playerSettings.streamAutoPlayRegex)
             ) {
                 directAutoPlayFlowEnabledForSession = false
@@ -460,7 +460,7 @@ class StreamScreenViewModel @Inject constructor(
                 }
             }
 
-            if (!autoPlayHandledForSession && playerSettings.streamReuseLastLinkEnabled) {
+            if (!autoPlayHandledForSession && !videoId.startsWith("ch:") && playerSettings.streamReuseLastLinkEnabled) {
                 val cached = streamLinkCacheDataStore.getValid(
                     contentKey = streamCacheKey,
                     maxAgeMs = playerSettings.streamReuseLastLinkCacheHours * 60L * 60L * 1000L
@@ -630,7 +630,11 @@ class StreamScreenViewModel @Inject constructor(
                 // chance to return higher-quality streams before the selector
                 // picks from whatever is available.
                 val shouldAutoSelect = !autoPlayHandledForSession && !resolvedAutoPlayTarget && isAllLoaded
-                val selectedAutoPlayStream = if (earlyBingeGroupMatch != null) {
+                val cinemaStreams = allStreams.filter { it.addonName == "CinemaHall" }
+                val selectedAutoPlayStream = if (!manualSelection && videoId.startsWith("ch:") &&
+                    !autoPlayHandledForSession && !resolvedAutoPlayTarget && cinemaStreams.isNotEmpty()) {
+                    cinemaPreferredStream(cinemaStreams, playerSettings.cinemaPreferredQuality)
+                } else if (earlyBingeGroupMatch != null) {
                     earlyBingeGroupMatch
                 } else if (!shouldAutoSelect) {
                     null

@@ -305,6 +305,7 @@ data class PlayerSettings(
     val frameRateMatchingMode: FrameRateMatchingMode = FrameRateMatchingMode.OFF,
     val resolutionMatchingEnabled: Boolean = false,
     // Stream selection settings
+    val cinemaPreferredQuality: String = "BEST",
     val streamAutoPlayMode: StreamAutoPlayMode = StreamAutoPlayMode.MANUAL,
     val streamAutoPlaySource: StreamAutoPlaySource = StreamAutoPlaySource.ALL_SOURCES,
     val streamAutoPlaySelectedAddons: Set<String> = emptySet(),
@@ -594,6 +595,7 @@ class PlayerSettingsDataStore @Inject constructor(
     private val frameRateMatchingKey = booleanPreferencesKey("frame_rate_matching")
     private val frameRateMatchingModeKey = stringPreferencesKey("frame_rate_matching_mode")
     private val resolutionMatchingEnabledKey = booleanPreferencesKey("resolution_matching_enabled")
+    private val cinemaPreferredQualityKey = stringPreferencesKey("cinema_preferred_quality")
     private val streamAutoPlayModeKey = stringPreferencesKey("stream_auto_play_mode")
     private val streamAutoPlaySourceKey = stringPreferencesKey("stream_auto_play_source")
     private val streamAutoPlaySelectedAddonsKey = stringSetPreferencesKey("stream_auto_play_selected_addons")
@@ -987,6 +989,7 @@ class PlayerSettingsDataStore @Inject constructor(
                     runCatching { FrameRateMatchingMode.valueOf(it) }.getOrNull()
                 } ?: if (prefs[frameRateMatchingKey] == true) FrameRateMatchingMode.START_STOP else FrameRateMatchingMode.OFF,
                 resolutionMatchingEnabled = prefs[resolutionMatchingEnabledKey] ?: false,
+                cinemaPreferredQuality = prefs[cinemaPreferredQualityKey]?.takeIf { it in listOf("BEST", "4K", "2K", "1080p", "720p", "576p", "480p", "360p", "240p") } ?: "BEST",
                 streamAutoPlayMode = prefs[streamAutoPlayModeKey]?.let {
                     runCatching { StreamAutoPlayMode.valueOf(it) }.getOrDefault(StreamAutoPlayMode.MANUAL)
                 } ?: StreamAutoPlayMode.MANUAL,
@@ -1337,6 +1340,11 @@ class PlayerSettingsDataStore @Inject constructor(
         setFrameRateMatchingMode(
             if (enabled) FrameRateMatchingMode.START_STOP else FrameRateMatchingMode.OFF
         )
+    }
+
+    suspend fun setCinemaPreferredQuality(value: String) {
+        require(value in listOf("BEST", "4K", "2K", "1080p", "720p", "576p", "480p", "360p", "240p"))
+        store().edit { it[cinemaPreferredQualityKey] = value }
     }
 
     suspend fun setStreamAutoPlayMode(mode: StreamAutoPlayMode) {

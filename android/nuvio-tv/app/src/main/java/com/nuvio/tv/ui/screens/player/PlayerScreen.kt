@@ -2926,7 +2926,7 @@ private fun PlayerControlsOverlay(
                     ControlButton(
                         icon = Icons.Default.SwapHoriz,
                         iconPainter = customSourcePainter,
-                        contentDescription = stringResource(R.string.cd_sources),
+                        contentDescription = "Качество и озвучка",
                         onClick = onShowSourcesPanel,
                         upFocusRequester = progressUpTarget,
                         onDownKey = onHideControls,

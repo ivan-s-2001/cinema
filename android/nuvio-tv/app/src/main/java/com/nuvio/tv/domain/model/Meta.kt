@@ -51,7 +51,7 @@ data class Meta(
         get() = type.toApiString(rawType)
 
     val backdropUrl: String?
-        get() = background ?: landscapePoster ?: poster
+        get() = background?.takeIf { it.isNotBlank() && it != poster } ?: landscapePoster?.takeIf { it.isNotBlank() && it != poster }
 
     /**
      * Returns the list of watchable episodes — non-special (season > 0),

@@ -35,6 +35,7 @@ fun EssentialPlaybackSettingsContent(
     val playerSettings by viewModel.playerSettings.collectAsStateWithLifecycle(initialValue = null)
     val torrentSettings by viewModel.torrentSettingsFlow.collectAsStateWithLifecycle(initialValue = null)
     val coroutineScope = rememberCoroutineScope()
+    var showQualityDialog by remember { mutableStateOf(false) }
     var showSubtitleLanguageDialog by remember { mutableStateOf(false) }
     var showAudioLanguageDialog by remember { mutableStateOf(false) }
     var showDecoderPriorityDialog by remember { mutableStateOf(false) }
@@ -58,29 +59,12 @@ fun EssentialPlaybackSettingsContent(
             item(key = "playback_basics") {
                 SettingsGroupCard(modifier = Modifier.fillMaxWidth(), title = stringResource(R.string.essential_playback_basics)) {
                     SettingsActionRow(
-                        title = stringResource(R.string.essential_stream_selection),
-                        subtitle = stringResource(R.string.essential_stream_selection_subtitle),
-                        value = when (settings?.streamAutoPlayMode) {
-                            StreamAutoPlayMode.FIRST_STREAM -> stringResource(R.string.stream_auto_play_first_stream)
-                            StreamAutoPlayMode.MANUAL -> stringResource(R.string.stream_auto_play_manual_short)
-                            StreamAutoPlayMode.REGEX_MATCH -> stringResource(R.string.stream_auto_play_smart_match)
-                            null -> ""
-                        },
-                        onClick = {
-                            val current = settings?.streamAutoPlayMode ?: StreamAutoPlayMode.MANUAL
-                            val next = if (current == StreamAutoPlayMode.MANUAL) {
-                                StreamAutoPlayMode.FIRST_STREAM
-                            } else {
-                                StreamAutoPlayMode.MANUAL
-                            }
-                            coroutineScope.launch { viewModel.setStreamAutoPlayMode(next) }
-                        },
+                        title = "Предпочитаемое качество",
+                        subtitle = "Если выбранное качество недоступно, будет выбрано ближайшее доступное",
+                        value = settings?.cinemaPreferredQuality?.let { if (it == "BEST") "Наилучшее" else it },
+                        onClick = { showQualityDialog = true },
                         enabled = settings != null,
-                        modifier = if (initialFocusRequester != null) {
-                            Modifier.focusRequester(initialFocusRequester)
-                        } else {
-                            Modifier
-                        }
+                        modifier = if (initialFocusRequester != null) Modifier.focusRequester(initialFocusRequester) else Modifier
                     )
                     SettingsToggleRow(
                         title = stringResource(R.string.essential_autoplay_next_episode),
@@ -161,6 +145,19 @@ fun EssentialPlaybackSettingsContent(
         SettingsVerticalScrollIndicators(state = listState)
     }
 
+    if (showQualityDialog && settings != null) {
+        val qualities = listOf("BEST", "4K", "2K", "1080p", "720p", "576p", "480p", "360p", "240p")
+        SettingsSingleChoiceDialog(
+            title = "Предпочитаемое качество",
+            options = qualities.map { SettingsPickerOption(it, if (it == "BEST") "Наилучшее" else it, null) },
+            selectedValue = settings.cinemaPreferredQuality,
+            onOptionSelected = { quality ->
+                coroutineScope.launch { viewModel.setCinemaPreferredQuality(quality) }
+                showQualityDialog = false
+            },
+            onDismiss = { showQualityDialog = false }
+        )
+    }
     if (showSubtitleLanguageDialog && settings != null) {
         LanguageSelectionDialog(
             title = stringResource(R.string.essential_subtitle_language),

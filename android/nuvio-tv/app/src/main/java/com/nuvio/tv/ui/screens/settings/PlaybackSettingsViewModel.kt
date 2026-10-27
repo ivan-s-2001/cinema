@@ -481,6 +481,10 @@ class PlaybackSettingsViewModel @Inject constructor(
         playerSettingsDataStore.setParallelChunkSizeKb(clampedChunkKb)
     }
 
+    suspend fun setCinemaPreferredQuality(value: String) {
+        playerSettingsDataStore.setCinemaPreferredQuality(value)
+    }
+
     suspend fun setStreamAutoPlayMode(mode: StreamAutoPlayMode) {
         playerSettingsDataStore.setStreamAutoPlayMode(mode)
     }

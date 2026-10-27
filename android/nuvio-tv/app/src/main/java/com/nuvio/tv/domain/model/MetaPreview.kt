@@ -42,5 +42,5 @@ data class MetaPreview(
         get() = type.toApiString(rawType)
 
     val backdropUrl: String?
-        get() = background ?: landscapePoster ?: poster
+        get() = background?.takeIf { it.isNotBlank() && it != poster } ?: landscapePoster?.takeIf { it.isNotBlank() && it != poster }
 }

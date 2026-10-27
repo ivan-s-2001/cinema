@@ -147,7 +147,16 @@ internal fun EpisodesSidePanel(
 
                 Spacer(modifier = Modifier.height(NuvioTheme.spacing.lg))
 
-                if (uiState.showEpisodeStreams) {
+                if (uiState.showEpisodeStreams && uiState.episodeStreamsForVideoId?.startsWith("ch:") == true) {
+                    if (uiState.isLoadingEpisodeStreams) {
+                        Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { LoadingIndicator() }
+                    } else {
+                        Text(uiState.episodeStreamsError ?: "Серия пока недоступна", color = NuvioTheme.colors.TextPrimary)
+                        Spacer(Modifier.height(NuvioTheme.spacing.lg))
+                        DialogButton(text = "Повторить", onClick = onReloadEpisodeStreams, isPrimary = false)
+                        DialogButton(text = "К сериям", onClick = onBackToEpisodes, isPrimary = false)
+                    }
+                } else if (uiState.showEpisodeStreams) {
                     EpisodeStreamsView(
                         uiState = uiState,
                         onBackToEpisodes = onBackToEpisodes,
