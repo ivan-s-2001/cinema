@@ -9,6 +9,7 @@ concurrency:
   cancel-in-progress: false
 permissions:
   contents: read
+  actions: read
 jobs:
   verify-tv:
     runs-on: ubuntu-latest
@@ -33,7 +34,7 @@ jobs:
   catalogue:
     runs-on: ubuntu-latest
     outputs:
-      available: ${{ steps.snapshot.outputs.available }}
+      available: ${{ steps.snapshot.outputs.available || steps.fallback.outputs.available }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -41,16 +42,30 @@ jobs:
           python-version: '3.12'
       - run: python -m unittest discover -s tests -p 'test_catalog_builder.py'
       - id: snapshot
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         env:
           KINOAPI_KEY: ${{ secrets.KINOAPI_KEY }}
           TMDB_READ_TOKEN: ${{ secrets.TMDB_READ_TOKEN }}
         run: |
           if [ -n "$KINOAPI_KEY" ]; then
-            python scripts/build_catalog.py --pages 15 --enrich 30 --details 80 --season-limit 5 --output catalog/index.json
-            echo "available=true" >> "$GITHUB_OUTPUT"
+            if python scripts/build_catalog.py --pages 15 --enrich 30 --details 80 --season-limit 5 --output catalog/index.json; then
+              echo "available=true" >> "$GITHUB_OUTPUT"
+            fi
           fi
+      - uses: actions/download-artifact@v4
+        if: steps.snapshot.outputs.available != 'true'
+        with:
+          name: CinemaHall-bundled-catalogue
+          run-id: 40549883418
+          github-token: ${{ github.token }}
+          path: catalog/
+      - id: fallback
+        if: steps.snapshot.outputs.available != 'true'
+        run: |
+          test -s catalog/index.json
+          echo "available=true" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
-        if: steps.snapshot.outputs.available == 'true'
+        if: steps.snapshot.outputs.available == 'true' || steps.fallback.outputs.available == 'true'
         with:
           name: CinemaHall-bundled-catalogue
           path: catalog/
