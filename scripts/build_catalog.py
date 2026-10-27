@@ -127,7 +127,7 @@ def sized_artwork(url, kind):
     parts = parsed.path.split("/")
     if len(parts) < 5:
         return url
-    parts[3] = "w1920" if kind == "backdrop" else "w500"
+    parts[3] = "original" if kind == "backdrop" else "w500"
     return urllib.parse.urlunsplit(parsed._replace(path="/".join(parts)))
 
 
