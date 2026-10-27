@@ -369,7 +369,7 @@ androidComponents {
         variant.applicationId.set(if (isPlaystore) "com.nuvio.appdebug" else "com.nuviodebug.com")
     }
     // Only the full flavor ships the in-app updater.
-    onVariants(selector().withFlavor("distribution" to "full")) { variant ->
+    onVariants(selector().withFlavor("distribution" to "full").withBuildType("release")) { variant ->
         val variantName = variant.name.replaceFirstChar { it.uppercase() }
         val embedTask = tasks.register<EmbedUpdateDexMetadataTask>("embed${variantName}UpdateDexMetadata") {
             dexMetadataDirectory.from(provider {
