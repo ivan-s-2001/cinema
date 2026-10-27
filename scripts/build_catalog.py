@@ -116,6 +116,21 @@ def image_url(value, kind="poster"):
     return value if value.startswith("https://") else ""
 
 
+def sized_artwork(url, kind):
+    """Avoid downloading original 4K+ TMDB artwork on Android TV."""
+    url = image_url(url)
+    if not url:
+        return ""
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.hostname != "image.tmdb.org" or not parsed.path.startswith("/t/p/"):
+        return url
+    parts = parsed.path.split("/")
+    if len(parts) < 5:
+        return url
+    parts[3] = "w1920" if kind == "backdrop" else "w500"
+    return urllib.parse.urlunsplit(parsed._replace(path="/".join(parts)))
+
+
 def title_id(raw):
     return {k: str(v) for k, v in (raw or {}).items() if k in ID_FIELDS and v is not None and str(v).strip()}
 
@@ -483,10 +498,10 @@ def stable_id(row):
 def compact(row):
     return {"id": stable_id(row), "type": row["type"], "ids": row["ids"],
             "title": row["title"], "aliases": row["aliases"], "year": row["year"],
-            "poster": row["images"]["poster"],
+            "poster": sized_artwork(row["images"]["poster"], "poster"),
             "genres": row["genres"], "rating": next((v for k in ("kinopoisk", "imdb", "tmdb")
                 if (v := row["ratings"].get(k)) is not None), 0),
-            "background": (row["images"]["backdrop"] if row["images"]["backdropVerified"] and
+            "background": (sized_artwork(row["images"]["backdrop"], "backdrop") if row["images"]["backdropVerified"] and
                            row["images"]["backdrop"] != row["images"]["poster"] else "")}
 
 
