@@ -64,11 +64,6 @@ final class CinemaSnapshot {
         JSONObject result=new JSONObject().put("id","ch:snapshot:"+entry.getString("id")).put("type",entry.optString("type").equals("tv")?"series":"movie").put("name",entry.optString("title")).put("poster",entry.optString("poster")).put("releaseInfo",entry.optString("year"));
         // New snapshots embed verified wide artwork in the lightweight search index.
         String background=entry.optString("background");
-        if (!entry.has("background")) { // Compatibility with snapshots generated before this fix.
-            JSONObject row=raw("ch:snapshot:"+entry.getString("id"));
-            JSONObject images=row==null?null:row.optJSONObject("images");
-            if(images!=null&&images.optBoolean("backdropVerified"))background=images.optString("backdrop");
-        }
         if(background.startsWith("https://")&&!background.equals(result.optString("poster")))result.put("background",background);
         return result;
     }
