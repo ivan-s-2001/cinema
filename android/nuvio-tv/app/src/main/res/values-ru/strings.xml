@@ -454,8 +454,8 @@
     <string name="playback_resolution_matching_sub">Разрешить изменение режима дисплея под разрешение видео.</string>
     <string name="playback_player_external_desc">Всегда открывать потоки во внешнем приложении</string>
     <string name="playback_player_ask_desc">Выбирать плеер каждый раз</string>
-    <string name="playback_engine_exoplayer_desc">Лучшая совместимость с текущими функциями Nuvio.</string>
-    <string name="playback_engine_mvplayer_desc">Использует libmpv с интерфейсом управления Nuvio. Экспериментально.</string>
+    <string name="playback_engine_exoplayer_desc">Лучшая совместимость с функциями CinemaHall.</string>
+    <string name="playback_engine_mvplayer_desc">Использует libmpv со встроенным интерфейсом управления. Экспериментально.</string>
 
     <!-- PlaybackAudioSettings -->
     <string name="audio_trailer_section">Трейлер</string>
@@ -1467,7 +1467,7 @@
     <string name="catalog_see_all_empty_subtitle">Попробуйте другой каталог или загляните позже</string>
 
     <!-- LayoutSelectionScreen -->
-    <string name="layout_selection_welcome">Добро пожаловать в Nuvio</string>
+    <string name="layout_selection_welcome">Добро пожаловать в CinemaHall</string>
     <string name="layout_selection_subtitle">Выберите макет вашего главного экрана</string>
     <string name="layout_selection_continue">Продолжить</string>
 
@@ -1850,13 +1850,13 @@
     <string name="appearance_settings_style">Стиль настроек</string>
     <string name="appearance_settings_style_subtitle">Выберите, как отображаются экраны настроек</string>
     <string name="appearance_launcher_artwork">Оформление значка на главном экране</string>
-    <string name="appearance_launcher_artwork_subtitle">Выберите, как Nuvio отображается на главном экране телевизора</string>
+    <string name="appearance_launcher_artwork_subtitle">Выберите, как CinemaHall отображается на главном экране телевизора</string>
     <string name="appearance_app_icon_and_banner">Значок приложения и баннер</string>
     <string name="appearance_app_icon_and_banner_subtitle">Изменить значок приложения и баннер</string>
     <string name="appearance_app_icon_picker_title">Выберите значок приложения и баннер</string>
     <string name="appearance_app_icon_picker_subtitle">Каждый стиль включает подходящий квадратный значок и баннер для ТВ</string>
     <string name="appearance_app_icon_confirmation_title">Изменить значок приложения?</string>
-    <string name="appearance_app_icon_confirmation_message">Переключение на «%1$s» закроет Nuvio. Для обновления баннера на ТВ может потребоваться перезагрузка устройства. Нажмите «ОК», чтобы продолжить.</string>
+    <string name="appearance_app_icon_confirmation_message">Переключение на «%1$s» закроет CinemaHall. Для обновления баннера на ТВ может потребоваться перезагрузка устройства. Нажмите «ОК», чтобы продолжить.</string>
     <string name="appearance_app_icon_change_failed">Не удалось изменить значок и баннер. Попробуйте ещё раз.</string>
     <string name="appearance_app_icon_original">Оригинальный</string>
     <string name="appearance_app_icon_arctic_blue">Арктический синий</string>
@@ -1875,7 +1875,7 @@
     <string name="about_licenses_attributions">Лицензии и указание авторства</string>
     <string name="about_licenses_attributions_subtitle">Источники данных, благодарности и лицензии Android</string>
     <string name="licenses_attributions_title">Лицензии и указание авторства</string>
-    <string name="licenses_attributions_subtitle">Поставщики данных, кредиты сервисов и лицензии воспроизведения Android, используемые Nuvio TV.</string>
+    <string name="licenses_attributions_subtitle">Источники данных, сведения об авторах и лицензии компонентов CinemaHall.</string>
     <string name="licenses_attributions_section_app">ЛИЦЕНЗИЯ ПРИЛОЖЕНИЯ</string>
     <string name="licenses_attributions_section_data">ДАННЫЕ И СЕРВИСЫ</string>
     <string name="licenses_attributions_section_playback">ЛИЦЕНЗИИ ВОСПРОИЗВЕДЕНИЯ ANDROID</string>
@@ -1904,7 +1904,7 @@
     <string name="settings_experience">Режим работы</string>
     <string name="experience_mode_essential">Базовый</string>
     <string name="experience_mode_advanced">Расширенный</string>
-    <string name="experience_mode_choose_title">Выберите свой режим Nuvio</string>
+    <string name="experience_mode_choose_title">Выберите режим CinemaHall</string>
     <string name="experience_mode_choose_subtitle">Начните с простого или разблокируйте все настройки. Можно менять в любое время.</string>
     <string name="experience_mode_essential_card_subtitle">Упрощённая настройка: аддоны, базовое воспроизведение, Trakt и аккаунт.</string>
     <string name="experience_mode_advanced_card_subtitle">Полные настройки: интерфейс, порядок каталогов, коллекции, плагины и диагностика.</string>
@@ -2708,7 +2708,7 @@
     <string name="autoplay_regex_preset_english">Английский</string>
     <string name="autoplay_regex_preset_no_cam_ts">Без CAM/TS</string>
     <string name="autoplay_regex_preset_no_remux_hdr">Без REMUX/HDR</string>
-    <string name="playback_player_internal_desc">Использовать встроенный плеер NuvioTV</string>
+    <string name="playback_player_internal_desc">Использовать встроенный плеер CinemaHall</string>
     <string name="player_torrent_peer_info">%1$d сидов · %2$d пиров</string>
     <string name="player_torrent_buffered_status">%1$s буфер · %2$s · %3$s</string>
     <string name="player_torrent_status">%1$s · %2$s</string>
