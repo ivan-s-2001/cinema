@@ -779,7 +779,9 @@ private fun RightStreamSection(
     hazeState: HazeState?,
     modifier: Modifier = Modifier
 ) {
-    val cinemaStreams = streams.isNotEmpty() && streams.all { it.addonName == "CinemaHall" && it.name?.startsWith("CinemaHall · ") == true }
+    // Keep third-party release sources out of the CinemaHall playback UI.
+    val cinemaChoices = remember(streams) { streams.filter { it.addonName == "CinemaHall" } }
+    val cinemaStreams = cinemaChoices.isNotEmpty()
     val isRtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
     var enter by remember { mutableStateOf(false) }
     var firstStreamFocusRequestId by remember { mutableStateOf(0) }
@@ -964,14 +966,14 @@ private fun RightStreamSection(
                                 onRetry = onRetry
                             )
                         }
-                        sharedStream == null && streams.isEmpty() -> {
+                        sharedStream == null && cinemaChoices.isEmpty() -> {
                             EmptyState()
                         }
                         else -> {
                             if (cinemaStreams) {
-                                CinemaHallQualityVoicePicker(streams = streams, onStreamSelected = onStreamSelected)
+                                CinemaHallQualityVoicePicker(streams = cinemaChoices, onStreamSelected = onStreamSelected)
                             } else StreamsList(
-                                streams = streams,
+                                streams = cinemaChoices,
                                 sharedStream = sharedStream,
                                 partySource = partySource,
                                 onSharedStreamSelected = onSharedStreamSelected,
