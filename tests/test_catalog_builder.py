@@ -2,7 +2,7 @@
 import unittest
 from unittest.mock import patch
 
-from scripts.build_catalog import build, details, enrich, merge_catalog, normalize
+from scripts.build_catalog import build, details, enrich, merge_catalog, normalize, split_snapshot
 
 
 def record(kind="movie", imdb="tt0137523", kp=361, tmdb=550, name="Бойцовский клуб"):
@@ -22,10 +22,53 @@ class CatalogTests(unittest.TestCase):
     def test_art_aliases_voiceovers_are_not_streams(self):
         row = normalize(record())
         self.assertEqual(row["images"]["backdrop"], "https://image.tmdb.org/t/p/original/landscape.jpg")
+        self.assertTrue(row["images"]["backdropVerified"])
         self.assertEqual(row["images"]["poster"], "https://image.tmdb.org/t/p/original/portrait.jpg")
         self.assertIn("Fight Club", row["aliases"])
         self.assertEqual(row["voiceoverLabels"], ["Дублированный", "Субтитры"])
         self.assertEqual(row["playableSources"], [])
+
+    def test_cover_is_not_a_verified_widescreen_banner(self):
+        raw = record()
+        raw["images"] = {"poster": "https://example.org/portrait.jpg", "cover": "https://example.org/unknown.jpg"}
+        row = normalize(raw)
+        self.assertEqual(row["images"]["backdrop"], "https://example.org/unknown.jpg")
+        self.assertFalse(row["images"]["backdropVerified"])
+
+    def test_conflicting_cross_ids_do_not_merge_unrelated_titles(self):
+        a = record(imdb="tt001", kp=10, tmdb=1)
+        b = record(imdb="tt002", kp=20, tmdb=2)
+        bridge = record(imdb="tt001", kp=20, tmdb=1)
+        rows = merge_catalog([[a, b, bridge]])
+        self.assertEqual(len(rows), 2)
+        self.assertEqual({r["ids"]["tmdb"] for r in rows}, {"1", "2"})
+        self.assertEqual({r["ids"]["kinopoisk"] for r in rows}, {"10", "20"})
+        self.assertTrue(rows[0]["identityWarnings"])
+
+    def test_anime_season_ids_preserved(self):
+        a = record(kind="tv")
+        a["id"]["myAnimeList"] = 101
+        b = record(kind="tv")
+        b["id"]["myAnimeList"] = 202
+        rows = merge_catalog([[a, b]])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["seasonIds"]["myAnimeList"], ["101", "202"])
+
+    def test_shards_keep_first_screen_small_and_search_all_titles(self):
+        items = []
+        for i in range(125):
+            item = record(kind="movie" if i % 2 else "tv", kp=i + 1, tmdb=i + 1, imdb=f"tt{i+1}")
+            items.append(item)
+        rows = merge_catalog([items])
+        snapshot = {"version": 2, "generatedAt": "now", "count": len(rows),
+                    "quality": {}, "filters": {}, "releaseCalendar": [], "titles": rows}
+        files = split_snapshot(snapshot, shard_size=50)
+        self.assertEqual(files["index.json"]["count"], 125)
+        self.assertEqual(len(files["search.json"]), 125)
+        self.assertTrue(all(len(v) <= 50 for name, v in files.items() if name.startswith("shards/")))
+        self.assertLess(len(files["index.json"]["home"]["movies"]), 25)
+        self.assertTrue(all(x["shard"].startswith("shards/") for x in files["index.json"]["home"]["movies"]))
+        self.assertNotIn("titles", files["index.json"])
 
     def test_merge_by_cross_provider_id_but_never_by_title(self):
         a = record()
@@ -57,6 +100,7 @@ class CatalogTests(unittest.TestCase):
         fetch.side_effect = canned
         result = build("dummy-key", pages=5, enrichment=0)
         self.assertEqual(result["count"], 1)
+        self.assertEqual(result["quality"]["movies"], 1)
         self.assertEqual(result["filters"]["genres"][0]["name"], "драма")
         self.assertEqual(result["releaseCalendar"][0]["playableSources"], [])
         self.assertEqual(fetch.call_count, 6)  # movie, tv, latest, anime, filters, calendar

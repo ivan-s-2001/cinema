@@ -9,7 +9,7 @@ on:
       pages:
         description: Popular catalogue pages per type (100 titles each)
         required: false
-        default: '3'
+        default: '15'
 
 permissions:
   contents: read
@@ -23,6 +23,10 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m unittest discover -s tests -p 'test_catalog_builder.py'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: node --test tests/test_catalog_client.mjs
 
   snapshot:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -37,10 +41,10 @@ jobs:
         env:
           KINOAPI_KEY: ${{ secrets.KINOAPI_KEY }}
           TMDB_READ_TOKEN: ${{ secrets.TMDB_READ_TOKEN }}
-          PAGES: ${{ inputs.pages || '3' }}
+          PAGES: ${{ inputs.pages || '15' }}
         run: python scripts/build_catalog.py --pages "$PAGES" --enrich 30 --details 12 --season-limit 3 --output catalog/index.json
       - uses: actions/upload-artifact@v7
         with:
           name: cinemahall-catalog
-          path: catalog/index.json
+          path: catalog/
           retention-days: 14

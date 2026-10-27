@@ -10,6 +10,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -20,8 +21,11 @@ ANILIST = "https://graphql.anilist.co"
 CINEMETA = "https://v3-cinemeta.strem.io"
 TVMAZE = "https://api.tvmaze.com"
 ID_FIELDS = ("tmdb", "kinopoisk", "imdb", "shikimori", "myAnimeList", "anilist")
+SEASON_IDS = ("shikimori", "myAnimeList", "anilist")
 MAX_RESPONSE = 6 * 1024 * 1024
 _last_kino_request = 0.0
+_requests = Counter()
+_failed = Counter()
 
 
 class SameHostRedirect(urllib.request.HTTPRedirectHandler):
@@ -56,8 +60,10 @@ def fetch(url, *, key="", body=None, optional=False):
     if body is not None:
         headers["Content-Type"] = "application/json"
     request = urllib.request.Request(url, headers=headers, data=json.dumps(body).encode() if body else None)
+    host = urllib.parse.urlparse(url).hostname or "unknown"
     for attempt in range(3):
         try:
+            _requests[host] += 1
             with _opener.open(request, timeout=12) as response:
                 if int(response.headers.get("Content-Length", "0")) > MAX_RESPONSE:
                     raise ValueError("Response too large")
@@ -74,10 +80,12 @@ def fetch(url, *, key="", body=None, optional=False):
                 time.sleep(delay)
                 continue
             if optional:
+                _failed[host] += 1
                 return None
             raise RuntimeError(f"{urllib.parse.urlparse(url).hostname}: HTTP {error.code}") from None
         except (OSError, ValueError, json.JSONDecodeError):
             if optional:
+                _failed[host] += 1
                 return None
             raise
 
@@ -106,10 +114,10 @@ def normalize(raw):
     p_candidates = distinct([image_url(art.get("poster")),
                              *(image_url(x) for x in art.get("posters") or []),
                              image_url(kp_art.get("poster"))])
-    # Only actual landscape candidates: never stretch a portrait poster into a banner.
-    b_candidates = distinct([image_url(art.get("backdrop")),
-                             *(image_url(x) for x in art.get("backdrops") or []),
-                             image_url(art.get("cover")), image_url(kp_art.get("cover"))])
+    wide = distinct([image_url(art.get("backdrop")),
+                     *(image_url(x) for x in art.get("backdrops") or [])])
+    # Covers have unknown dimensions; let clients use a gradient instead of stretching one.
+    b_candidates = distinct(wide + [image_url(art.get("cover")), image_url(kp_art.get("cover"))])
     aliases = distinct([name.get("ru"), name.get("en"), name.get("original")])
     if not aliases:
         return None
@@ -128,11 +136,13 @@ def normalize(raw):
         "ratings": raw.get("ratings") or {}, "images": {
             "poster": p_candidates[0] if p_candidates else "",
             "backdrop": b_candidates[0] if b_candidates else "",
+            "backdropVerified": bool(wide),
             "logo": image_url(art.get("logo")),
             "posters": p_candidates[:12], "backdrops": b_candidates[:12],
         },
         "voiceoverLabels": distinct(raw.get("voiceovers") or []),
         "playableSources": [], "sources": ["kinoapi"],
+        "identityWarnings": [], "seasonIds": {},
         "updatedAt": raw.get("updatedAt") or "",
     }
 
@@ -143,12 +153,25 @@ def identity_keys(row):
 
 def merge_rows(old, new):
     """Never overwrite a known field with an empty value from another list."""
-    old["ids"].update(new["ids"])
+    for field, value in new["ids"].items():
+        original = old["ids"].get(field)
+        if not original:
+            old["ids"][field] = value
+        elif original != value:
+            if field in SEASON_IDS:
+                old["seasonIds"][field] = distinct(old["seasonIds"].get(field, []) + [original, value])
+            else:
+                warning = f"{field}: {original} != {value}"
+                if warning not in old["identityWarnings"]:
+                    old["identityWarnings"].append(warning)
     for field in ("title", "year", "status", "description", "releaseDate", "runtimeMinutes", "ageRating", "tagline"):
         if not old.get(field) and new.get(field):
             old[field] = new[field]
     for field in ("aliases", "genres", "countries", "studios", "voiceoverLabels", "sources"):
         old[field] = distinct(old[field] + new[field])
+    old["identityWarnings"] = distinct(old["identityWarnings"] + new["identityWarnings"])
+    for field, values in new["seasonIds"].items():
+        old["seasonIds"][field] = distinct(old["seasonIds"].get(field, []) + values)
     old["ratings"].update({k: v for k, v in new["ratings"].items() if v is not None})
     for language, trailer in new["trailers"].items():
         if trailer and not old["trailers"].get(language):
@@ -158,9 +181,18 @@ def merge_rows(old, new):
     for field in ("poster", "backdrop", "logo"):
         if not old["images"].get(field):
             old["images"][field] = new["images"].get(field, "")
+    if new["images"]["backdropVerified"] and not old["images"]["backdropVerified"]:
+        old["images"]["backdrop"] = new["images"]["backdrop"]
+        old["images"]["backdropVerified"] = True
     if new["updatedAt"] > old["updatedAt"]:
         old["updatedAt"] = new["updatedAt"]
     return old
+
+
+def incompatible_ids(a, b):
+    """Conflicting film IDs must never cause two unrelated records to collapse."""
+    return any(a["ids"].get(k) and b["ids"].get(k) and a["ids"][k] != b["ids"][k]
+               for k in ("tmdb", "kinopoisk", "imdb"))
 
 
 def merge_catalog(batches):
@@ -173,15 +205,18 @@ def merge_catalog(batches):
                 continue
             matches = {indexes[k] for k in identity_keys(row) if k in indexes}
             if matches:
-                target = min(matches)
+                # Prefer exact TMDB match for a contradictory multi-ID bridge.
+                tmdb = row["ids"].get("tmdb")
+                exact = [i for i in matches if tmdb and rows[i]["ids"].get("tmdb") == tmdb]
+                target = min(exact or matches)
                 row = merge_rows(rows[target], row)
                 for other in sorted(matches - {target}):
-                    if rows[other] is not None:
+                    if rows[other] is not None and not incompatible_ids(row, rows[other]):
                         merge_rows(row, rows[other])
                         rows[other] = None
-                for k, v in list(indexes.items()):
-                    if v in matches:
-                        indexes[k] = target
+                        for k, v in list(indexes.items()):
+                            if v == other:
+                                indexes[k] = target
             else:
                 target = len(rows)
                 rows.append(row)
@@ -190,15 +225,17 @@ def merge_catalog(batches):
     return [row for row in rows if row is not None]
 
 
-def append_art(row, field, url):
+def append_art(row, field, url, verified=False):
     url = image_url(url)
     if not url:
         return
     pictures = row["images"]
     list_key = "backdrops" if field == "backdrop" else "posters"
     pictures[list_key] = distinct(pictures[list_key] + [url])[:12]
-    if not pictures[field]:
+    if not pictures[field] or (field == "backdrop" and verified and not pictures["backdropVerified"]):
         pictures[field] = url
+    if field == "backdrop" and verified:
+        pictures["backdropVerified"] = True
 
 
 def enrich(row, tmdb_key=""):
@@ -219,7 +256,7 @@ def enrich(row, tmdb_key=""):
                     append_art(row, "poster", "https://image.tmdb.org/t/p/original" + x.get("file_path", ""))
             for x in backs[:4]:
                 if x.get("width", 0) >= x.get("height", 1) * 1.5:
-                    append_art(row, "backdrop", "https://image.tmdb.org/t/p/original" + x.get("file_path", ""))
+                    append_art(row, "backdrop", "https://image.tmdb.org/t/p/original" + x.get("file_path", ""), verified=True)
             row["sources"].append("tmdb")
     if ids.get("myAnimeList"):
         query = "query ($id:Int) { Media(idMal:$id,type:ANIME) { title { romaji english native } synonyms bannerImage coverImage { extraLarge } genres } }"
@@ -229,9 +266,9 @@ def enrich(row, tmdb_key=""):
             row["aliases"] = distinct(row["aliases"] + list((media.get("title") or {}).values()) + (media.get("synonyms") or []))
             row["genres"] = distinct(row["genres"] + (media.get("genres") or []))
             append_art(row, "poster", (media.get("coverImage") or {}).get("extraLarge"))
-            append_art(row, "backdrop", media.get("bannerImage"))
+            append_art(row, "backdrop", media.get("bannerImage"), verified=True)
             row["sources"].append("anilist")
-    if not art["poster"] or not art["backdrop"]:
+    if not art["poster"] or not art["backdropVerified"]:
         imdb = ids.get("imdb", "")
         if imdb.startswith("tt") and imdb[2:].isdigit():
             kind = "series" if row["type"] == "tv" else "movie"
@@ -241,7 +278,7 @@ def enrich(row, tmdb_key=""):
             append_art(row, "backdrop", meta.get("background"))
             if meta:
                 row["sources"].append("cinemeta")
-    if row["type"] == "tv" and not art["backdrop"] and ids.get("imdb"):
+    if row["type"] == "tv" and not art["backdropVerified"] and ids.get("imdb"):
         show = fetch(f"{TVMAZE}/lookup/shows?imdb={urllib.parse.quote(ids['imdb'])}", optional=True) or {}
         if show.get("id"):
             pictures = fetch(f"{TVMAZE}/shows/{int(show['id'])}/images", optional=True) or []
@@ -308,6 +345,8 @@ def details(row, key, season_limit=3):
 
 
 def build(key, pages, enrichment, tmdb_key="", detail_count=0, season_limit=3):
+    _requests.clear()
+    _failed.clear()
     batches = []
     for kind in ("movie", "tv"):
         for page in range(1, pages + 1):
@@ -320,9 +359,10 @@ def build(key, pages, enrichment, tmdb_key="", detail_count=0, season_limit=3):
         batches.append((fetch(KINO + endpoint, key=key) or {}).get("data") or [])
     filters = (fetch(KINO + "/catalog/filters", key=key, optional=True) or {}).get("data") or {}
     calendar = (fetch(KINO + "/releases/calendar", key=key, optional=True) or {}).get("data") or []
+    batches.append(calendar[:100])
     rows = merge_catalog(batches)
     # Enrich the most visible cards and those without usable art; bound requests.
-    candidates = sorted(rows, key=lambda r: (bool(r["images"]["backdrop"]),
+    candidates = sorted(rows, key=lambda r: (r["images"]["backdropVerified"],
                                                bool(r["images"]["poster"]),
                                                not bool(r["ids"].get("myAnimeList"))))
     for row in candidates[:enrichment]:
@@ -334,19 +374,76 @@ def build(key, pages, enrichment, tmdb_key="", detail_count=0, season_limit=3):
     selected += (movies[len(shows):] if len(shows) < len(movies) else shows[len(movies):])
     for row in selected[:detail_count]:
         details(row, key, season_limit)
-    return {"version": 1, "generatedAt": datetime.now(timezone.utc).isoformat(),
+    quality = {
+        "movies": sum(r["type"] == "movie" for r in rows),
+        "series": sum(r["type"] == "tv" for r in rows),
+        "anime": sum(bool(r["ids"].get("myAnimeList")) for r in rows),
+        "noPoster": sum(not r["images"]["poster"] for r in rows),
+        "noVerifiedBackdrop": sum(not r["images"]["backdropVerified"] for r in rows),
+        "multipleAliases": sum(len(r["aliases"]) > 1 for r in rows),
+        "withVoiceoverLabels": sum(bool(r["voiceoverLabels"]) for r in rows),
+        "withDetails": sum("details" in r for r in rows),
+        "identityWarnings": sum(bool(r["identityWarnings"]) for r in rows),
+        "enrichedBy": dict(Counter(source for r in rows for source in r["sources"])),
+        "requests": dict(_requests), "optionalFailures": dict(_failed),
+    }
+    return {"version": 2, "generatedAt": datetime.now(timezone.utc).isoformat(),
             "count": len(rows), "filters": filters,
             "releaseCalendar": [r for raw in calendar[:100] if (r := normalize(raw)) is not None],
-            "titles": rows}
+            "quality": quality, "titles": rows}
+
+
+def stable_id(row):
+    for source in ("tmdb", "kinopoisk", "imdb", "myAnimeList", "shikimori"):
+        if row["ids"].get(source):
+            return f"{row['type']}:{source}:{row['ids'][source]}"
+    raise ValueError("Title without a stable identifier")
+
+
+def compact(row):
+    return {"id": stable_id(row), "type": row["type"], "ids": row["ids"],
+            "title": row["title"], "aliases": row["aliases"], "year": row["year"],
+            "poster": row["images"]["poster"]}
+
+
+def split_snapshot(result, shard_size=250):
+    """Small home screen now; lazy-load only the requested catalogue shards later."""
+    if not 50 <= shard_size <= 1000:
+        raise ValueError("shard_size must be 50..1000")
+    rows = result["titles"]
+    grouped = {"movie": [r for r in rows if r["type"] == "movie"],
+               "tv": [r for r in rows if r["type"] == "tv"]}
+    manifest = {"version": result["version"], "generatedAt": result["generatedAt"],
+                "count": result["count"], "quality": result["quality"],
+                "filters": result["filters"], "search": "search.json", "shards": []}
+    files = {}
+    lookup = {}
+    for kind, entries in grouped.items():
+        for i in range(0, len(entries), shard_size):
+            path = f"shards/{kind}-{i // shard_size + 1:03d}.json"
+            files[path] = entries[i:i + shard_size]
+            manifest["shards"].append({"path": path, "type": kind, "count": len(files[path])})
+            for row in files[path]:
+                lookup[stable_id(row)] = path
+    def link(row):
+        return {**compact(row), "shard": lookup.get(stable_id(row), "")}
+    manifest["home"] = {"movies": [link(r) for r in grouped["movie"][:24]],
+                        "series": [link(r) for r in grouped["tv"][:24]],
+                        "anime": [link(r) for r in rows if r["ids"].get("myAnimeList")][:24],
+                        "calendar": [link(r) for r in result["releaseCalendar"][:24]]}
+    files["search.json"] = [link(r) for r in rows]
+    files["index.json"] = manifest
+    return files
 
 
 def main():
     parser = argparse.ArgumentParser(description="Build a KinoAPI-led static metadata catalog")
-    parser.add_argument("--pages", type=int, default=3, help="Popular pages per movie/TV type (100 titles each)")
+    parser.add_argument("--pages", type=int, default=15, help="Popular pages per movie/TV type (100 titles each)")
     parser.add_argument("--enrich", type=int, default=30, help="Maximum optional cross-provider enrichments")
     parser.add_argument("--details", type=int, default=12, help="Popular detail cards with cast, recommendations and seasons")
     parser.add_argument("--season-limit", type=int, default=3, help="Maximum seasons with full episode metadata per detailed show")
     parser.add_argument("--output", default="catalog/index.json")
+    parser.add_argument("--shard-size", type=int, default=250)
     args = parser.parse_args()
     if not 1 <= args.pages <= 50 or not 0 <= args.enrich <= 500 or not 0 <= args.details <= 100 or not 0 <= args.season_limit <= 20:
         parser.error("pages 1..50, enrich 0..500, details 0..100, season-limit 0..20")
@@ -354,8 +451,13 @@ def main():
                    os.environ.get("TMDB_READ_TOKEN", ""), args.details, args.season_limit)
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(result, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    print(f"Catalog created: {result['count']} deduplicated titles in {out}")
+    shards = split_snapshot(result, args.shard_size)
+    for name, data in shards.items():
+        path = out if name == "index.json" else out.parent / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    print(f"Catalog created: {result['count']} deduplicated titles in {len(shards)} lazy-load files")
+    print("Quality: " + json.dumps(result["quality"], ensure_ascii=False, sort_keys=True))
 
 
 if __name__ == "__main__":
