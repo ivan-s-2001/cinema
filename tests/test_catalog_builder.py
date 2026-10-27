@@ -118,6 +118,27 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(rows[0]["ids"]["kinopoisk"], "361")
 
     @patch("scripts.build_catalog.fetch")
+    def test_cinemeta_background_survives_snapshot(self, fetch):
+        raw = record()
+        raw["images"] = {"poster": raw["images"]["poster"]}
+        row = normalize(raw)
+        fetch.return_value = {"meta": {"background": "https://example.org/wide.jpg"}}
+        enrich(row)
+        self.assertTrue(row["images"]["backdropVerified"])
+        self.assertEqual(row["images"]["backdrop"], "https://example.org/wide.jpg")
+
+    @patch("scripts.build_catalog.fetch")
+    def test_tvmaze_background_used_after_empty_cinemeta(self, fetch):
+        raw = record(kind="tv")
+        raw["images"] = {"poster": raw["images"]["poster"]}
+        row = normalize(raw)
+        fetch.side_effect = [{"meta": {}}, {"id": 1}, [{"type": "background",
+            "resolutions": {"original": {"url": "https://example.org/tv-wide.jpg"}}}]]
+        enrich(row)
+        self.assertTrue(row["images"]["backdropVerified"])
+        self.assertEqual(row["images"]["backdrop"], "https://example.org/tv-wide.jpg")
+
+    @patch("scripts.build_catalog.fetch")
     def test_no_unnecessary_extra_calls_when_art_is_complete(self, fetch):
         row = normalize(record())
         enrich(row)

@@ -70,6 +70,12 @@ final class CinemaSnapshot {
         JSONObject result=new JSONObject().put("id",id).put("type",row.optString("type").equals("tv")?"series":"movie").put("name",row.optString("title"))
             .put("poster",images==null?"":images.optString("poster")).put("description",row.optString("description")).put("releaseInfo",row.optString("year")).put("genres",row.optJSONArray("genres"));
         if(images!=null&&images.optBoolean("backdropVerified")&&!images.optString("backdrop").equals(result.optString("poster")))result.put("background",images.optString("backdrop"));
+        if(result.optString("background").isEmpty()){
+            JSONObject fallback=Metadata.load(context,document(id),false);
+            String backdrop=fallback.optString("background");
+            if(!backdrop.isEmpty()&&!backdrop.equals(result.optString("poster")))result.put("background",backdrop);
+            if(result.optString("poster").isEmpty()&&!fallback.optString("poster").isEmpty())result.put("poster",fallback.getString("poster"));
+        }
         if(images!=null&&!images.optString("logo").isEmpty())result.put("logo",images.optString("logo"));
         if(row.optInt("runtimeMinutes")>0)result.put("runtime",row.getInt("runtimeMinutes")+" мин");
         JSONObject scores=row.optJSONObject("ratings");if(scores!=null){
@@ -86,6 +92,6 @@ final class CinemaSnapshot {
     synchronized JSONObject document(String id) throws Exception {
         JSONObject row=raw(id);if(row==null)return null;JSONObject ids=row.getJSONObject("ids");JSONArray aliases=row.optJSONArray("aliases");
         String original=row.optString("title");if(aliases!=null&&aliases.length()>1)original=aliases.optString(1);
-        return new JSONObject().put("id",ids.optString("kinopoisk")).put("name_rus",row.optString("title")).put("name_original",original).put("year",row.optInt("year"));
+        return new JSONObject().put("serial",row.optString("type").equals("tv")).put("id",ids.optString("kinopoisk")).put("imdb",ids.optString("imdb")).put("name_rus",row.optString("title")).put("name_original",original).put("year",row.optInt("year"));
     }
 }

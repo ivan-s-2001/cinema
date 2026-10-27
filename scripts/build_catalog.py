@@ -305,7 +305,7 @@ def enrich(row, tmdb_key=""):
             result = fetch(f"{CINEMETA}/meta/{kind}/{imdb}.json", optional=True) or {}
             meta = result.get("meta") or {}
             append_art(row, "poster", meta.get("poster"))
-            append_art(row, "backdrop", meta.get("background"))
+            append_art(row, "backdrop", meta.get("background"), verified=True)
             if meta:
                 row["sources"].append("cinemeta")
     if row["type"] == "tv" and not art["backdropVerified"] and ids.get("imdb"):
@@ -314,7 +314,7 @@ def enrich(row, tmdb_key=""):
             pictures = fetch(f"{TVMAZE}/shows/{int(show['id'])}/images", optional=True) or []
             for picture in pictures:
                 if picture.get("type") == "background":
-                    append_art(row, "backdrop", ((picture.get("resolutions") or {}).get("original") or {}).get("url"))
+                    append_art(row, "backdrop", ((picture.get("resolutions") or {}).get("original") or {}).get("url"), verified=True)
             row["sources"].append("tvmaze")
     row["sources"] = distinct(row["sources"])
 

@@ -25,6 +25,15 @@ public final class ProviderCheck {
         JSONArray episodes=new JSONArray().put(new JSONObject().put("season",1).put("episode",1).put("title","Known title"));
         CinemaCatalog.mergeKnownEpisodes(snapshot,episodes,"S01E01 S04E02 S04E02 S00E00");
         if(episodes.length()!=2||!episodes.getJSONObject(0).getString("title").equals("Known title")||!episodes.getJSONObject(1).getString("id").equals(snapshot+":4:2"))throw new AssertionError("Detail budget must not hide later seasons or overwrite episode metadata");
+        JSONObject artResult=new JSONObject();
+        JSONObject art=new JSONObject().put("poster", "https://example.org/poster.jpg")
+            .put("backdrop", "https://example.org/poster.jpg")
+            .put("backdrops",new JSONArray().put(JSONObject.NULL).put("invalid").put("https://example.org/poster.jpg").put("https://example.org/wide.jpg"));
+        KinoApi.enrich(artResult,new JSONObject().put("images",art),false);
+        if(!artResult.getString("background").equals("https://example.org/wide.jpg"))throw new AssertionError("Skip invalid/portrait backdrop candidates");
+        art.remove("backdrops");artResult=new JSONObject();
+        KinoApi.enrich(artResult,new JSONObject().put("images",art),false);
+        if(artResult.has("background"))throw new AssertionError("Poster cannot become background");
         System.out.println("CinemaHall provider contract passed");
     }
 }
