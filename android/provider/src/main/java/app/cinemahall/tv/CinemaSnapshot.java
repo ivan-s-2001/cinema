@@ -61,8 +61,9 @@ final class CinemaSnapshot {
     private static String words(String value){return value.toLowerCase(Locale.ROOT).replace('ё','е').replaceAll("[^\\p{L}\\p{N}]+"," ").trim();}
     private JSONObject compact(JSONObject entry) throws Exception {
         JSONObject result=new JSONObject().put("id","ch:snapshot:"+entry.getString("id")).put("type",entry.optString("type").equals("tv")?"series":"movie").put("name",entry.optString("title")).put("poster",entry.optString("poster")).put("releaseInfo",entry.optString("year"));
-        JSONObject row=raw("ch:snapshot:"+entry.getString("id"));JSONObject images=row==null?null:row.optJSONObject("images");
-        if(images!=null&&images.optBoolean("backdropVerified")&&!images.optString("backdrop").equals(result.optString("poster")))result.put("background",images.optString("backdrop"));
+        // New snapshots embed verified wide artwork in the lightweight search index.
+        String background=entry.optString("background");
+        if(!background.isEmpty()&&!background.equals(result.optString("poster")))result.put("background",background);
         return result;
     }
     synchronized JSONObject detail(String id) throws Exception {
