@@ -540,7 +540,9 @@ def rating_for_sort(scores):
 def compact(row):
     return {"id": stable_id(row), "type": row["type"], "ids": row["ids"],
             "title": row["title"], "aliases": row["aliases"], "year": row["year"],
-            "poster": row["images"]["poster"], "genres": row.get("genres") or [],
+            "poster": row["images"]["poster"],
+            "background": row["images"].get("backdrop", "") if row["images"].get("backdropVerified") and row["images"].get("backdrop") != row["images"].get("poster") else "",
+            "genres": row.get("genres") or [],
             "topRating": rating_for_sort(row.get("ratings"))}
 
 
