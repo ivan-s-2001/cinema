@@ -59,6 +59,13 @@ final class CinemaSnapshot {
     }
     private static double rating(JSONObject scores){if(scores==null)return 0;for(String key:new String[]{"kinopoisk","imdb","tmdb"}){Object v=scores.opt(key);if(v instanceof Number)return ((Number)v).doubleValue();if(v instanceof JSONObject){double value=((JSONObject)v).optDouble("value",0);if(value>0)return value;}}return 0;}
     private static String words(String value){return value.toLowerCase(Locale.ROOT).replace('ё','е').replaceAll("[^\\p{L}\\p{N}]+"," ").trim();}
+    private static String displayYear(int year) {
+        return year>=1888&&year<=2100?Integer.toString(year):"Год не указан";
+    }
+    private static String summary(String text) {
+        String clean=text==null?"":text.replaceAll("<[^>]*>"," ").replaceAll("\\s+"," ").trim();
+        return clean.isEmpty()?"Описание пока не добавлено":clean;
+    }
     private static String cleanImage(String value) {
         String image=value==null?"":value.trim();
         return image.startsWith("https://")||image.startsWith("http://")?image:"";
@@ -71,7 +78,7 @@ final class CinemaSnapshot {
         return "Название уточняется";
     }
     private JSONObject compact(JSONObject entry) throws Exception {
-        JSONObject result=new JSONObject().put("id","ch:snapshot:"+entry.getString("id")).put("type",entry.optString("type").equals("tv")?"series":"movie").put("name",entry.optString("title")).put("poster",entry.optString("poster")).put("releaseInfo",entry.optString("year"));
+        JSONObject result=new JSONObject().put("id","ch:snapshot:"+entry.getString("id")).put("type",entry.optString("type").equals("tv")?"series":"movie").put("name",entry.optString("title")).put("poster",cleanImage(entry.optString("poster"))).put("releaseInfo",displayYear(entry.optInt("year")));
         JSONObject row=raw("ch:snapshot:"+entry.getString("id"));JSONObject images=row==null?null:row.optJSONObject("images");
         if(images!=null){
             String poster=cleanImage(images.optString("poster"));
@@ -89,7 +96,7 @@ final class CinemaSnapshot {
     synchronized JSONObject detail(String id) throws Exception {
         JSONObject row=raw(id);if(row==null)return null;JSONObject images=row.optJSONObject("images");
         JSONObject result=new JSONObject().put("id",id).put("type",row.optString("type").equals("tv")?"series":"movie").put("name",title(row))
-            .put("poster",images==null?"":cleanImage(images.optString("poster"))).put("description",row.optString("description").trim()).put("releaseInfo",row.optString("year")).put("genres",row.optJSONArray("genres"));
+            .put("poster",images==null?"":cleanImage(images.optString("poster"))).put("description",summary(row.optString("description"))).put("releaseInfo",displayYear(row.optInt("year"))).put("genres",row.optJSONArray("genres"));
         if(images!=null&&images.optBoolean("backdropVerified")&&!cleanImage(images.optString("backdrop")).isEmpty()&&!cleanImage(images.optString("backdrop")).equals(result.optString("poster")))result.put("background",cleanImage(images.optString("backdrop")));
         if(result.optString("background").isEmpty()){
             JSONObject fallback=Metadata.load(context,document(id),false);
