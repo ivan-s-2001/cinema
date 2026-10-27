@@ -15,7 +15,7 @@ final class Net {
     static byte[] request(String url, JSONObject body, int limit) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         c.setConnectTimeout(10000); c.setReadTimeout(15000);
-        c.setRequestProperty("User-Agent", "CinemaHall/0.5 (+https://github.com/ivan-s-2001/cinema)");
+        c.setRequestProperty("User-Agent", "CinemaHall/0.6 (+https://github.com/ivan-s-2001/cinema)");
         try {
             if (body != null) {
                 c.setRequestMethod("POST"); c.setDoOutput(true);

@@ -27,16 +27,21 @@ object CinemaIntegration {
     val catalogs get()=listOf(
         catalog("popular","Сейчас смотрят","movie"),catalog("new","Новые фильмы","movie"),
         catalog("series","Сериалы","series"),catalog("new_series","Новые сериалы","series"),
-        catalog("top","Лучшие фильмы","movie"),catalog("top_series","Лучшие сериалы","series")
+        catalog("top","Лучшие фильмы","movie"),catalog("top_series","Лучшие сериалы","series"),
+        catalog("scifi","Фантастика","movie"),catalog("animation","Мультфильмы","movie"),
+        catalog("comedy","Комедии","movie"),catalog("thriller","Триллеры","movie"),
+        catalog("horror","Ужасы","movie"),catalog("classics","Классика кино","movie"),
+        catalog("detective_series","Детективные сериалы","series"),
+        catalog("drama_series","Драматические сериалы","series")
     )
     private fun catalog(id:String,title:String,type:String):CatalogConfig {
         val hash=java.security.MessageDigest.getInstance("SHA-256").digest("$ID|$type|$id".toByteArray()).take(8).joinToString(""){"%02x".format(it)}
         return CatalogConfig("addon_$hash",title,CatalogSourceType.ADDON,addonId=ID,addonCatalogType=type,addonCatalogId=id,addonName="CinemaHall")
     }
-    private fun manifest()=AddonManifest(ID,"CinemaHall","0.4.0","Каталог фильмов и сериалов",types=types,
+    private fun manifest()=AddonManifest(ID,"CinemaHall","0.6.0","Каталог фильмов и сериалов",types=types,
         resources=listOf(AddonResource("catalog",types),AddonResource("meta",types,listOf("ch:")),AddonResource("stream",types,listOf("ch:"))),
         idPrefixes=listOf("ch:"),catalogs=catalogs.map {AddonCatalog(it.addonCatalogType!!,it.addonCatalogId!!,it.title,extra=listOf(AddonCatalogExtra("skip"),AddonCatalogExtra("search")))})
-    fun addon()=Addon(ID,"CinemaHall","0.4.0","Фильмы и сериалы",true,true,AddonType.CUSTOM,url="$BASE/manifest.json",transportUrl=BASE,manifest=manifest())
+    fun addon()=Addon(ID,"CinemaHall","0.6.0","Фильмы и сериалы",true,true,AddonType.CUSTOM,url="$BASE/manifest.json",transportUrl=BASE,manifest=manifest())
     @Synchronized fun initialize(app:Context){
         context=app.applicationContext?:app
         if(server!=null)return
@@ -82,7 +87,12 @@ object CinemaIntegration {
                 val serial=if(type=="series")"true"else "false"
                 val high=if(catalog=="top"||catalog=="top_series")" AND rating_kinopoisk:[8 TO *]"else ""
                 val recent=catalog=="new"||catalog=="new_series"
-                val data=Net.select("movie","$available AND serial:$serial$high$query",if(recent)"release_date desc"else "popularity desc",skip,40,fields).getJSONArray("docs")
+                val genre=mapOf("scifi" to "фантастика","animation" to "мультфильм",
+                    "comedy" to "комедия","thriller" to "триллер","horror" to "ужасы",
+                    "detective_series" to "детектив","drama_series" to "драма")[catalog]
+                val genreFilter=genre?.let {" AND genre_name:\"$it\""}?:""
+                val classic=if(catalog=="classics")" AND year:[1900 TO 2000] AND rating_kinopoisk:[7 TO *]"else ""
+                val data=Net.select("movie","$available AND serial:$serial$high$genreFilter$classic$query",if(recent)"release_date desc"else "popularity desc",skip,40,fields).getJSONArray("docs")
                 val metas=JSONArray()
                 for(i in 0 until data.length()){
                     val doc=data.getJSONObject(i);docs[doc.getString("id")]=doc
@@ -120,13 +130,18 @@ object CinemaIntegration {
             .put("genres",JSONArray(doc.optString("genre_name").split(',').map {it.trim()}.filter {it.isNotBlank()}).takeIf {it.length()>0}?:enriched.optJSONArray("genres")?:JSONArray())
         enriched.optString("imdb").takeIf {it.isNotEmpty()}?.let {result.put("imdb_id",it)}
         enriched.optInt("tmdb").takeIf {it>0}?.let {result.put("tmdb_id",it.toString())}
+        enriched.optString("logo").takeIf {it.isNotEmpty()}?.let {result.put("logo",it)}
+        if(full && enriched.optString("credits").isNotEmpty()) {
+            result.put("description",result.optString("description").trim()+"\n\n"+enriched.optString("credits"))
+        }
         if(full&&serial){
             val videos=JSONArray();val episodes=enriched.optJSONArray("episodes")?:JSONArray()
             for(i in 0 until episodes.length()){
                 val ep=episodes.getJSONObject(i);val s=ep.optInt("season");val e=ep.optInt("number");if(s<1||e<1)continue
                 videos.put(JSONObject().put("id","ch:$id:$s:$e").put("season",s).put("episode",e).put("title",ep.optString("name"))
                     .put("released",ep.optString("airdate").takeIf {it.isNotEmpty()}?.plus("T00:00:00.000Z"))
-                    .put("thumbnail",ep.optJSONObject("image")?.optString("original")))
+                    .put("thumbnail",ep.optJSONObject("image")?.optString("original"))
+                    .put("overview",android.text.Html.fromHtml(ep.optString("summary"),android.text.Html.FROM_HTML_MODE_COMPACT).toString().trim()))
             }
             if(videos.length()==0)Regex("S(\\d+)E(\\d+)",RegexOption.IGNORE_CASE).findAll(doc.optString("episodes")).forEach {
                 val s=it.groupValues[1].toInt();val e=it.groupValues[2].toInt()

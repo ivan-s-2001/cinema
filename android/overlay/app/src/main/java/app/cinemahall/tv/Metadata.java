@@ -174,6 +174,88 @@ final class Metadata {
         } catch (Exception ignored) {}
     }
 
+    private static JSONObject bestFanart(JSONArray images, boolean portrait) {
+        JSONObject best = null;
+        long highest = -1;
+        if (images == null) return null;
+        for (int i = 0; i < images.length(); i++) {
+            JSONObject item = images.optJSONObject(i);
+            if (item == null || !item.optString("url").startsWith("https://")) continue;
+            int width = item.optInt("width"), height = item.optInt("height");
+            if (width < 1 || height < 1) continue;
+            double ratio = (double) width / height;
+            if (portrait ? (ratio < 0.55 || ratio > 0.85 || height < 1200) :
+                (ratio < 1.55 || ratio > 2.1 || width < 1280)) continue;
+            String lang = item.optString("lang");
+            int preferred = "ru".equals(lang) ? 400 : "en".equals(lang) ? 200 : 0;
+            long score = ((long) width * height) / 10000 + preferred + item.optInt("likes") * 5L;
+            if (score > highest) { best = item; highest = score; }
+        }
+        return best;
+    }
+
+    private static JSONObject bestLogo(JSONArray images) {
+        JSONObject best = null;
+        long score = -1;
+        if (images == null) return null;
+        for (int i = 0; i < images.length(); i++) {
+            JSONObject item = images.optJSONObject(i);
+            if (item == null || !item.optString("url").startsWith("https://")) continue;
+            int width = item.optInt("width"), height = item.optInt("height");
+            if (width < 400 || height < 100 || width < height) continue;
+            long candidate = (long) width * height / 10000 + item.optInt("likes") * 5L +
+                ("ru".equals(item.optString("lang")) ? 400 : 0);
+            if (candidate > score) { best = item; score = candidate; }
+        }
+        return best;
+    }
+
+    /** Optional fan artwork. Never mix records by title: IMDb is the shared identity. */
+    private static void fanart(JSONObject result, boolean serial) {
+        String key = BuildConfig.FANART_API_KEY.trim();
+        String imdb = result.optString("imdb");
+        if (key.isEmpty() || !imdb.matches("tt[0-9]+")) return;
+        try {
+            JSONObject art = Net.json("https://webservice.fanart.tv/v3.2/" +
+                (serial ? "tv" : "movies") + "/" + imdb +
+                "?source=imdb&api_key=" + Net.enc(key), null);
+            JSONObject backdrop = bestFanart(art.optJSONArray(serial ? "showbackground" : "moviebackground"), false);
+            JSONObject poster = bestFanart(art.optJSONArray(serial ? "tvposter" : "movieposter"), true);
+            JSONObject logo = bestLogo(art.optJSONArray(serial ? "hdtvlogo" : "hdmovielogo"));
+            if (logo == null) logo = bestLogo(art.optJSONArray(serial ? "clearlogo" : "movielogo"));
+            if (logo != null) result.put("logo", logo.getString("url"));
+            if (backdrop != null && (result.optString("background").isEmpty() ||
+                (!result.has("tmdb") && backdrop.optInt("width") >= 2500))) {
+                result.put("background", backdrop.getString("url"));
+            }
+            if (poster != null && (result.optString("poster").isEmpty() ||
+                (!result.has("tmdb") && poster.optInt("height") >= 2000))) {
+                result.put("poster", poster.getString("url"));
+            }
+        } catch (Exception ignored) {}
+    }
+
+    /** Optional richer credits; OMDb may be used only under its data licence. */
+    private static void omdb(JSONObject result, JSONObject film) {
+        String key = BuildConfig.OMDB_API_KEY.trim();
+        String imdb = result.optString("imdb");
+        if (key.isEmpty() || !imdb.matches("tt[0-9]+")) return;
+        try {
+            JSONObject info = Net.json("https://www.omdbapi.com/?apikey=" + Net.enc(key) +
+                "&i=" + imdb + "&plot=full", null);
+            if (!"True".equalsIgnoreCase(info.optString("Response")) ||
+                !imdb.equalsIgnoreCase(info.optString("imdbID"))) return;
+            String director = info.optString("Director");
+            String actors = info.optString("Actors");
+            ArrayList<String> credits = new ArrayList<>();
+            if (!director.isEmpty() && !"N/A".equals(director)) credits.add("Режиссёр: " + director);
+            if (!actors.isEmpty() && !"N/A".equals(actors)) credits.add("В ролях: " + actors);
+            if (!credits.isEmpty()) result.put("credits", String.join("\n", credits));
+            if (film.optString("description").isEmpty() && result.optString("description").isEmpty() &&
+                !"N/A".equals(info.optString("Plot"))) result.put("description", info.optString("Plot"));
+        } catch (Exception ignored) {}
+    }
+
     static JSONObject load(Context context, JSONObject film, boolean details) {
         SharedPreferences cache = context.getSharedPreferences("metadata-v2", 0);
         String key = film.optString("id") + (details ? ":detail" : ":art");
@@ -204,6 +286,8 @@ final class Metadata {
                 if (result.has("imdb")) cinemetaDetails(result, type, result.getString("imdb"));
                 if (serial) tvmaze(result, names, film.optInt("year"));
                 tmdb(result, film, names, serial);
+                fanart(result, serial);
+                omdb(result, film);
             }
             boolean matched = result.has("imdb") || result.has("tvmaze") || result.has("tmdb");
             result.put("matched", matched).put("fetched", System.currentTimeMillis());

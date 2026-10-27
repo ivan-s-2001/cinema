@@ -26,7 +26,7 @@ class CinemaQualityTabsTest {
         val addon=CinemaIntegration.addon()
         assertEquals(listOf("ch:"),addon.manifest!!.idPrefixes)
         assertTrue(addon.manifest!!.types.containsAll(listOf("movie","series")))
-        assertEquals(6,CinemaIntegration.catalogs.size)
+        assertEquals(14,CinemaIntegration.catalogs.size)
         assertTrue(CinemaIntegration.catalogs.all {it.addonId==addon.id})
     }
 }
