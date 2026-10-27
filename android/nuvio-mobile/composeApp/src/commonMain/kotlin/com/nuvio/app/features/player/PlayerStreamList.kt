@@ -6,6 +6,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.MaterialTheme
@@ -13,6 +20,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,6 +66,7 @@ internal fun PlayerStreamList(
     }.collectAsStateWithLifecycle()
     val streams = streamsUiState.allStreams
     val visibleGroups = streamsUiState.filteredGroups
+    val cinemaOnly = streams.isNotEmpty() && streams.all { it.addonName == "CinemaHall" && it.name?.startsWith("CinemaHall · ") == true }
 
     when {
         streams.isEmpty() && streamsUiState.isAnyLoading -> {
@@ -84,6 +94,15 @@ internal fun PlayerStreamList(
                     style = MaterialTheme.typography.bodyLarge,
                 )
             }
+        }
+
+        cinemaOnly -> {
+            CinemaHallMobileQualityPicker(
+                streams = streams,
+                onStreamSelected = onStreamSelected,
+                modifier = modifier,
+                contentPadding = contentPadding,
+            )
         }
 
         else -> {
@@ -118,6 +137,68 @@ internal fun PlayerStreamList(
                     }
                 }
             }
+            }
+        }
+    }
+}
+
+/** Simple CinemaHall choices; original Nuvio stream cards remain for other providers. */
+@Composable
+private fun CinemaHallMobileQualityPicker(
+    streams: List<StreamItem>,
+    onStreamSelected: (StreamItem) -> Unit,
+    modifier: Modifier,
+    contentPadding: PaddingValues,
+) {
+    val ranks = remember { listOf("4K", "2K", "1080p", "720p", "576p", "480p", "360p", "240p") }
+    val groups = remember(streams) {
+        streams.groupBy { it.name.orEmpty().removePrefix("CinemaHall · ").trim().ifEmpty { "Не указано" } }
+            .toList()
+            .sortedBy { ranks.indexOf(it.first).let { index -> if (index < 0) 99 else index } }
+    }
+    var quality by remember(groups) { mutableStateOf(groups.firstOrNull()?.first.orEmpty()) }
+    val voices = groups.firstOrNull { it.first == quality }?.second.orEmpty()
+        .distinctBy { it.title.orEmpty().trim().lowercase() }
+    Column(
+        modifier = modifier.fillMaxWidth().padding(contentPadding),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Text("Качество", style = MaterialTheme.typography.titleMedium)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        ) {
+            groups.forEach { entry ->
+                val active = quality == entry.first
+                Box(
+                    modifier = Modifier
+                        .background(
+                            if (active) MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surfaceVariant,
+                            RoundedCornerShape(12.dp),
+                        )
+                        .clickable { quality = entry.first }
+                        .padding(horizontal = 18.dp, vertical = 12.dp),
+                ) {
+                    Text(entry.first, color = if (active) MaterialTheme.colorScheme.onPrimaryContainer
+                        else MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+        Text("Озвучка", style = MaterialTheme.typography.titleMedium)
+        voices.forEach { stream ->
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
+                    .clickable { onStreamSelected(stream) }
+                    .padding(horizontal = 18.dp, vertical = 16.dp),
+            ) {
+                Text(
+                    stream.title?.takeIf { it.isNotBlank() } ?: "Озвучка не указана",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
