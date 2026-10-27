@@ -40,10 +40,9 @@ done
 # and nested trees MUST have a declared source above, otherwise fail the import.
 for entry in "${entries[@]}"; do
   IFS='|' read -r directory repository sha <<< "$entry"
-  git -C "$work" init -q 2>/dev/null || true
   gitlinks="$(curl --fail --silent --show-error \
     "https://api.github.com/repos/${repository}/git/trees/${sha}?recursive=1" \
-    | python3 -c 'import json,sys; data=json.load(sys.stdin); assert not data.get("truncated"); print("\\n".join(x["path"] for x in data["tree"] if x["mode"]=="160000"))')"
+    | python3 -c 'import json,sys; data=json.load(sys.stdin); assert not data.get("truncated"); print(chr(10).join(x["path"] for x in data["tree"] if x["mode"]=="160000"))')"
   if [ -n "$gitlinks" ]; then
     while IFS= read -r nested; do
       found=0
