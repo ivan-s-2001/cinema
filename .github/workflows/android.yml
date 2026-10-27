@@ -11,6 +11,23 @@ permissions:
   contents: read
   actions: read
 jobs:
+  verify-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Validate server syntax
+        run: |
+          node --check backend/server.mjs
+          node --check backend/admin.mjs
+          node --check backend/sync-catalog.mjs
+      - name: Catalog normalization self-test
+        run: |
+          npm --prefix backend install --omit=dev --no-audit --no-fund
+          node backend/sync-catalog.mjs selftest
   verify-tv:
     runs-on: ubuntu-latest
     timeout-minutes: 40
