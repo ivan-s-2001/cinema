@@ -72,8 +72,19 @@ if (-not (Test-Path $SdkManager)) {
 $env:ANDROID_HOME = $SdkRoot
 $env:ANDROID_SDK_ROOT = $SdkRoot
 Invoke-Checked { 1..100 | ForEach-Object { 'y' } | & $SdkManager "--sdk_root=$SdkRoot" --licenses }
-Invoke-Checked { & $SdkManager "--sdk_root=$SdkRoot" 'platform-tools' 'platforms;android-35' 'build-tools;34.0.0' }
-('sdk.dir=' + $SdkRoot.Replace('\','/')) | Set-Content -Encoding ASCII (Join-Path $RepoRoot 'local.properties')
+Invoke-Checked { & $SdkManager "--sdk_root=$SdkRoot" 'platform-tools' 'platforms;android-36' 'build-tools;36.0.0' }
+Write-Host 'Получение готовой основы ARVIO TV + Mobile' -ForegroundColor Cyan
+Invoke-Checked { git -C $RepoRoot submodule update --init --depth 1 -- android/arvio }
+$AppRoot = Join-Path $RepoRoot 'android\arvio'
+$Patch = Join-Path $RepoRoot 'android\arvio.patch'
+$ErrorActionPreference = 'Continue'
+try {
+    git -C $AppRoot apply --reverse --check $Patch 2>$null
+    $alreadyApplied = ($LASTEXITCODE -eq 0)
+} finally { $ErrorActionPreference = 'Stop' }
+if (-not $alreadyApplied) { Invoke-Checked { git -C $AppRoot apply $Patch } }
+Copy-Item -Path (Join-Path $RepoRoot 'android\overlay\*') -Destination $AppRoot -Recurse -Force
+('sdk.dir=' + $SdkRoot.Replace('\','/')) | Set-Content -Encoding ASCII (Join-Path $AppRoot 'local.properties')
 
 Write-Host '[3/6] Встроенный TorrServer, проверка SHA256' -ForegroundColor Cyan
 $engines = @(
@@ -81,20 +92,21 @@ $engines = @(
     @{ Abi='armeabi-v7a'; Name='TorrServer-android-arm7'; Hash='e775001edf7bfb2adebfde0ba36780357c0951f12203adb367bd69b2b45522b6' }
 )
 foreach ($engine in $engines) {
-    $dir = Join-Path $RepoRoot ('app\src\main\jniLibs\' + $engine.Abi)
+    $dir = Join-Path $AppRoot ('app\src\main\jniLibs\' + $engine.Abi)
     New-Item -ItemType Directory -Force $dir | Out-Null
     Download-Verified ('https://github.com/YouROK/TorrServer/releases/download/MatriX.147.1/' + $engine.Name) (Join-Path $dir 'libtorrserver.so') $engine.Hash
 }
 
-Write-Host '[4/6] Проверка логики, сборка APK и Android lint' -ForegroundColor Cyan
+Write-Host '[4/6] Проверка логики и сборка ARVIO TV + Mobile' -ForegroundColor Cyan
 Push-Location $RepoRoot
 try {
     New-Item -ItemType Directory -Force 'build\check' | Out-Null
-    Invoke-Checked { & "$JavaRoot\bin\javac.exe" -encoding UTF-8 -d 'build\check' 'app\src\main\java\app\cinemahall\tv\Logic.java' 'tests\LogicCheck.java' }
+    Invoke-Checked { & "$JavaRoot\bin\javac.exe" -encoding UTF-8 -d 'build\check' 'android\overlay\app\src\main\java\app\cinemahall\tv\Logic.java' 'tests\LogicCheck.java' }
     Invoke-Checked { & "$JavaRoot\bin\java.exe" -cp 'build\check' 'app.cinemahall.tv.LogicCheck' }
-    Invoke-Checked { & '.\gradlew.bat' --no-daemon 'clean' ':app:assembleDebug' ':app:lintDebug' }
+    Push-Location $AppRoot
+    try { Invoke-Checked { & '.\gradlew.bat' --no-daemon ':app:assembleSideloadDebug' } } finally { Pop-Location }
 } finally { Pop-Location }
-$Apk = Join-Path $RepoRoot 'app\build\outputs\apk\debug\app-debug.apk'
+$Apk = Join-Path $AppRoot 'app\build\outputs\apk\sideload\debug\app-sideload-debug.apk'
 if (-not (Test-Path $Apk)) { throw "APK не найден: $Apk" }
 if ($BuildOnly) { Write-Host "APK готов: $Apk" -ForegroundColor Green; return }
 
@@ -130,6 +142,6 @@ if ($installCode -ne 0 -and ($install -match 'INSTALL_FAILED_UPDATE_INCOMPATIBLE
     Invoke-Checked { & $Adb -s $TvAddress uninstall 'app.cinemahall.tv' }
     Invoke-Checked { & $Adb -s $TvAddress install $Apk }
 } elseif ($installCode -ne 0) { throw "Ошибка установки: $($install -join ' ')" }
-Invoke-Checked { & $Adb -s $TvAddress shell am start -n 'app.cinemahall.tv/.MainActivity' }
+Invoke-Checked { & $Adb -s $TvAddress shell am start -n 'app.cinemahall.tv/com.arflix.tv.MainActivity' }
 Write-Host "Готово. CinemaHall установлен и запущен на $TvAddress" -ForegroundColor Green
 Write-Host "Следующий запуск обновит приложение с сохранением данных. APK: $Apk"

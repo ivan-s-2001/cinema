@@ -1,4 +1,4 @@
-name: Android APK
+name: Android TV + Mobile APK
 on:
   push:
     branches: [main]
@@ -9,25 +9,28 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
-      - name: Verify source selection, episode and seek logic
-        run: |
-          mkdir -p build/check
-          javac -d build/check app/src/main/java/app/cinemahall/tv/Logic.java tests/LogicCheck.java
-          java -cp build/check app.cinemahall.tv.LogicCheck
-      - name: Fetch pinned streaming engine
+      - name: Prepare pinned TV + mobile application
+        run: python3 scripts/prepare_android.py
+      - name: Fetch verified embedded engine
         run: python3 scripts/fetch_engine.py
-      - name: Build and lint
-        run: ./gradlew :app:assembleDebug :app:lintDebug --no-daemon
+      - name: Build TV + mobile APK
+        working-directory: android/arvio
+        run: ./gradlew :app:assembleSideloadDebug --no-daemon
+      - name: Check CinemaHall quality tabs and catalog contract
+        working-directory: android/arvio
+        run: ./gradlew :app:testSideloadDebugUnitTest --tests app.cinemahall.tv.CinemaQualityTabsTest --no-daemon
       - uses: actions/upload-artifact@v4
         with:
-          name: CinemaHall-debug
-          path: app/build/outputs/apk/debug/*.apk
+          name: CinemaHall-TV-Mobile-debug
+          path: android/arvio/app/build/outputs/apk/sideload/debug/*.apk

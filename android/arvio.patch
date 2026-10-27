@@ -1,0 +1,518 @@
+diff --git a/app/build.gradle.kts b/app/build.gradle.kts
+index 34f6781..c4ca4b2 100644
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -3,7 +3,6 @@ import java.net.URI
+ import java.security.MessageDigest
+ import java.nio.file.Files
+ import java.nio.file.StandardCopyOption
+-import com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension
+ 
+ plugins {
+     id("com.android.application")
+@@ -18,8 +17,6 @@ plugins {
+     id("com.google.android.libraries.mapsplatform.secrets-gradle-plugin")
+     id("io.gitlab.arturbosch.detekt")
+     kotlin("plugin.serialization")
+-    id("com.google.gms.google-services")
+-    id("com.google.firebase.crashlytics")
+ }
+ 
+ // On-device speech recognition for sync by hearing (sherpa-onnx, Apache-2.0). The AAR is ~50 MB, so it is downloaded once into libs/ (git-ignored)
+@@ -63,20 +60,19 @@ val includeX86Abis = providers.gradleProperty("includeX86Abis")
+ android {
+     namespace = "com.arflix.tv"
+     compileSdk = 36
+-    ndkVersion = "28.2.13676358"
+ 
+     flavorDimensions += "distribution"
+ 
+     defaultConfig {
+-        applicationId = "com.arvio.tv"
++        applicationId = "app.cinemahall.tv"
+         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+         // Fire TV devices can be as low as Android 7.1 (API 25) or lower depending on model/OS.
+-        minSdk = 23
++        minSdk = 26
+         targetSdk = 36
+-        versionCode = 321
+-        versionName = "2.3"
+-        buildConfigField("String", "GITHUB_OWNER", "\"ProdigyV21\"")
+-        buildConfigField("String", "GITHUB_REPO", "\"ARVIO\"")
++        versionCode = 4
++        versionName = "0.4.0"
++        buildConfigField("String", "GITHUB_OWNER", "\"ivan-s-2001\"")
++        buildConfigField("String", "GITHUB_REPO", "\"cinema\"")
+         buildConfigField("Boolean", "FEATURE_PLUGINS_ENABLED", "false")
+         // Use the same resolution for generated values and release validation.
+         buildConfigField("String", "TELEGRAM_API_ID", "\"${escapeBuildConfigString(localSecretValue("TELEGRAM_API_ID"))}\"")
+@@ -201,9 +197,7 @@ android {
+ 
+             // Build config fields for release
+             buildConfigField("Boolean", "ENABLE_CRASH_REPORTING", "true")
+-            configure<CrashlyticsExtension> {
+-                nativeSymbolUploadEnabled = true
+-            }
++
+         }
+ 
+         debug {
+@@ -286,7 +280,8 @@ android {
+             )
+         }
+         jniLibs {
+-            useLegacyPackaging = false  // Required for 16KB page size support
++            useLegacyPackaging = true
++            keepDebugSymbols += "**/libtorrserver.so"  // Required for 16KB page size support
+             // sherpa-onnx's JNI library only needs libonnxruntime; its C/C++ API libraries are unused.
+             excludes += setOf("lib/*/libsherpa-onnx-c-api.so", "lib/*/libsherpa-onnx-cxx-api.so")
+         }
+@@ -501,7 +496,7 @@ ksp {
+     implementation("com.google.firebase:firebase-crashlytics-ndk")
+     implementation("com.google.firebase:firebase-analytics")
+ 
+-    baselineProfile(project(":benchmark"))
++
+ 
+     // YouTube player for the Home billboard trailer (official IFrame API wrapper)
+     implementation("com.pierfrancescosoffritti.androidyoutubeplayer:core:13.0.0") {
+diff --git a/app/src/main/AndroidManifest.xml b/app/src/main/AndroidManifest.xml
+index a3b7cd4..dca75a0 100644
+--- a/app/src/main/AndroidManifest.xml
++++ b/app/src/main/AndroidManifest.xml
+@@ -20,8 +20,7 @@
+         android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"
+         tools:node="remove" />
+     <uses-permission
+-        android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+-        tools:node="remove" />
++        android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+     <uses-permission
+         android:name="android.permission.MODIFY_AUDIO_SETTINGS"
+         tools:node="remove" />
+@@ -32,6 +31,7 @@
+         android:name="android.permission.BLUETOOTH_CONNECT"
+         tools:node="remove" />
+ 
++    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+     <!-- TV Features (not required so the same APK installs on phones/tablets) -->
+     <uses-feature
+         android:name="android.software.leanback"
+@@ -57,7 +57,6 @@
+         android:allowBackup="false"
+         android:banner="@drawable/app_banner"
+         android:enableOnBackInvokedCallback="true"
+-        android:extractNativeLibs="false"
+         android:hardwareAccelerated="true"
+         android:largeHeap="true"
+         android:icon="@mipmap/ic_launcher"
+@@ -217,6 +216,7 @@
+             </intent-filter>
+         </receiver>
+ 
++        <service android:name="app.cinemahall.tv.TorrentService" android:exported="false" android:foregroundServiceType="mediaPlayback" android:stopWithTask="true" />
+     </application>
+ 
+ </manifest>
+diff --git a/app/src/main/kotlin/com/arflix/tv/ArflixApplication.kt b/app/src/main/kotlin/com/arflix/tv/ArflixApplication.kt
+index 31502de..0ae0684 100644
+--- a/app/src/main/kotlin/com/arflix/tv/ArflixApplication.kt
++++ b/app/src/main/kotlin/com/arflix/tv/ArflixApplication.kt
+@@ -117,6 +117,7 @@ class ArflixApplication : Application(), Configuration.Provider, ImageLoaderFact
+         com.arflix.tv.network.initializeNetworkPlatform(this)
+         super.onCreate()
+         instance = this
++        if (!crashProcess) app.cinemahall.tv.CinemaIntegration.initialize(this)
+         if (crashProcess) return
+ 
+         // Initialize global DNS provider and user agent from DataStore before network calls.
+diff --git a/app/src/main/kotlin/com/arflix/tv/data/repository/MediaRepository.kt b/app/src/main/kotlin/com/arflix/tv/data/repository/MediaRepository.kt
+index daba2d5..8092ea2 100644
+--- a/app/src/main/kotlin/com/arflix/tv/data/repository/MediaRepository.kt
++++ b/app/src/main/kotlin/com/arflix/tv/data/repository/MediaRepository.kt
+@@ -785,52 +785,8 @@ class MediaRepository @Inject constructor(
+          * MediaRepository (which would need every injected dependency).
+          */
+         internal fun buildPreinstalledDefaults(): List<CatalogConfig> {
+-            val topLevelCatalogs = listOf(
+-                CatalogConfig("trending_movies", "Trending in Movies", CatalogSourceType.MDBLIST, isPreinstalled = true, sourceUrl = "https://mdblist.com/lists/snoak/trending-movies", sourceRef = "mdblist:https://mdblist.com/lists/snoak/trending-movies"),
+-                CatalogConfig("trending_tv", "Trending in Shows", CatalogSourceType.MDBLIST, isPreinstalled = true, sourceUrl = "https://mdblist.com/lists/snoak/trakt-s-trending-shows", sourceRef = "mdblist:https://mdblist.com/lists/snoak/trakt-s-trending-shows"),
+-                CatalogConfig("trending_anime", "Trending in Anime", CatalogSourceType.MDBLIST, isPreinstalled = true, sourceUrl = "https://mdblist.com/lists/snoak/trending-anime-shows", sourceRef = "mdblist:https://mdblist.com/lists/snoak/trending-anime-shows"),
+-                CatalogConfig("favorite_tv", "Favorite TV", CatalogSourceType.PREINSTALLED, isPreinstalled = true),
+-                CatalogConfig("top10_movies_today", "Top 10 Movies Today", CatalogSourceType.MDBLIST, isPreinstalled = true, sourceUrl = "https://mdblist.com/lists/snoak/top-10-movies-of-the-day", sourceRef = "mdblist:https://mdblist.com/lists/snoak/top-10-movies-of-the-day"),
+-                CatalogConfig("top10_shows_today", "Top 10 Shows Today", CatalogSourceType.MDBLIST, isPreinstalled = true, sourceUrl = "https://mdblist.com/lists/snoak/top-10-shows-of-the-day", sourceRef = "mdblist:https://mdblist.com/lists/snoak/top-10-shows-of-the-day"),
+-                CatalogConfig("just_added", "Just Added", CatalogSourceType.MDBLIST, isPreinstalled = true, sourceUrl = "https://mdblist.com/lists/snoak/latest-movies-digital-release", sourceRef = "mdblist:https://mdblist.com/lists/snoak/latest-movies-digital-release"),
+-                CatalogConfig("top_movies_week", "Top Movies This Week", CatalogSourceType.MDBLIST, isPreinstalled = true, sourceUrl = "https://mdblist.com/lists/linaspurinis/top-watched-movies-of-the-week", sourceRef = "mdblist:https://mdblist.com/lists/linaspurinis/top-watched-movies-of-the-week"),
+-                CatalogConfig("new_kdramas", "New in K-Dramas", CatalogSourceType.MDBLIST, isPreinstalled = true, sourceUrl = "https://mdblist.com/lists/snoak/latest-kdrama-shows", sourceRef = "mdblist:https://mdblist.com/lists/snoak/latest-kdrama-shows"),
+-                CatalogConfig("coming_soon", "Coming Soon", CatalogSourceType.MDBLIST, isPreinstalled = true, sourceUrl = "https://mdblist.com/lists/snoak/upcoming-movies", sourceRef = "mdblist:https://mdblist.com/lists/snoak/upcoming-movies")
+-            )
+-
+-            val collectionRails = CollectionTemplateManifest.railOrder.map { group ->
+-                CatalogConfig(
+-                    id = CollectionTemplateManifest.railCatalogId(group),
+-                    title = CollectionTemplateManifest.railTitle(group),
+-                    sourceType = CatalogSourceType.PREINSTALLED,
+-                    isPreinstalled = true,
+-                    kind = CatalogKind.COLLECTION_RAIL,
+-                    collectionGroup = group
+-                )
+-            }
+-            val templateCollections = CollectionTemplateManifest.entries.map { entry ->
+-                CatalogConfig(
+-                    id = entry.id,
+-                    title = entry.title,
+-                    sourceType = CatalogSourceType.PREINSTALLED,
+-                    isPreinstalled = true,
+-                    kind = CatalogKind.COLLECTION,
+-                    collectionGroup = entry.group,
+-                    collectionDescription = CollectionTemplateManifest.descriptionFor(entry),
+-                    collectionCoverImageUrl = entry.coverImageUrl,
+-                    collectionFocusGifUrl = entry.coverImageUrl,
+-                    collectionHeroImageUrl = entry.heroImageUrl,
+-                    collectionHeroVideoUrl = entry.heroVideoUrl,
+-                    collectionTileShape = entry.tileShape,
+-                    collectionHideTitle = entry.hideTitle,
+-                    collectionSources = entry.sources
+-                )
+-            }
+-
+-            val pinnedLeadCatalogs = topLevelCatalogs.take(3)
+-            val trailingCatalogs = topLevelCatalogs.drop(3)
+-            return pinnedLeadCatalogs + collectionRails + templateCollections + trailingCatalogs
+-        }
++            return app.cinemahall.tv.CinemaIntegration.catalogs
++}
+     }
+ 
+     /**
+@@ -2885,59 +2841,13 @@ class MediaRepository @Inject constructor(
+      * Search media
+      */
+     suspend fun search(query: String): List<MediaItem> {
+-        val results = tmdbApi.searchMulti(apiKey, query, language = contentLanguage)
+-        val items = results.results
+-            .filter { it.mediaType == "movie" || it.mediaType == "tv" }
+-            .map {
+-                it.toMediaItem(
+-                    if (it.mediaType == "tv") MediaType.TV else MediaType.MOVIE
+-                )
+-            }
+-        cacheItems(items)
+-        return items
+-    }
++        return searchNativeAddonItems(query)
++}
+ 
+     /** Titles and known-for rows share one request; optional artwork must not delay them. */
+     suspend fun searchWithPeople(query: String, maxPeople: Int = 3): MediaSearchResults = coroutineScope {
+-        val trimmed = query.trim()
+-        if (trimmed.isEmpty()) return@coroutineScope MediaSearchResults(emptyList(), emptyList())
+-
+-        val response = tmdbApi.searchMulti(apiKey, trimmed, language = contentLanguage)
+-        val items = response.results
+-            .filter { it.mediaType == "movie" || it.mediaType == "tv" }
+-            .map { it.toMediaItem(if (it.mediaType == "tv") MediaType.TV else MediaType.MOVIE) }
+-            .distinctBy { it.mediaType to it.id }
+-        val people = response.results
+-            .asSequence()
+-            .filter { it.mediaType == "person" && it.id > 0 && !it.name.isNullOrBlank() }
+-            .distinctBy { it.id }
+-            .sortedByDescending { it.popularity }
+-            .take(maxPeople)
+-            .toList()
+-
+-        val rows = people.map { person ->
+-            val knownForItems = person.knownFor
+-                .asSequence()
+-                .filter { it.posterPath != null && (it.mediaType == "movie" || it.mediaType == "tv") }
+-                .sortedWith(
+-                    compareByDescending<TmdbMediaItem> { it.voteCount }
+-                        .thenByDescending { it.popularity }
+-                )
+-                .map {
+-                    it.toMediaItem(
+-                        if (it.mediaType == "tv") MediaType.TV else MediaType.MOVIE
+-                    )
+-                }
+-                .distinctBy { "${it.mediaType}_${it.id}" }
+-                .take(20)
+-                .toList()
+-
+-            PersonMediaSearchResult(personId = person.id, name = person.name.orEmpty(), items = knownForItems)
+-        }
+-
+-        cacheItems(items + rows.flatMap { it.items })
+-        MediaSearchResults(items, rows)
+-    }
++        return@coroutineScope MediaSearchResults(searchNativeAddonItems(query), emptyList())
++}
+ 
+     /** Native addon items matching [query] (see [StreamRepository.searchNativeAddonCatalogs]). */
+     suspend fun searchNativeAddonItems(query: String): List<MediaItem> = try {
+diff --git a/app/src/main/kotlin/com/arflix/tv/data/repository/StreamRepository.kt b/app/src/main/kotlin/com/arflix/tv/data/repository/StreamRepository.kt
+index 03aba72..4db0a07 100644
+--- a/app/src/main/kotlin/com/arflix/tv/data/repository/StreamRepository.kt
++++ b/app/src/main/kotlin/com/arflix/tv/data/repository/StreamRepository.kt
+@@ -671,23 +671,8 @@ class StreamRepository @Inject constructor(
+     }
+ 
+     private fun getDefaultAddonList(): List<Addon> {
+-        return defaultAddons.map { config ->
+-            Addon(
+-                id = config.id,
+-                name = config.name,
+-                version = "1.0.0",
+-                description = when (config.id) {
+-                    "opensubtitles" -> context.getString(R.string.addon_opensubtitles_description)
+-                    else -> ""
+-                },
+-                isInstalled = true,
+-                isEnabled = true,
+-                type = config.type,
+-                url = config.baseUrl,
+-                transportUrl = getTransportUrl(config.baseUrl)
+-            )
+-        }
+-    }
++        return listOf(app.cinemahall.tv.CinemaIntegration.addon())
++}
+ 
+     private fun canonicalOpenSubtitles(addon: Addon? = null): Addon {
+         // Preserve the user's enabled/disabled choice. The addon is always kept installed
+diff --git a/app/src/main/kotlin/com/arflix/tv/network/OkHttpProvider.kt b/app/src/main/kotlin/com/arflix/tv/network/OkHttpProvider.kt
+index 4a8b288..9bf910b 100644
+--- a/app/src/main/kotlin/com/arflix/tv/network/OkHttpProvider.kt
++++ b/app/src/main/kotlin/com/arflix/tv/network/OkHttpProvider.kt
+@@ -268,6 +268,7 @@ object OkHttpProvider {
+         }
+ 
+         val builder = OkHttpClient.Builder()
++            .addInterceptor(app.cinemahall.tv.CinemaIntegration.interceptor)
+             .addInterceptor(customUserAgentInterceptor)
+             // TMDB/Trakt calls are proxied when Supabase proxy config is present.
+             // Contributors can still use direct calls with their own local keys.
+diff --git a/app/src/main/kotlin/com/arflix/tv/ui/components/StreamSelector.kt b/app/src/main/kotlin/com/arflix/tv/ui/components/StreamSelector.kt
+index 5b52637..41173f1 100644
+--- a/app/src/main/kotlin/com/arflix/tv/ui/components/StreamSelector.kt
++++ b/app/src/main/kotlin/com/arflix/tv/ui/components/StreamSelector.kt
+@@ -147,6 +147,11 @@ internal fun buildSourceAddonTabs(
+     streams: List<StreamSource>,
+     addonOrderedIds: List<String>,
+ ): List<SourceAddonTab> {
++    if (streams.isNotEmpty() && streams.all { it.addonId == "cinemahall.catalog" }) {
++        val order=listOf("4K","2K","1080p","720p","576p","480p","360p","240p")
++        return streams.map { it.rawLabel.orEmpty() }.filter { it in order }.distinct()
++            .sortedBy { order.indexOf(it) }.map { SourceAddonTab("cinema:$it", it) }
++    }
+     val baseNameById = LinkedHashMap<String, String>()
+     streams.forEach { stream ->
+         val baseName = stream.addonName
+@@ -429,7 +434,8 @@ fun StreamSelector(
+     }
+ 
+     // Tab labels: "All sources" + addon labels
+-    val allSourcesLabel = stringResource(R.string.stream_tab_all_sources)
++    val cinemaOnly = streams.isNotEmpty() && streams.all { it.addonId == "cinemahall.catalog" }
++    val allSourcesLabel = if(cinemaOnly) "Авто" else stringResource(R.string.stream_tab_all_sources)
+     val tabLabels = remember(addonTabs, allSourcesLabel) {
+         listOf(allSourcesLabel) + addonTabs.map { it.label }
+     }
+@@ -502,7 +508,7 @@ fun StreamSelector(
+     ) {
+         val selectedFilter = sourceFilters.getOrNull(selectedFilterIndex)?.label ?: "All"
+         val addonFiltered = if (selectedTabIndex == 0) {
+-            orderedPresentations
++            if(cinemaOnly) orderedPresentations.filter { it.stream.rawLabel == "Авто" } else orderedPresentations
+         } else {
+             val selectedAddonId = addonTabs.getOrNull(selectedTabIndex - 1)?.id ?: ""
+             orderedPresentations.filter {
+@@ -784,7 +790,7 @@ fun StreamSelector(
+                     ) {
+                         Column(modifier = Modifier.weight(1f)) {
+                             Text(
+-                                text = title.ifEmpty { stringResource(R.string.stream_title_select_source) },
++                                text = if(cinemaOnly) "Качество и озвучка" else title.ifEmpty { stringResource(R.string.stream_title_select_source) },
+                                 style = ArflixTypography.body.copy(
+                                     fontSize = 18.sp,
+                                     fontWeight = FontWeight.Bold
+@@ -794,7 +800,7 @@ fun StreamSelector(
+                                 overflow = TextOverflow.Ellipsis
+                             )
+                             Text(
+-                                text = "${streams.size} ${stringResource(R.string.sources_available)}",
++                                text = if(cinemaOnly) "Выберите озвучку для выбранного качества" else "${streams.size} ${stringResource(R.string.sources_available)}",
+                                 style = ArflixTypography.caption.copy(fontSize = 12.sp),
+                                 color = TextSecondary
+                             )
+@@ -1295,6 +1301,7 @@ private fun keepsOwnStreamOrder(stream: StreamSource): Boolean =
+         stream.addonId.contains("aiostream", ignoreCase = true)
+ 
+ internal fun sourceTabId(stream: StreamSource): String {
++    if(stream.addonId == "cinemahall.catalog") return "cinema:${stream.rawLabel.orEmpty()}"
+     val baseName = stream.addonName.split(" - ").firstOrNull()?.trim() ?: stream.addonName
+     return if (stream.addonId == "home_server" && baseName.isNotBlank()) {
+         "${stream.addonId}:$baseName"
+diff --git a/app/src/main/kotlin/com/arflix/tv/ui/screens/details/AutoPlaySourcePlanner.kt b/app/src/main/kotlin/com/arflix/tv/ui/screens/details/AutoPlaySourcePlanner.kt
+index 096bd2f..ada2d5a 100644
+--- a/app/src/main/kotlin/com/arflix/tv/ui/screens/details/AutoPlaySourcePlanner.kt
++++ b/app/src/main/kotlin/com/arflix/tv/ui/screens/details/AutoPlaySourcePlanner.kt
+@@ -65,6 +65,8 @@ internal fun bestAutoPlayStream(
+     minQualityScore: Int,
+     limits: AutoplayLimits = AutoplayLimits()
+ ): StreamSource? {
++    if(minQualityScore==0 && limits.qualityScore==Int.MAX_VALUE && limits.sizeBytes==0L)
++        streams.firstOrNull { it.addonId == "cinemahall.catalog" && it.rawLabel == "Авто" }?.let { return it }
+     return streams
+         .asSequence()
+         .filter { stream -> matchesAutoplayLimits(stream, minQualityScore, limits) }
+diff --git a/app/src/main/kotlin/com/arflix/tv/ui/screens/details/DetailsScreen.kt b/app/src/main/kotlin/com/arflix/tv/ui/screens/details/DetailsScreen.kt
+index 7389dd7..e765aa2 100644
+--- a/app/src/main/kotlin/com/arflix/tv/ui/screens/details/DetailsScreen.kt
++++ b/app/src/main/kotlin/com/arflix/tv/ui/screens/details/DetailsScreen.kt
+@@ -598,7 +598,7 @@ fun DetailsScreen(
+                 episodeIndex = idx
+                 if (isMobile && currentSelectedEpisodeIdentity.value != ep.identity) {
+                     selectedEpisodeIdentity = ep.identity
+-                } else if (isMobile || !state.autoPlaySingleSource) {
++                } else if (!state.autoPlaySingleSource) {
+                     selectedEpisodeIdentity = ep.identity
+                     showStreamSelector = true
+                     viewModel.loadStreams(state.imdbId, ep.identity)
+diff --git a/app/src/main/kotlin/com/arflix/tv/util/DiagnosticsManager.kt b/app/src/main/kotlin/com/arflix/tv/util/DiagnosticsManager.kt
+index 1aaf81b..26fd170 100644
+--- a/app/src/main/kotlin/com/arflix/tv/util/DiagnosticsManager.kt
++++ b/app/src/main/kotlin/com/arflix/tv/util/DiagnosticsManager.kt
+@@ -24,7 +24,7 @@ data object DiagnosticsManager {
+     fun isReportingEnabled(context: Context): Boolean {
+         return context.applicationContext
+             .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+-            .getBoolean(REPORTING_ENABLED_KEY, true)
++            .getBoolean(REPORTING_ENABLED_KEY, false)
+     }
+ 
+     @Synchronized
+diff --git a/app/src/main/res/values-es/strings.xml b/app/src/main/res/values-es/strings.xml
+index ffdc9d3..3c134d6 100644
+--- a/app/src/main/res/values-es/strings.xml
++++ b/app/src/main/res/values-es/strings.xml
+@@ -2,7 +2,7 @@
+ <resources>
+     <string name="library_sort_release_newest">Fecha de lanzamiento: más recientes primero</string>
+     <string name="library_sort_release_oldest">Fecha de lanzamiento: más antiguos primero</string>
+-    <string name="app_name">ARVIO</string>
++    <string name="app_name">CinemaHall</string>
+     <string name="about_credits">Acerca de y Créditos</string>
+     <string name="about_credits_description">Atribución de metadatos e información de derechos de autor</string>
+     <string name="tmdb_attribution" translatable="false">Este producto utiliza la API de TMDB, pero no cuenta con el respaldo ni la certificación de TMDB.</string>
+diff --git a/app/src/main/res/values-fr/strings.xml b/app/src/main/res/values-fr/strings.xml
+index 8ec7983..832dea6 100644
+--- a/app/src/main/res/values-fr/strings.xml
++++ b/app/src/main/res/values-fr/strings.xml
+@@ -1,6 +1,6 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <resources>
+-    <string name="app_name">ARVIO</string>
++    <string name="app_name">CinemaHall</string>
+     <string name="now_playing">LECTURE EN COURS</string>
+ 
+     <!-- Navigation -->
+diff --git a/app/src/main/res/values-pt-rBR/strings.xml b/app/src/main/res/values-pt-rBR/strings.xml
+index a3ef37b..18d1269 100644
+--- a/app/src/main/res/values-pt-rBR/strings.xml
++++ b/app/src/main/res/values-pt-rBR/strings.xml
+@@ -1,6 +1,6 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <resources>
+-    <string name="app_name">ARVIO</string>
++    <string name="app_name">CinemaHall</string>
+     <string name="now_playing">REPRODUZINDO AGORA</string>
+ 
+     <!-- Navigation -->
+diff --git a/app/src/main/res/values-pt/strings.xml b/app/src/main/res/values-pt/strings.xml
+index a3ef37b..18d1269 100644
+--- a/app/src/main/res/values-pt/strings.xml
++++ b/app/src/main/res/values-pt/strings.xml
+@@ -1,6 +1,6 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <resources>
+-    <string name="app_name">ARVIO</string>
++    <string name="app_name">CinemaHall</string>
+     <string name="now_playing">REPRODUZINDO AGORA</string>
+ 
+     <!-- Navigation -->
+diff --git a/app/src/main/res/values/strings.xml b/app/src/main/res/values/strings.xml
+index 831aa4a..538f1d9 100644
+--- a/app/src/main/res/values/strings.xml
++++ b/app/src/main/res/values/strings.xml
+@@ -8,7 +8,7 @@
+     <string name="live_sports_external_source">Opens in browser</string>
+     <string name="library_sort_release_newest">Release date: newest first</string>
+     <string name="library_sort_release_oldest">Release date: oldest first</string>
+-    <string name="app_name">ARVIO</string>
++    <string name="app_name">CinemaHall</string>
+     <string name="about_credits">About &amp; Credits</string>
+     <string name="about_credits_description">Metadata attribution and copyright information</string>
+     <string name="tmdb_attribution" translatable="false">This product uses the TMDB API but is not endorsed or certified by TMDB.</string>
+diff --git a/build.gradle.kts b/build.gradle.kts
+index 2ccec8d..291c947 100644
+--- a/build.gradle.kts
++++ b/build.gradle.kts
+@@ -17,8 +17,6 @@ plugins {
+     id("com.google.dagger.hilt.android") version "2.57" apply false
+     id("com.google.android.libraries.mapsplatform.secrets-gradle-plugin") version "2.0.1" apply false
+     // Firebase - requires google-services.json from Firebase Console
+-    id("com.google.gms.google-services") version "4.5.0" apply false
+-    id("com.google.firebase.crashlytics") version "3.0.8" apply false
+     // Static analysis
+     id("io.gitlab.arturbosch.detekt") version "1.23.7" apply false
+ }
+diff --git a/gradle.properties b/gradle.properties
+index cf07c7c..5739200 100644
+--- a/gradle.properties
++++ b/gradle.properties
+@@ -1,6 +1,6 @@
+ # Project-wide Gradle settings.
+-org.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8 --add-exports=jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.jvm=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED --add-opens=jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED --add-opens=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED --add-opens=jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED --add-opens=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED --add-opens=jdk.compiler/com.sun.tools.javac.jvm=ALL-UNNAMED --add-opens=jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED --add-opens=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED --add-opens=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED --add-opens=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED --add-opens=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED
+-org.gradle.parallel=true
++org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8 --add-exports=jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.jvm=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED --add-opens=jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED --add-opens=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED --add-opens=jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED --add-opens=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED --add-opens=jdk.compiler/com.sun.tools.javac.jvm=ALL-UNNAMED --add-opens=jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED --add-opens=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED --add-opens=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED --add-opens=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED --add-opens=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED
++org.gradle.parallel=false
+ org.gradle.caching=true
+ 
+ # Android settings
+@@ -16,3 +16,6 @@ android.enableJetifier=false
+ 
+ 
+ hilt.enableAggregatingTask=false
++
++org.gradle.workers.max=1
++kotlin.daemon.jvmargs=-Xmx4096m
+diff --git a/gradle/wrapper/gradle-wrapper.properties b/gradle/wrapper/gradle-wrapper.properties
+index dcb98de..766d14d 100644
+--- a/gradle/wrapper/gradle-wrapper.properties
++++ b/gradle/wrapper/gradle-wrapper.properties
+@@ -1,9 +1,11 @@
+ distributionBase=GRADLE_USER_HOME
+ distributionPath=wrapper/dists
+ distributionUrl=https\://services.gradle.org/distributions/gradle-8.13-bin.zip
+-networkTimeout=10000
++networkTimeout=120000
+ validateDistributionUrl=true
+ zipStoreBase=GRADLE_USER_HOME
+ zipStorePath=wrapper/dists
+ 
+ 
++
++distributionSha256Sum=20f1b1176237254a6fc204d8434196fa11a4cfb387567519c61556e8710aed78
+diff --git a/settings.gradle.kts b/settings.gradle.kts
+index b7ee002..7804aad 100644
+--- a/settings.gradle.kts
++++ b/settings.gradle.kts
+@@ -33,6 +33,6 @@ dependencyResolutionManagement {
+     }
+ }
+ 
+-rootProject.name = "ARVIO"
++rootProject.name = "CinemaHall"
+ include(":app")
+-include(":benchmark")
++// Benchmark remains upstream; the CinemaHall distribution builds the app.

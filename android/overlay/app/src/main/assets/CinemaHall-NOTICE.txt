@@ -1,0 +1,8 @@
+CinemaHall 0.4.0 uses the complete ARVIO Android application (TV, phone and tablet layouts).
+Upstream: https://github.com/ProdigyV21/ARVIO
+Pinned commit: 814638307236adb8eb572ed343f126de46b61b27
+ARVIO: Apache-2.0. See the upstream LICENSE and notices.
+CinemaHall adapters and bundled TorrServer: GPL-3.0.
+Source: https://github.com/ivan-s-2001/cinema
+TVmaze episode metadata: CC BY-SA 4.0, https://www.tvmaze.com/api
+Cinemeta: https://v3-cinemeta.strem.io/manifest.json

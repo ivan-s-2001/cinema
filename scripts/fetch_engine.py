@@ -3,7 +3,7 @@ import hashlib
 from pathlib import Path
 import urllib.request
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[1] / "android" / "arvio"
 VERSION = "MatriX.147.1"
 ASSETS = {
     "arm64-v8a": ("TorrServer-android-arm64", "93250bb1850e69663c6758398be515c2c429595cb4692c6eccb367f2236868d5"),
