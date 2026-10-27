@@ -135,7 +135,7 @@ final class CinemaCatalog {
         JSONObject result=new JSONObject().put("id","ch:"+id).put("type",film.optBoolean("serial")?"series":"movie")
             .put("name",film.optString("name_rus").isEmpty()?(film.optString("name_original").isEmpty()?film.optString("name_eng"):film.optString("name_original")):film.optString("name_rus"))
             .put("poster",art.optString("poster").isEmpty()?"https://img2.zonapic.com/images/film_240/"+(id.length()>3?id.substring(0,id.length()-3):"0")+"/"+id+".jpg":art.optString("poster"))
-            .put("background",art.optString("background")).put("description",film.optString("description")).put("releaseInfo",film.optString("year")).put("imdbRating",film.optString("rating_imdb"));
+            .put("background",art.optString("background")).put("description",film.optString("description")).put("releaseInfo",film.optString("year"));
         JSONArray aliases=new JSONArray();for(String field:new String[]{"name_rus","name_eng","name_original"}){String name=film.optString(field).trim();if(!name.isEmpty())aliases.put(name);}result.put("aliases",aliases);
         JSONObject scores=new JSONObject().put("kinopoisk",film.opt("rating_kinopoisk")).put("imdb",film.opt("rating_imdb"));
         JSONObject enriched=art.optJSONObject("ratings");if(enriched!=null){Iterator<String> keys=enriched.keys();while(keys.hasNext()){String key=keys.next();scores.put(key,enriched.opt(key));}}

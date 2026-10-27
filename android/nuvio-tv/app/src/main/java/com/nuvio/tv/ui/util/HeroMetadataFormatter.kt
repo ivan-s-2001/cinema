@@ -13,8 +13,8 @@ fun formatHeroRuntime(runtime: String?): String? {
     val wholeHours = totalMinutes / 60
     val remainingMinutes = totalMinutes % 60
     return when {
-        wholeHours > 0 && remainingMinutes > 0 -> "${wholeHours}h ${remainingMinutes}m"
-        wholeHours > 0 -> "${wholeHours}h"
-        else -> "${remainingMinutes}m"
+        wholeHours > 0 && remainingMinutes > 0 -> "${wholeHours} ч ${remainingMinutes} мин"
+        wholeHours > 0 -> "${wholeHours} ч"
+        else -> "${remainingMinutes} мин"
     }
 }

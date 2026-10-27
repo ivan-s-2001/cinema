@@ -77,18 +77,29 @@ final class CinemaSnapshot {
         }
         return "Название уточняется";
     }
+    static void appendMetadata(JSONObject target,JSONObject row) throws JSONException {
+        if(row==null)return;
+        CinemaRatings.append(target,row.optJSONObject("ratings"));
+        for(String field:new String[]{"aliases","genres"})if(row.optJSONArray(field)!=null)target.put(field,row.optJSONArray(field));
+        for(String field:new String[]{"status","tagline"}){String value=row.optString(field).trim();if(!value.isEmpty())target.put(field,value);}
+        int minutes=row.optInt("runtimeMinutes");if(minutes>0&&minutes<1440)target.put("runtime",Integer.toString(minutes));
+        JSONArray countries=row.optJSONArray("countries");if(countries!=null){ArrayList<String> names=new ArrayList<>();for(int i=0;i<countries.length();i++){String value=countries.optString(i).trim();if(!value.isEmpty())names.add(value);}if(!names.isEmpty())target.put("country",String.join(", ",names));}
+        JSONObject ids=row.optJSONObject("ids");if(ids!=null&&ids.optString("imdb").matches("tt[0-9]+"))target.put("imdb_id",ids.optString("imdb"));
+        String date=row.optString("releaseDate");if(date.matches("[0-9]{4}-[0-9]{2}-[0-9]{2}"))target.put("released",date+"T00:00:00.000Z");
+        String age=row.optString("ageRating").trim();if(!age.isEmpty())target.put("app_extras",new JSONObject().put("certificationLocal",age));
+    }
     private JSONObject compact(JSONObject entry) throws Exception {
         JSONObject result=new JSONObject().put("id","ch:snapshot:"+entry.getString("id")).put("type",entry.optString("type").equals("tv")?"series":"movie").put("name",entry.optString("title")).put("poster",cleanImage(entry.optString("poster"))).put("releaseInfo",displayYear(entry.optInt("year")));
         JSONObject row=raw("ch:snapshot:"+entry.getString("id"));JSONObject images=row==null?null:row.optJSONObject("images");
         if(images!=null){
             String poster=cleanImage(images.optString("poster"));
             if(!poster.isEmpty())result.put("poster",poster);
+            String logo=cleanImage(images.optString("logo"));if(!logo.isEmpty())result.put("logo",logo);
             String backdrop=cleanImage(images.optString("backdrop"));
             if(images.optBoolean("backdropVerified")&&!backdrop.isEmpty()&&!backdrop.equals(result.optString("poster")))result.put("background",backdrop);
         }
         if(row!=null){
-            CinemaRatings.append(result,row.optJSONObject("ratings"));
-            if(row.optJSONArray("aliases")!=null)result.put("aliases",row.optJSONArray("aliases"));
+            appendMetadata(result,row);
             if(!row.optString("titleRu").trim().isEmpty()||result.optString("name").trim().isEmpty())result.put("name",title(row));
             String summary=row.optString("description").trim();
             if(!summary.isEmpty())result.put("description",summary);
@@ -107,9 +118,7 @@ final class CinemaSnapshot {
             if(result.optString("poster").isEmpty()&&!fallback.optString("poster").isEmpty())result.put("poster",fallback.getString("poster"));
         }
         if(images!=null&&!images.optString("logo").isEmpty())result.put("logo",images.optString("logo"));
-        if(row.optInt("runtimeMinutes")>0)result.put("runtime",row.getInt("runtimeMinutes")+" мин");
-        CinemaRatings.append(result,row.optJSONObject("ratings"));
-        if(row.optJSONArray("aliases")!=null)result.put("aliases",row.optJSONArray("aliases"));
+        appendMetadata(result,row);
         JSONObject details=row.optJSONObject("details");JSONArray seasons=details==null?null:details.optJSONArray("seasons"),videos=new JSONArray();
         if(seasons!=null)for(int s=0;s<seasons.length();s++){
             JSONObject season=seasons.getJSONObject(s);int sn=season.optInt("number");JSONArray episodes=season.optJSONArray("episodes");if(episodes==null)continue;

@@ -27,6 +27,8 @@ fun MetaPreviewDto.toDomainOrNull(catalogType: String, sourceAddonBaseUrl: Strin
         genres = genres ?: emptyList(),
         runtime = runtime,
         status = status?.trim()?.takeIf { it.isNotBlank() },
+        ageRating = appExtras?.certificationLocal?.trim()?.takeIf { it.isNotBlank() }
+            ?: appExtras?.certification?.trim()?.takeIf { it.isNotBlank() },
         released = released,
         country = country,
         imdbId = imdbId,

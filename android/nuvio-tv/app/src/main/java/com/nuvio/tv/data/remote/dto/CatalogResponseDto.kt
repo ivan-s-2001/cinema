@@ -24,6 +24,7 @@ data class MetaPreviewDto(
     @Json(name = "genres") val genres: List<String>? = null,
     @Json(name = "runtime") val runtime: String? = null,
     @Json(name = "status") val status: String? = null,
+    @Json(name = "app_extras") val appExtras: AppExtrasDto? = null,
     @Json(name = "released") val released: String? = null,
     @Json(name = "country") val country: String? = null,
     @Json(name = "imdb_id") val imdbId: String? = null,

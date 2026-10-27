@@ -953,8 +953,8 @@ private fun formatRuntime(runtime: String): String? {
         val total = hours * 60 + mins
         if (total > 0) return if (total >= 60) {
             val h = total / 60; val m = total % 60
-            if (m > 0) "${h}h ${m}m" else "${h}h"
-        } else "${total}m"
+            if (m > 0) "${h} ч ${m} мин" else "${h} ч"
+        } else "${total} мин"
     }
     // "H:MM" or "HH:MM" format
     if (trimmed.contains(':')) {
@@ -964,8 +964,8 @@ private fun formatRuntime(runtime: String): String? {
         val total = hours * 60 + mins
         if (total > 0) return if (total >= 60) {
             val m = total % 60
-            if (m > 0) "${hours}h ${m}m" else "${hours}h"
-        } else "${total}m"
+            if (m > 0) "${hours} ч ${m} мин" else "${hours} ч"
+        } else "${total} мин"
     }
     // Plain number (minutes)
     val minutes = trimmed.filter { it.isDigit() }.toIntOrNull() ?: return runtime
@@ -973,9 +973,9 @@ private fun formatRuntime(runtime: String): String? {
     return if (minutes >= 60) {
         val hours = minutes / 60
         val mins = minutes % 60
-        if (mins > 0) "${hours}h ${mins}m" else "${hours}h"
+        if (mins > 0) "${hours} ч ${mins} мин" else "${hours} ч"
     } else {
-        "${minutes}m"
+        "${minutes} мин"
     }
 }
 

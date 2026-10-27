@@ -8,14 +8,14 @@ class HeroMetadataFormatterTest {
 
     @Test
     fun `formats hours and minutes`() {
-        assertEquals("2h 5m", formatHeroRuntime("125"))
-        assertEquals("1h 30m", formatHeroRuntime("90 min"))
-        assertEquals("45m", formatHeroRuntime("45"))
+        assertEquals("2 ч 5 мин", formatHeroRuntime("125"))
+        assertEquals("1 ч 30 мин", formatHeroRuntime("90 min"))
+        assertEquals("45 мин", formatHeroRuntime("45"))
     }
 
     @Test
     fun `drops the minute part when a runtime is whole hours`() {
-        assertEquals("2h", formatHeroRuntime("120"))
+        assertEquals("2 ч", formatHeroRuntime("120"))
     }
 
     /**

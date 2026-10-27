@@ -39,6 +39,11 @@ public final class ProviderCheck {
         if(cached==null||cached.size()!=1)throw new AssertionError("Playback search should reuse its recent results");
         cached.clear();
         if(Sources.cached(cacheKey,2000).size()!=1||Sources.cached(cacheKey,91000)!=null)throw new AssertionError("Cache must isolate lists and expire");
+        JSONObject metadata=new JSONObject();
+        CinemaSnapshot.appendMetadata(metadata,new JSONObject().put("ids",new JSONObject().put("imdb","tt1234567"))
+            .put("runtimeMinutes",125).put("genres",new JSONArray().put("драма"))
+            .put("countries",new JSONArray().put("Россия")).put("ageRating","16+").put("releaseDate","2024-05-01"));
+        if(!metadata.getString("runtime").equals("125")||!metadata.getString("imdb_id").equals("tt1234567")||!metadata.getString("country").equals("Россия")||!metadata.getJSONObject("app_extras").getString("certificationLocal").equals("16+"))throw new AssertionError("Available metadata should reach the TV client");
         JSONObject ratings=new JSONObject();
         CinemaRatings.append(ratings,new JSONObject().put("kinopoisk",new JSONObject().put("value",8.2)).put("imdb",7.4).put("anilist",85).put("tmdb",25).put("mal",JSONObject.NULL));
         JSONArray ratingItems=ratings.getJSONArray("cinemaRatings");
