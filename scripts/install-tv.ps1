@@ -3,7 +3,8 @@
 param(
     [string]$TvAddress = '192.168.8.118:5555',
     [switch]$BuildOnly,
-    [switch]$AcceptReinstall
+    [switch]$AcceptReinstall,
+    [switch]$Universal
 )
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -81,16 +82,59 @@ $ErrorActionPreference = 'Continue'
 try {
     git -C $AppRoot apply --reverse --check $Patch 2>$null
     $alreadyApplied = ($LASTEXITCODE -eq 0)
+    git -C $AppRoot apply --check $Patch 2>$null
+    $canApply = ($LASTEXITCODE -eq 0)
 } finally { $ErrorActionPreference = 'Stop' }
-if (-not $alreadyApplied) { Invoke-Checked { git -C $AppRoot apply $Patch } }
+if (-not $alreadyApplied) {
+    if ($canApply) {
+        Invoke-Checked { git -C $AppRoot apply $Patch }
+    } else {
+        # After git pull an older CinemaHall patch may still be applied.
+        # Reverse only a matching historical patch, never reset arbitrary edits.
+        $history = @(git -C $RepoRoot log --format=%H -- 'android/arvio.patch')
+        $upgraded = $false
+        $tempPatch = [IO.Path]::GetTempFileName()
+        try {
+            $utf8 = [System.Text.UTF8Encoding]::new($false)
+            $previousConsoleEncoding = [Console]::OutputEncoding
+            [Console]::OutputEncoding = $utf8
+            try {
+                foreach ($revision in ($history | Select-Object -Skip 1 -First 8)) {
+                    $oldText = (& git -C $RepoRoot show "${revision}:android/arvio.patch") -join "`n"
+                    if ($LASTEXITCODE -ne 0) { continue }
+                    [IO.File]::WriteAllText($tempPatch, $oldText + "`n", $utf8)
+                    $ErrorActionPreference = 'Continue'
+                    try {
+                        git -C $AppRoot apply --reverse --check $tempPatch 2>$null
+                        $matchesPrevious = ($LASTEXITCODE -eq 0)
+                    } finally { $ErrorActionPreference = 'Stop' }
+                    if (-not $matchesPrevious) { continue }
+                    Invoke-Checked { git -C $AppRoot apply --reverse $tempPatch }
+                    try {
+                        Invoke-Checked { git -C $AppRoot apply --check $Patch }
+                        Invoke-Checked { git -C $AppRoot apply $Patch }
+                    } catch {
+                        Invoke-Checked { git -C $AppRoot apply $tempPatch }
+                        throw
+                    }
+                    $upgraded = $true
+                    break
+                }
+            } finally { [Console]::OutputEncoding = $previousConsoleEncoding }
+        } finally { Remove-Item -LiteralPath $tempPatch -Force }
+        if (-not $upgraded) { throw 'ARVIO содержит посторонние изменения: безопасно обновить патч не удалось.' }
+    }
+}
 Copy-Item -Path (Join-Path $RepoRoot 'android\overlay\*') -Destination $AppRoot -Recurse -Force
 ('sdk.dir=' + $SdkRoot.Replace('\','/')) | Set-Content -Encoding ASCII (Join-Path $AppRoot 'local.properties')
 
 Write-Host '[3/6] Встроенный TorrServer, проверка SHA256' -ForegroundColor Cyan
 $engines = @(
-    @{ Abi='arm64-v8a'; Name='TorrServer-android-arm64'; Hash='93250bb1850e69663c6758398be515c2c429595cb4692c6eccb367f2236868d5' },
-    @{ Abi='armeabi-v7a'; Name='TorrServer-android-arm7'; Hash='e775001edf7bfb2adebfde0ba36780357c0951f12203adb367bd69b2b45522b6' }
+    @{ Abi='arm64-v8a'; Name='TorrServer-android-arm64'; Hash='93250bb1850e69663c6758398be515c2c429595cb4692c6eccb367f2236868d5' }
 )
+if ($Universal) {
+    $engines += @{ Abi='armeabi-v7a'; Name='TorrServer-android-arm7'; Hash='e775001edf7bfb2adebfde0ba367bd69b2b45522b6' }
+}
 foreach ($engine in $engines) {
     $dir = Join-Path $AppRoot ('app\src\main\jniLibs\' + $engine.Abi)
     New-Item -ItemType Directory -Force $dir | Out-Null
@@ -104,9 +148,19 @@ try {
     Invoke-Checked { & "$JavaRoot\bin\javac.exe" -encoding UTF-8 -d 'build\check' 'android\overlay\app\src\main\java\app\cinemahall\tv\Logic.java' 'tests\LogicCheck.java' }
     Invoke-Checked { & "$JavaRoot\bin\java.exe" -cp 'build\check' 'app.cinemahall.tv.LogicCheck' }
     Push-Location $AppRoot
-    try { Invoke-Checked { & '.\gradlew.bat' --no-daemon ':app:assembleSideloadDebug' } } finally { Pop-Location }
+    try {
+        if ($Universal) {
+            Invoke-Checked { & '.\gradlew.bat' --no-daemon ':app:assembleSideloadDebug' }
+        } else {
+            Invoke-Checked { & '.\gradlew.bat' --no-daemon '-PcinemaArm64Only=true' ':app:assemblePlayDebug' }
+        }
+    } finally { Pop-Location }
 } finally { Pop-Location }
-$Apk = Join-Path $AppRoot 'app\build\outputs\apk\sideload\debug\app-sideload-debug.apk'
+$Apk = if ($Universal) {
+    Join-Path $AppRoot 'app\build\outputs\apk\sideload\debug\app-sideload-debug.apk'
+} else {
+    Join-Path $AppRoot 'app\build\outputs\apk\play\debug\app-play-debug.apk'
+}
 if (-not (Test-Path $Apk)) { throw "APK не найден: $Apk" }
 if ($BuildOnly) { Write-Host "APK готов: $Apk" -ForegroundColor Green; return }
 

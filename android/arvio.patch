@@ -19,7 +19,7 @@ index 34f6781..c4ca4b2 100644
  }
  
  // On-device speech recognition for sync by hearing (sherpa-onnx, Apache-2.0). The AAR is ~50 MB, so it is downloaded once into libs/ (git-ignored)
-@@ -63,20 +60,19 @@ val includeX86Abis = providers.gradleProperty("includeX86Abis")
+@@ -63,20 +60,22 @@ val includeX86Abis = providers.gradleProperty("includeX86Abis")
  android {
      namespace = "com.arflix.tv"
      compileSdk = 36
@@ -39,14 +39,27 @@ index 34f6781..c4ca4b2 100644
 -        versionName = "2.3"
 -        buildConfigField("String", "GITHUB_OWNER", "\"ProdigyV21\"")
 -        buildConfigField("String", "GITHUB_REPO", "\"ARVIO\"")
-+        versionCode = 4
-+        versionName = "0.4.0"
++        versionCode = 6
++        versionName = "0.6.0"
 +        buildConfigField("String", "GITHUB_OWNER", "\"ivan-s-2001\"")
 +        buildConfigField("String", "GITHUB_REPO", "\"cinema\"")
++        buildConfigField("String", "TMDB_API_KEY", "\"${escapeBuildConfigString(localSecretValue("TMDB_API_KEY"))}\"")
++        buildConfigField("String", "FANART_API_KEY", "\"${escapeBuildConfigString(localSecretValue("FANART_API_KEY"))}\"")
++        buildConfigField("String", "OMDB_API_KEY", "\"${escapeBuildConfigString(localSecretValue("OMDB_API_KEY"))}\"")
          buildConfigField("Boolean", "FEATURE_PLUGINS_ENABLED", "false")
          // Use the same resolution for generated values and release validation.
          buildConfigField("String", "TELEGRAM_API_ID", "\"${escapeBuildConfigString(localSecretValue("TELEGRAM_API_ID"))}\"")
-@@ -201,9 +197,7 @@ android {
+@@ -115,7 +114,8 @@ android {
+         ndk {
+             abiFilters += buildList {
+-                addAll(listOf("armeabi-v7a", "arm64-v8a"))
++                if (providers.gradleProperty("cinemaArm64Only").orNull?.toBooleanStrictOrNull() != true) add("armeabi-v7a")
++                add("arm64-v8a")
+                 if (includeX86Abis) {
+                     addAll(listOf("x86", "x86_64"))
+                 }
+             }
+@@ -201,9 +198,7 @@ android {
  
              // Build config fields for release
              buildConfigField("Boolean", "ENABLE_CRASH_REPORTING", "true")
@@ -57,7 +70,7 @@ index 34f6781..c4ca4b2 100644
          }
  
          debug {
-@@ -286,7 +280,8 @@ android {
+@@ -286,7 +281,8 @@ android {
              )
          }
          jniLibs {
@@ -67,7 +80,7 @@ index 34f6781..c4ca4b2 100644
              // sherpa-onnx's JNI library only needs libonnxruntime; its C/C++ API libraries are unused.
              excludes += setOf("lib/*/libsherpa-onnx-c-api.so", "lib/*/libsherpa-onnx-cxx-api.so")
          }
-@@ -501,7 +496,7 @@ ksp {
+@@ -501,7 +497,7 @@ ksp {
      implementation("com.google.firebase:firebase-crashlytics-ndk")
      implementation("com.google.firebase:firebase-analytics")
  

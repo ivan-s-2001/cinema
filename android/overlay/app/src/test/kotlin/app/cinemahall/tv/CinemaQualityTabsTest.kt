@@ -16,11 +16,17 @@ class CinemaQualityTabsTest {
         assertNotEquals(sourceTabId(streams[1]),sourceTabId(streams[2]))
         assertEquals("Авто",bestAutoPlayStream(streams,0)?.rawLabel)
     }
+    @Test fun tmdbImagesRequireSafePathsAndCorrectAspectRole(){
+        assertEquals("https://image.tmdb.org/t/p/original/cover.jpg",Metadata.tmdbArtwork("/cover.jpg",true))
+        assertEquals("https://image.tmdb.org/t/p/w780/poster.png",Metadata.tmdbArtwork("/poster.png",false))
+        assertEquals("",Metadata.tmdbArtwork("https://example.com/img.jpg",true))
+        assertEquals("",Metadata.tmdbArtwork("/../secret.jpg",false))
+    }
     @Test fun defaultAddonOwnsItsNativeIdsAndIncludesBothDeviceCatalogs(){
         val addon=CinemaIntegration.addon()
         assertEquals(listOf("ch:"),addon.manifest!!.idPrefixes)
         assertTrue(addon.manifest!!.types.containsAll(listOf("movie","series")))
-        assertEquals(4,CinemaIntegration.catalogs.size)
+        assertEquals(14,CinemaIntegration.catalogs.size)
         assertTrue(CinemaIntegration.catalogs.all {it.addonId==addon.id})
     }
 }
