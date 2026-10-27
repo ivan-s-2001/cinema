@@ -97,8 +97,23 @@ def distinct(values):
     return list(dict.fromkeys(v for v in values if isinstance(v, str) and v.strip()))
 
 
-def image_url(value):
-    return value if isinstance(value, str) and value.startswith("https://") else ""
+def image_url(value, kind="poster"):
+    """Normalize TMDB artwork to TV-sized images, preserving external HTTPS URLs."""
+    if not isinstance(value, str) or not value.strip():
+        return ""
+    value = value.strip()
+    size = {"poster": "w500", "backdrop": "w1280", "logo": "w300"}.get(kind, "w500")
+    prefix = "https://image.tmdb.org/t/p/"
+    if value.startswith(prefix):
+        path = value[len(prefix):]
+        if "/" not in path:
+            return ""
+        variant, file_path = path.split("/", 1)
+        if variant in {"original", "w92", "w154", "w185", "w300", "w342", "w500", "w780", "w1280"} and file_path:
+            return prefix + size + "/" + file_path
+    if value.startswith("/") and not value.startswith("//") and value.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+        return prefix + size + value
+    return value if value.startswith("https://") else ""
 
 
 def title_id(raw):
@@ -117,11 +132,11 @@ def normalize(raw):
     p_candidates = distinct([image_url(art.get("poster")),
                              *(image_url(x) for x in art.get("posters") or []),
                              image_url(kp_art.get("poster"))])
-    wide = distinct([image_url(art.get("backdrop")),
-                     *(image_url(x) for x in art.get("backdrops") or [])])
+    wide = distinct([image_url(art.get("backdrop"), "backdrop"),
+                     *(image_url(x, "backdrop") for x in art.get("backdrops") or [])])
     wide = [url for url in wide if url not in p_candidates]
     # Covers have unknown dimensions; let clients use a gradient instead of stretching one.
-    b_candidates = distinct(wide + [image_url(art.get("cover")), image_url(kp_art.get("cover"))])
+    b_candidates = distinct(wide + [image_url(art.get("cover"), "backdrop"), image_url(kp_art.get("cover"), "backdrop")])
     aliases = distinct([name.get("ru"), name.get("en"), name.get("original")])
     if not aliases:
         return None
@@ -141,7 +156,7 @@ def normalize(raw):
             "poster": p_candidates[0] if p_candidates else "",
             "backdrop": b_candidates[0] if b_candidates else "",
             "backdropVerified": bool(wide),
-            "logo": image_url(art.get("logo")),
+            "logo": image_url(art.get("logo"), "logo"),
             "posters": p_candidates[:12], "backdrops": b_candidates[:12],
         },
         "voiceoverLabels": distinct(raw.get("voiceovers") or []),
@@ -254,7 +269,7 @@ def merge_catalog(batches):
 
 
 def append_art(row, field, url, verified=False):
-    url = image_url(url)
+    url = image_url(url, field)
     if not url:
         return
     pictures = row["images"]
@@ -362,7 +377,7 @@ def details(row, key, season_limit=3):
                         summary["episodes"] = [{"number": e.get("episode_number"),
                                                 "name": e.get("name_ru") or e.get("name_en") or "",
                                                 "overview": e.get("overview_ru") or e.get("overview_en") or "",
-                                                "date": e.get("air_date"), "still": image_url(e.get("still_path")),
+                                                "date": e.get("air_date"), "still": image_url(e.get("still_path"), "backdrop"),
                                                 "animeMapping": e.get("anime_mapping")}
                                                for e in (episodes.get("data") or [])[:100]]
                 bundle["seasons"].append(summary)
