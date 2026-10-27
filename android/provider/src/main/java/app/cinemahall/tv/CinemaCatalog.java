@@ -82,8 +82,8 @@ final class CinemaCatalog {
                 if(source!=null)try{
                     JSONArray videos=bundled.getJSONArray("videos");
                     if(source.optString("id").matches("[0-9]{1,12}"))try{
-                        JSONObject film=document("ch:"+source.getString("id"));
-                        mergeKnownEpisodes(id,videos,film.optString("episodes"));
+                        JSONObject film=docs.get("ch:"+source.getString("id"));
+                        if(film!=null)mergeKnownEpisodes(id,videos,film.optString("episodes"));
                     }catch(Exception optional){}
                     boolean missing=videos.length()==0;
                     for(int i=0;i<videos.length()&&!missing;i++)missing=videos.getJSONObject(i).optString("thumbnail").isEmpty();
