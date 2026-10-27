@@ -960,14 +960,7 @@ private fun SettingsDetailPane(
                 null
             }
         )
-        SettingsCategory.ACCOUNT -> AccountSettingsInline(
-            onNavigateToAuthQrSignIn = onNavigateToAuthQrSignIn,
-            initialFocusRequester = if (allowDetailAutofocus) {
-                contentFocusRequesters[SettingsCategory.ACCOUNT]
-            } else {
-                null
-            }
-        )
+        SettingsCategory.ACCOUNT -> Unit // Legacy account UI is intentionally unavailable.
         SettingsCategory.TRACKING -> TrackingSettingsContent(
             initialFocusRequester = if (allowDetailAutofocus) {
                 contentFocusRequesters[SettingsCategory.TRACKING]
@@ -1015,37 +1008,6 @@ private fun EssentialAdvancedSettingsContent(
             onConfirm = { experienceModeViewModel.setMode(ExperienceMode.ADVANCED) },
             onDismiss = { showConfirmation = false }
         )
-    }
-}
-
-@Composable
-private fun AccountSettingsInline(
-    onNavigateToAuthQrSignIn: () -> Unit,
-    initialFocusRequester: FocusRequester?
-) {
-    val accountViewModel: com.nuvio.tv.ui.screens.account.AccountViewModel = hiltViewModel()
-    val accountUiState by accountViewModel.uiState.collectAsStateWithLifecycle()
-
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)
-    ) {
-        SettingsDetailHeader(
-            title = stringResource(R.string.settings_account),
-            subtitle = stringResource(R.string.settings_account_section_subtitle)
-        )
-        SettingsGroupCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-        ) {
-            com.nuvio.tv.ui.screens.account.AccountSettingsContent(
-                uiState = accountUiState,
-                viewModel = accountViewModel,
-                onNavigateToAuthQrSignIn = onNavigateToAuthQrSignIn,
-                initialFocusRequester = initialFocusRequester
-            )
-        }
     }
 }
 
