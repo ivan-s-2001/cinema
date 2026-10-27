@@ -1,0 +1,10 @@
+.gradle/
+.kotlin/
+**/build/
+local.properties
+*.jks
+*.keystore
+app/src/main/jniLibs/**/*.so
+app/src/main/jniLibs/**/*.download
+__pycache__/
+*.pyc
