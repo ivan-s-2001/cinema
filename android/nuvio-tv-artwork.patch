@@ -8,6 +8,7 @@ diff --git a/app/src/main/java/com/nuvio/tv/domain/model/Meta.kt b/app/src/main/
 -        get() = background ?: landscapePoster ?: poster
 +        get() = background?.takeIf { it.isNotBlank() && it != poster }
 +            ?: landscapePoster?.takeIf { it.isNotBlank() && it != poster }
++            ?: poster?.takeIf { it.isNotBlank() }
  
      /**
       * Returns the list of watchable episodes — non-special (season > 0),
@@ -21,6 +22,7 @@ diff --git a/app/src/main/java/com/nuvio/tv/domain/model/MetaPreview.kt b/app/sr
 -        get() = background ?: landscapePoster ?: poster
 +        get() = background?.takeIf { it.isNotBlank() && it != poster }
 +            ?: landscapePoster?.takeIf { it.isNotBlank() && it != poster }
++            ?: poster?.takeIf { it.isNotBlank() }
  }
 diff --git a/app/src/main/java/com/nuvio/tv/ui/screens/detail/MetaDetailsScreen.kt b/app/src/main/java/com/nuvio/tv/ui/screens/detail/MetaDetailsScreen.kt
 --- a/app/src/main/java/com/nuvio/tv/ui/screens/detail/MetaDetailsScreen.kt
