@@ -50,7 +50,7 @@ internal fun StreamSourcesSidePanel(
             }
             Spacer(Modifier.height(NuvioTheme.spacing.lg))
             when {
-                streams.isNotEmpty() -> CinemaHallQualityVoicePicker(streams, onStreamSelected, streamsFocusRequester)
+                streams.isNotEmpty() -> CinemaHallQualityVoicePicker(streams, onStreamSelected, streamsFocusRequester, Modifier.weight(1f))
                 uiState.isLoadingSourceStreams -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { LoadingIndicator() }
                 else -> {
                     Text(uiState.sourceStreamsError ?: "Варианты воспроизведения не найдены",

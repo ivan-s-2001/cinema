@@ -1013,7 +1013,8 @@ private fun RightStreamSection(
 internal fun CinemaHallQualityVoicePicker(
     streams: List<Stream>,
     onStreamSelected: (Stream) -> Unit,
-    firstTabFocusRequester: FocusRequester? = null
+    firstTabFocusRequester: FocusRequester? = null,
+    modifier: Modifier = Modifier
 ) {
     val order = remember { listOf("4K", "2K", "1080p", "720p", "576p", "480p", "360p", "240p") }
     val groups = remember(streams) {
@@ -1025,7 +1026,7 @@ internal fun CinemaHallQualityVoicePicker(
     val voices = groups.firstOrNull { it.first == quality }?.second.orEmpty()
         .distinctBy { it.title.orEmpty().trim().lowercase() }
     Column(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.lg)
     ) {
         Text(
