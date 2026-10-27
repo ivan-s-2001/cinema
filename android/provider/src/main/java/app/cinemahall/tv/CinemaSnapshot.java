@@ -77,7 +77,7 @@ final class CinemaSnapshot {
         String image=value==null?"":value.trim();
         return image.startsWith("https://")||image.startsWith("http://")?image:"";
     }
-    private static String title(JSONObject row){
+    static String title(JSONObject row){
         for(String key:new String[]{"titleRu","title","name","originalTitle"}){
             String value=row.optString(key).trim();
             if(!value.isEmpty())return value;
@@ -137,6 +137,6 @@ final class CinemaSnapshot {
         JSONObject row=raw(id);if(row==null)return null;JSONObject ids=row.getJSONObject("ids");JSONArray aliases=row.optJSONArray("aliases");
         String original=row.optString("originalTitle");if(original.isEmpty()&&aliases!=null&&aliases.length()>1)original=aliases.optString(1);
         if(original.isEmpty())original=row.optString("title");
-        return new JSONObject().put("serial",row.optString("type").equals("tv")).put("id",ids.optString("kinopoisk")).put("imdb",ids.optString("imdb")).put("name_rus",row.optString("title")).put("name_eng",row.optString("titleEn")).put("name_original",original).put("year",row.optInt("year"));
+        return new JSONObject().put("serial",row.optString("type").equals("tv")).put("id",ids.optString("kinopoisk")).put("imdb",ids.optString("imdb")).put("name_rus",title(row)).put("name_eng",row.optString("titleEn")).put("name_original",original).put("year",row.optInt("year"));
     }
 }
