@@ -70,7 +70,7 @@ final class CinemaCatalog {
                             String key=season+":"+number;JSONObject video=existing.get(key);
                             if(video==null){video=new JSONObject().put("id",id+":"+season+":"+number).put("season",season).put("episode",number).put("title",episode.optString("name"));videos.put(video);existing.put(key,video);}
                             JSONObject image=episode.optJSONObject("image");
-                            if(video.optString("thumbnail").isEmpty()&&image!=null&&!image.optString("original").isEmpty())video.put("thumbnail",image.optString("original"));
+                            if(video.optString("thumbnail").isEmpty()){String still=episodeStill(episode);if(!still.isEmpty())video.put("thumbnail",still);}
                         }
                     }
                     fillEpisodeArtwork(videos,bundled.optString("background"),bundled.optString("poster"));
@@ -113,6 +113,20 @@ final class CinemaCatalog {
         java.util.regex.Matcher match=java.util.regex.Pattern.compile("^(ch:.*):([0-9]{1,3}):([0-9]{1,4})$").matcher(id);
         if(match.matches())return new String[]{match.group(1),"S"+Integer.parseInt(match.group(2))+"E"+Integer.parseInt(match.group(3))};
         return new String[]{id,""};
+    }
+    /** Prefer the episode's own still over a duplicated show-wide background. */
+    static String episodeStill(JSONObject episode){
+        if(episode==null)return "";
+        JSONObject image=episode.optJSONObject("image");
+        for(String url:new String[]{
+            episode.optString("still"),episode.optString("thumbnail"),
+            image==null?"":image.optString("original"),
+            image==null?"":image.optString("medium"),
+            image==null?"":image.optString("url")
+        }){
+            if(url.startsWith("https://")||url.startsWith("http://"))return url;
+        }
+        return "";
     }
     /** Use the series backdrop only when an episode still is unavailable. */
     static void fillEpisodeArtwork(JSONArray videos,String background,String poster) throws JSONException {
