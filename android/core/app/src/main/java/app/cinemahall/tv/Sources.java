@@ -57,7 +57,8 @@ final class Sources {
                 technologyHints=Logic.releaseTechnologyHints(value.optString("name",value.optString("title",value.optString("torrent_name"))));
                 link=value.optString("torrent_download_link");
                 String id=value.optString("hash");hash=id.isEmpty()?Logic.infoHash(link):id.toLowerCase(Locale.ROOT);
-                quality=Logic.qualityLabel(value.optString("resolution"));
+                String resolution=Logic.qualityLabel(value.optString("resolution"));
+                quality="Не указано".equals(resolution)?Logic.qualityFromTitle(value.optString("name",value.optString("title",value.optString("torrent_name")))):resolution;
                 translation=value.optString("translate_info").trim();languages=value.optString("languages_parser").toLowerCase(Locale.ROOT);seeds=value.optInt("seeds");
                 JSONObject mapping;try{mapping=new JSONObject(value.optString("episodes_map_auto","{}"));}catch(Exception ignored){mapping=new JSONObject();}episodeFiles=mapping;
             }else{
@@ -157,7 +158,7 @@ final class Sources {
             String voice=Logic.voiceKey(c.translation);
             ArrayList<Candidate> options=levels.computeIfAbsent(c.quality,q->new LinkedHashMap<>()).computeIfAbsent(voice,v->new ArrayList<>());
             boolean duplicate=false;
-            for(Candidate previous:options)if(previous.hash.equals(c.hash)){duplicate=true;break;}
+            for(Candidate previous:options)if(!previous.hash.isEmpty()&&previous.hash.equals(c.hash)){duplicate=true;break;}
             if(!duplicate)options.add(c);
         }
         LinkedHashMap<String,LinkedHashMap<String,ArrayList<Candidate>>> result=new LinkedHashMap<>();
