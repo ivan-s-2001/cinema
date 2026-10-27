@@ -215,7 +215,13 @@ fun SettingsScreen(
     // CinemaHall works without a Nuvio account. Keep local profiles, playback,
     // appearance and device settings, but remove the cloud sign-in section.
     val visibleSections = visibleCategories
-        .filterNot { it == SettingsCategory.ACCOUNT }
+        .filterNot { it in setOf(
+            SettingsCategory.ACCOUNT,
+            SettingsCategory.WATCH_PARTY,
+            SettingsCategory.INTEGRATION,
+            SettingsCategory.TRACKING,
+            SettingsCategory.CONTENT_DISCOVERY
+        ) }
         .map { category -> settingsSectionSpec(category) }
 
     val isRtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
