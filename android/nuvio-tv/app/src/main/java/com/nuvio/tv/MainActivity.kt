@@ -402,18 +402,6 @@ open class MainActivity : ComponentActivity() {
             val authState by authManager.authState.collectAsState()
             val context = LocalContext.current
 
-            LaunchedEffect(authSessionNoticeDataStore, context) {
-                authSessionNoticeDataStore.pendingNotice.collect { notice ->
-                    if (notice == StartupAuthNotice.NUVIO) {
-                        Toast.makeText(
-                            context,
-                            context.getString(R.string.auth_notice_nuvio_logged_out),
-                            Toast.LENGTH_LONG
-                        ).show()
-                        authSessionNoticeDataStore.consumeNotice(notice)
-                    }
-                }
-            }
 
             PartyEffects(partyRepository)
 
@@ -428,15 +416,6 @@ open class MainActivity : ComponentActivity() {
             }
             var profilePinStates by remember { mutableStateOf<Map<Int, Boolean>>(emptyMap()) }
 
-            LaunchedEffect(authState, profiles) {
-                if (authState is AuthState.FullAccount) {
-                    profileSyncService.pullProfileLockStates()
-                        .onSuccess { profilePinStates = it }
-                        .onFailure { profilePinStates = emptyMap() }
-                } else {
-                    profilePinStates = emptyMap()
-                }
-            }
 
             val activeProfileHasPin = remember(activeProfileId, profilePinStates) {
                 profilePinStates[activeProfileId] == true
@@ -452,9 +431,6 @@ open class MainActivity : ComponentActivity() {
             }
             LaunchedEffect(shouldAutoSelectProfile) {
                 if (shouldAutoSelectProfile) {
-                    if (authManager.authState.value is AuthState.FullAccount) {
-                        startupSyncService.requestSyncNow()
-                    }
                     // Preload profile background catalog so the splash can show it
                     activeProfile?.profileBackgroundId?.let {
                         profileBackgroundRepository.loadSelectedAndPreload(it)
@@ -744,9 +720,6 @@ open class MainActivity : ComponentActivity() {
                             },
                             onProfileSelected = {
                                 hasSelectedProfileThisSession = true
-                                if (authManager.authState.value is AuthState.FullAccount) {
-                                    startupSyncService.requestSyncNow()
-                                }
                             }
                         )
                     } else {
