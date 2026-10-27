@@ -1,7 +1,7 @@
 name: CinemaHall Nuvio TV and Mobile
 on:
   push:
-    branches: [rewrite/streambert-android]
+    branches: [main, rewrite/streambert-android]
   pull_request:
   workflow_dispatch:
 concurrency:
@@ -26,7 +26,7 @@ jobs:
           TMDB_READ_TOKEN: ${{ secrets.TMDB_READ_TOKEN }}
         run: |
           if [ -n "$KINOAPI_KEY" ]; then
-            python scripts/build_catalog.py --pages 15 --enrich 30 --details 12 --output catalog/index.json
+            python scripts/build_catalog.py --pages 15 --enrich 96 --details 12 --output catalog/index.json
             echo "available=true" >> "$GITHUB_OUTPUT"
           fi
       - uses: actions/upload-artifact@v4
