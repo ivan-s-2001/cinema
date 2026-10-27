@@ -153,6 +153,7 @@ import com.nuvio.tv.core.tracking.TrackingRefreshIntent
 import com.nuvio.tv.data.local.AuthSessionNoticeDataStore
 import com.nuvio.tv.data.local.ExperienceModeDataStore
 import com.nuvio.tv.data.local.LayoutPreferenceDataStore
+import com.nuvio.tv.data.local.ProfileLockStateDataStore
 import com.nuvio.tv.data.local.StartupAuthNotice
 import com.nuvio.tv.data.local.ThemeDataStore
 import com.nuvio.tv.data.repository.MemberAccessRepository
@@ -296,6 +297,9 @@ open class MainActivity : ComponentActivity() {
     lateinit var profileManager: ProfileManager
 
     @Inject
+    lateinit var profileLockStateDataStore: ProfileLockStateDataStore
+
+    @Inject
     lateinit var authManager: AuthManager
 
     @Inject
@@ -414,7 +418,7 @@ open class MainActivity : ComponentActivity() {
             val activeProfile = remember(activeProfileId, profiles) {
                 profiles.firstOrNull { it.id == activeProfileId }
             }
-            var profilePinStates by remember { mutableStateOf<Map<Int, Boolean>>(emptyMap()) }
+            val profilePinStates by profileLockStateDataStore.pinEnabled.collectAsState(initial = emptyMap())
 
 
             val activeProfileHasPin = remember(activeProfileId, profilePinStates) {
