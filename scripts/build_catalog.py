@@ -5,6 +5,7 @@ fill gaps only for a bounded number of items; no source is treated as playable.
 """
 import argparse
 import hashlib
+import http.client
 import json
 import os
 import time
@@ -86,7 +87,16 @@ def fetch(url, *, key="", body=None, optional=False):
                 _failed[host] += 1
                 return None
             raise RuntimeError(f"{urllib.parse.urlparse(url).hostname}: HTTP {error.code}") from None
-        except (OSError, ValueError, json.JSONDecodeError):
+        except (OSError, http.client.HTTPException):
+            # KinoAPI occasionally cuts chunked responses mid-body; retry a fresh connection.
+            if attempt < 4:
+                time.sleep(min(8, 2 ** attempt))
+                continue
+            if optional:
+                _failed[host] += 1
+                return None
+            raise
+        except (ValueError, json.JSONDecodeError):
             if optional:
                 _failed[host] += 1
                 return None
