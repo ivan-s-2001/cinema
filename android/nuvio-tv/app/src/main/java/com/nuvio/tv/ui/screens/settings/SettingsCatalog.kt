@@ -30,6 +30,7 @@ internal fun visibleSettingsCategories(
     isDebugBuild: Boolean,
     isWatchPartyAvailable: Boolean = false
 ): List<SettingsCategory> = listOf(
+    SettingsCategory.PROFILES,
     SettingsCategory.APPEARANCE,
     SettingsCategory.LAYOUT,
     SettingsCategory.PLAYBACK,
