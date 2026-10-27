@@ -58,7 +58,7 @@ final class CinemaCatalog {
                     boolean missing=videos.length()==0;
                     for(int i=0;i<videos.length()&&!missing;i++)missing=videos.getJSONObject(i).optString("thumbnail").isEmpty();
                     if(missing){
-                        JSONObject enrichment=Metadata.load(context,source,true);
+                        JSONObject enrichment=Metadata.cachedDetails(context,source);
                         JSONArray episodes=enrichment.optJSONArray("episodes");
                         Map<String,JSONObject> existing=new HashMap<>();
                         for(int i=0;i<videos.length();i++){JSONObject video=videos.getJSONObject(i);existing.put(video.optInt("season")+":"+video.optInt("episode"),video);}
