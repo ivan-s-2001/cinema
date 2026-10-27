@@ -118,9 +118,13 @@ def normalize(raw):
     anime = raw.get("anime") or {}
     return {
         "type": kind, "ids": ids, "title": (name.get("ru") or name.get("original") or aliases[0]) if aliases else "",
-        "aliases": aliases, "year": release.get("year"),
-        "status": release.get("status"), "description": desc.get("ru") or desc.get("en") or "",
+        "aliases": aliases, "year": release.get("year"), "releaseDate": release.get("date"),
+        "status": release.get("status"), "runtimeMinutes": release.get("runtimeMinutes"),
+        "ageRating": release.get("ageRating"), "description": desc.get("ru") or desc.get("en") or "",
+        "tagline": (raw.get("tagline") or {}).get("ru") or (raw.get("tagline") or {}).get("en") or "",
         "genres": distinct((raw.get("genres") or []) + (anime.get("genres") or [])),
+        "countries": distinct(raw.get("countries") or []), "studios": distinct(anime.get("studios") or []),
+        "trailers": raw.get("trailers") or {},
         "ratings": raw.get("ratings") or {}, "images": {
             "poster": p_candidates[0] if p_candidates else "",
             "backdrop": b_candidates[0] if b_candidates else "",
@@ -140,12 +144,15 @@ def identity_keys(row):
 def merge_rows(old, new):
     """Never overwrite a known field with an empty value from another list."""
     old["ids"].update(new["ids"])
-    for field in ("title", "year", "status", "description"):
+    for field in ("title", "year", "status", "description", "releaseDate", "runtimeMinutes", "ageRating", "tagline"):
         if not old.get(field) and new.get(field):
             old[field] = new[field]
-    for field in ("aliases", "genres", "voiceoverLabels", "sources"):
+    for field in ("aliases", "genres", "countries", "studios", "voiceoverLabels", "sources"):
         old[field] = distinct(old[field] + new[field])
     old["ratings"].update({k: v for k, v in new["ratings"].items() if v is not None})
+    for language, trailer in new["trailers"].items():
+        if trailer and not old["trailers"].get(language):
+            old["trailers"][language] = trailer
     for field in ("posters", "backdrops"):
         old["images"][field] = distinct(old["images"][field] + new["images"][field])[:12]
     for field in ("poster", "backdrop", "logo"):
@@ -262,7 +269,14 @@ def details(row, key, season_limit=3):
     if isinstance(recs, dict):
         bundle["recommendations"] = [r for raw in (recs.get("data") or [])[:12]
                                      if (r := normalize(raw)) is not None]
+    similar = fetch(f"{KINO}/titles/{kind}/{tmdb}/similar?limit=12", key=key, optional=True)
+    if isinstance(similar, dict):
+        bundle["similar"] = [r for raw in (similar.get("data") or [])[:12]
+                             if (r := normalize(raw)) is not None]
     if kind == "tv":
+        schedule = fetch(f"{KINO}/tv/{tmdb}/schedule", key=key, optional=True)
+        if isinstance(schedule, dict):
+            bundle["upcomingEpisodes"] = (schedule.get("data") or [])[:24]
         seasons = fetch(f"{KINO}/tv/by/tmdb/{tmdb}/seasons", key=key, optional=True)
         if isinstance(seasons, dict):
             bundle["seasons"] = []
@@ -285,6 +299,10 @@ def details(row, key, season_limit=3):
                                                 "animeMapping": e.get("anime_mapping")}
                                                for e in (episodes.get("data") or [])[:100]]
                 bundle["seasons"].append(summary)
+    else:
+        markers = fetch(f"{KINO}/titles/by/tmdb/{tmdb}/skip-markers?type=movie", key=key, optional=True)
+        if isinstance(markers, dict):
+            bundle["skipMarkers"] = markers.get("data") or []
     if bundle:
         row["details"] = bundle
 
@@ -300,6 +318,8 @@ def build(key, pages, enrichment, tmdb_key="", detail_count=0, season_limit=3):
                 break
     for endpoint in ("/titles/latest?limit=100", "/anime?page=1&limit=100"):
         batches.append((fetch(KINO + endpoint, key=key) or {}).get("data") or [])
+    filters = (fetch(KINO + "/catalog/filters", key=key, optional=True) or {}).get("data") or {}
+    calendar = (fetch(KINO + "/releases/calendar", key=key, optional=True) or {}).get("data") or []
     rows = merge_catalog(batches)
     # Enrich the most visible cards and those without usable art; bound requests.
     candidates = sorted(rows, key=lambda r: (bool(r["images"]["backdrop"]),
@@ -315,7 +335,9 @@ def build(key, pages, enrichment, tmdb_key="", detail_count=0, season_limit=3):
     for row in selected[:detail_count]:
         details(row, key, season_limit)
     return {"version": 1, "generatedAt": datetime.now(timezone.utc).isoformat(),
-            "count": len(rows), "titles": rows}
+            "count": len(rows), "filters": filters,
+            "releaseCalendar": [r for raw in calendar[:100] if (r := normalize(raw)) is not None],
+            "titles": rows}
 
 
 def main():

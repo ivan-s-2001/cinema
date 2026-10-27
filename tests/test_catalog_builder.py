@@ -47,13 +47,19 @@ class CatalogTests(unittest.TestCase):
     @patch("scripts.build_catalog.fetch")
     def test_base_lists_deduplicated_and_bounded(self, fetch):
         def canned(url, **kwargs):
+            if url.endswith("/catalog/filters"):
+                return {"data": {"genres": [{"name": "драма", "titles": 10}]}}
+            if url.endswith("/releases/calendar"):
+                return {"data": [record()]}
             if "/titles/latest" in url or "/anime?" in url:
                 return {"data": [record()]}
             return {"data": [record()], "meta": {"hasNext": False}}
         fetch.side_effect = canned
         result = build("dummy-key", pages=5, enrichment=0)
         self.assertEqual(result["count"], 1)
-        self.assertEqual(fetch.call_count, 4)  # movie, tv, latest, anime
+        self.assertEqual(result["filters"]["genres"][0]["name"], "драма")
+        self.assertEqual(result["releaseCalendar"][0]["playableSources"], [])
+        self.assertEqual(fetch.call_count, 6)  # movie, tv, latest, anime, filters, calendar
 
     @patch("scripts.build_catalog.fetch")
     def test_tv_detail_bundle_contains_series_navigation(self, fetch):
@@ -62,6 +68,8 @@ class CatalogTests(unittest.TestCase):
                 return {"data": [{"id": 1, "profession": "actor", "name_ru": "Актёр"}]}
             if "/recommendations" in url:
                 return {"data": [record()]}
+            if "/similar" in url or "/schedule" in url:
+                return {"data": []}
             if url.endswith("/seasons"):
                 return {"data": [{"season_number": 1, "name_ru": "Первый", "episode_count": 1}]}
             if url.endswith("/episodes"):
