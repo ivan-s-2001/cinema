@@ -9,29 +9,31 @@ TARGETS = {"tv": ("nuvio-tv", "c3f68d84a5e0ec8fea7a027443a9beca50d32c31"),
            "mobile": ("nuvio-mobile", "61658f366f985fc7758f0942a14c1754c69aca68")}
 
 def ensure_sdk_properties(directory):
-    """Keep existing local properties and restore sdk.dir if Gradle cannot locate the SDK."""
+    """Repair a missing or stale sdk.dir without disturbing other local settings."""
     properties = directory / "local.properties"
     current = properties.read_text(encoding="utf-8") if properties.exists() else ""
-    if any(line.strip().startswith("sdk.dir=") for line in current.splitlines()):
-        return
+    sdk_line = next((line.partition("=")[2].strip() for line in current.splitlines()
+                     if line.strip().startswith("sdk.dir=")), "")
     local = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
     candidates = [
         os.environ.get("ANDROID_HOME"),
         os.environ.get("ANDROID_SDK_ROOT"),
         local / "CinemaHall" / "toolchain" / "android-sdk",
         local / "Android" / "Sdk",
+        sdk_line.replace("\\\\", "\\") if sdk_line else None,
     ]
     for candidate in candidates:
         if not candidate:
             continue
         sdk = Path(candidate).expanduser()
         if (sdk / "platform-tools" / ("adb.exe" if os.name == "nt" else "adb")).is_file():
-            escaped = sdk.resolve().as_posix()
-            suffix = "" if not current or current.endswith("\\n") else "\\n"
-            properties.write_text(current + suffix + "sdk.dir=" + escaped + "\\n", encoding="utf-8")
+            value = sdk.resolve().as_posix()
+            lines = [line for line in current.splitlines()
+                     if not line.strip().startswith("sdk.dir=")]
+            properties.write_text("\\n".join(lines + ["sdk.dir=" + value]) + "\\n", encoding="utf-8")
             print(f"Android SDK: {sdk}")
             return
-    print(f"Android SDK not found automatically; configure sdk.dir in {properties}")
+    raise RuntimeError(f"Android SDK not found: check ANDROID_HOME or sdk.dir in {properties}")
 
 
 def prepare(target):
