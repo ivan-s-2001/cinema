@@ -2927,6 +2927,7 @@ private fun PlayerControlsOverlay(
                         icon = Icons.Default.SwapHoriz,
                         iconPainter = customSourcePainter,
                         contentDescription = "Качество и озвучка",
+                        visibleLabel = "Качество и озвучка",
                         onClick = onShowSourcesPanel,
                         upFocusRequester = progressUpTarget,
                         onDownKey = onHideControls,
@@ -3173,6 +3174,7 @@ private fun ControlButton(
     icon: ImageVector,
     iconPainter: Painter? = null,
     contentDescription: String,
+    visibleLabel: String? = null,
     onClick: () -> Unit,
     focusRequester: FocusRequester? = null,
     upFocusRequester: FocusRequester? = null,
@@ -3187,7 +3189,8 @@ private fun ControlButton(
         onClick = onClick,
         enabled = enabled,
         modifier = Modifier
-            .size(NuvioTheme.spacing.xxxl)
+            .then(if (visibleLabel == null) Modifier.size(NuvioTheme.spacing.xxxl)
+                  else Modifier.width(198.dp).height(NuvioTheme.spacing.xxxl))
             .then(
                 if (focusRequester != null) Modifier.focusRequester(focusRequester)
                 else Modifier
@@ -3230,8 +3233,9 @@ private fun ControlButton(
             contentColor = contentColor,
             focusedContentColor = Color.Black
         ),
-        shape = IconButtonDefaults.shape(shape = CircleShape)
+        shape = IconButtonDefaults.shape(shape = if (visibleLabel == null) CircleShape else RoundedCornerShape(14.dp))
     ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
         if (iconPainter != null) {
             Icon(
                 painter = iconPainter,
@@ -3244,6 +3248,11 @@ private fun ControlButton(
                 contentDescription = contentDescription,
                 modifier = Modifier.size(28.dp)
             )
+        }
+        if (visibleLabel != null) {
+            Spacer(Modifier.width(8.dp))
+            Text(text = visibleLabel, maxLines = 1, style = MaterialTheme.typography.labelMedium)
+        }
         }
     }
 }
