@@ -102,6 +102,13 @@ final class CinemaCatalog {
                             if(video.optString("thumbnail").isEmpty()){String still=episodeStill(episode);if(!still.isEmpty())video.put("thumbnail",still);}
                         }
                     }
+                    // Backfill remaining missing episode stills in the background, never block playback UI.
+                    boolean stillMissing=videos.length()==0;
+                    for(int i=0;i<videos.length()&&!stillMissing;i++){
+                        JSONObject ep=videos.optJSONObject(i);
+                        stillMissing=ep!=null&&episodeStill(ep).isEmpty();
+                    }
+                    if(stillMissing)refreshEpisodeArtwork(source);
                     fillEpisodeArtwork(videos,bundled.optString("background"),bundled.optString("poster"));
                     bundled.put("videos",videos);
                 }catch(Exception optional){} // Keep the base card if optional episode enrichment fails.
