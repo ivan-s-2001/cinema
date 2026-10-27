@@ -105,7 +105,7 @@ function job(mode, value) {
   run.logs = '';
   run.startedAt = new Date().toISOString();
   run.finishedAt = null;
-  const args = mode === 'one' ? ['sync-catalog.mjs', 'one', value.source, value.id]
+  const args = mode === 'one' ? ['sync-catalog.mjs', 'one', value.source, String(value.id)]
     : ['sync-catalog.mjs', mode, String(value.pages)];
   const child = spawn(process.execPath, args, { cwd: directory, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
   child.stdout.on('data', addLog);
@@ -187,7 +187,7 @@ export async function handleAdmin(req, res, pool) {
     if (path === '/api/admin/titles' && req.method === 'GET') {
       const u = new URL(req.url, 'http://localhost');
       const q = (u.searchParams.get('q') || '').trim().slice(0, 100);
-      const offset = Math.min(100000, Math.max(0, Number(u.searchParams.get('offset')) || 0));
+      const offset = Math.min(100000, Math.max(0, Math.floor(Number(u.searchParams.get('offset')) || 0)));
       const rows = await query(pool,
         'SELECT id,kind,title,year,poster,backdrop,updated_at FROM titles WHERE title LIKE ? ORDER BY updated_at DESC LIMIT 40 OFFSET ?',
         ['%' + q.replace(/[%_\\]/g, '\\$&') + '%', offset]);
