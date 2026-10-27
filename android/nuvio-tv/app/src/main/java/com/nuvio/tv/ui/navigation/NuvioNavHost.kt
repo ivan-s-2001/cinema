@@ -33,15 +33,12 @@ import com.nuvio.tv.ui.screens.ExperienceModeSelectionScreen
 import com.nuvio.tv.ui.screens.LayoutSelectionScreen
 import com.nuvio.tv.ui.screens.detail.MetaDetailsScreen
 import com.nuvio.tv.ui.screens.home.HomeScreen
-import com.nuvio.tv.ui.screens.addon.AddonManagerScreen
-import com.nuvio.tv.ui.screens.addon.CatalogOrderScreen
 import com.nuvio.tv.ui.screens.library.LibraryScreen
 import com.nuvio.tv.ui.screens.player.PlayerExitReason
 import com.nuvio.tv.ui.screens.player.PlayerScreen
 import com.nuvio.tv.ui.screens.player.PostPlayRecommendation
 import com.nuvio.tv.ui.screens.player.playerBackOpensCurrentEpisodeStreams
 import com.nuvio.tv.ui.screens.party.PartyScreen
-import com.nuvio.tv.ui.screens.plugin.PluginScreen
 import com.nuvio.tv.ui.screens.search.DiscoverScreen
 import com.nuvio.tv.ui.screens.search.SearchScreen
 import com.nuvio.tv.ui.screens.settings.AboutScreen
@@ -1334,21 +1331,6 @@ private fun PlaybackNavHost(
             )
         }
 
-        composable(Screen.AddonManager.route) {
-            AddonManagerScreen(
-                showBuiltInHeader = !hideBuiltInHeaders,
-                onBackPress = { navController.popBackStack() },
-                onNavigateToCatalogOrder = { navController.navigate(Screen.CatalogOrder.route) },
-                onNavigateToCollections = { navController.navigate(Screen.Collections.route) }
-            )
-        }
-
-        composable(Screen.CatalogOrder.route) {
-            CatalogOrderScreen(
-                onBackPress = { navController.popBackStack() }
-            )
-        }
-
         composable(Screen.Collections.route) {
             com.nuvio.tv.ui.screens.collection.CollectionManagementScreen(
                 onNavigateToEditor = { collectionId ->
@@ -1386,38 +1368,6 @@ private fun PlaybackNavHost(
                     navController.navigate(Screen.Detail.createRoute(itemId, itemType, addonBaseUrl, heroBackdropUrl = heroBackdrop))
                 },
                 onBack = { navController.popBackStack() }
-            )
-        }
-
-        if (AppFeaturePolicy.pluginsEnabled) {
-            composable(Screen.Plugins.route) {
-                PluginScreen(
-                    onBackPress = { navController.popBackStack() }
-                )
-            }
-        }
-
-        composable(Screen.Account.route) {
-            ProfileSelectionScreen(
-                onProfileSelected = {},
-                screenMode = ProfileSelectionMode.Management,
-                onBackPress = { navController.popBackStack() }
-            )
-        }
-
-        composable(Screen.AuthSignIn.route) {
-            ProfileSelectionScreen(
-                onProfileSelected = {},
-                screenMode = ProfileSelectionMode.Management,
-                onBackPress = { navController.popBackStack() }
-            )
-        }
-
-        composable(Screen.AuthQrSignIn.route) {
-            ProfileSelectionScreen(
-                onProfileSelected = {},
-                screenMode = ProfileSelectionMode.Management,
-                onBackPress = { navController.popBackStack() }
             )
         }
 
