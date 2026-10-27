@@ -133,7 +133,7 @@ android {
     defaultConfig {
         applicationId = "com.nuvio.tv"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 36
         versionCode = 1071
         versionName = "1.1.0-beta.8"
