@@ -1,10 +1,9 @@
 ﻿#Requires -Version 5.1
 [CmdletBinding()]
 param(
-    [string]$TvAddress = '192.168.8.118:5555',
-    [switch]$BuildOnly,
-    [switch]$AcceptReinstall,
-    [switch]$Universal
+    [Alias('DeviceAddress')][string]$TvAddress = '192.168.8.118:5555',
+    [ValidateSet('tv','mobile','both')][string]$Target = 'tv',
+    [switch]$BuildOnly
 )
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -17,6 +16,11 @@ function Invoke-Checked([scriptblock]$Command) {
     & $Command
     if ($LASTEXITCODE -ne 0) { throw "Команда завершилась с ошибкой $LASTEXITCODE : $Command" }
 }
+function Get-RemoteText([string]$Url) {
+    $content = (Invoke-WebRequest -UseBasicParsing -Uri $Url -TimeoutSec 120).Content
+    if ($content -is [byte[]]) { return [Text.Encoding]::UTF8.GetString($content) }
+    return [string]$content
+}
 function Download-Verified([string]$Url, [string]$Destination, [string]$Checksum, [string]$Algorithm = 'SHA256') {
     if ((Test-Path $Destination) -and ((Get-FileHash $Destination -Algorithm $Algorithm).Hash -eq $Checksum)) { return }
     $part = "$Destination.part"
@@ -27,13 +31,13 @@ function Download-Verified([string]$Url, [string]$Destination, [string]$Checksum
     } finally { if (Test-Path $part) { Remove-Item -Force $part } }
 }
 
-Write-Host '[1/6] Java 17' -ForegroundColor Cyan
-$JavaRoot = Join-Path $ToolsRoot 'jdk17'
+Write-Host '[1/6] Java 21' -ForegroundColor Cyan
+$JavaRoot = Join-Path $ToolsRoot 'jdk21'
 if (-not (Test-Path "$JavaRoot\bin\javac.exe")) {
-    $assets = Invoke-RestMethod 'https://api.adoptium.net/v3/assets/latest/17/hotspot?architecture=x64&image_type=jdk&os=windows&vendor=eclipse'
+    $assets = Invoke-RestMethod 'https://api.adoptium.net/v3/assets/latest/21/hotspot?architecture=x64&image_type=jdk&os=windows&vendor=eclipse'
     $package = @($assets)[0].binary.package
-    if (-not $package.checksum -or -not $package.link) { throw 'Adoptium не вернул JDK 17.' }
-    $archive = Join-Path $ToolsRoot 'jdk17.zip'
+    if (-not $package.checksum -or -not $package.link) { throw 'Adoptium не вернул JDK 21.' }
+    $archive = Join-Path $ToolsRoot 'jdk21.zip'
     Download-Verified $package.link $archive $package.checksum
     $stage = Join-Path $ToolsRoot 'jdk-unpack'
     if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
@@ -50,21 +54,21 @@ Invoke-Checked { & "$JavaRoot\bin\javac.exe" -version }
 
 Write-Host '[2/6] Android SDK; принятие лицензий SDK для сборки' -ForegroundColor Cyan
 $SdkRoot = Join-Path $ToolsRoot 'android-sdk'
-$SdkManager = Join-Path $SdkRoot 'cmdline-tools\12.0\bin\sdkmanager.bat'
+$SdkManager = Join-Path $SdkRoot 'cmdline-tools\23.0\bin\sdkmanager.bat'
 if (-not (Test-Path $SdkManager)) {
-    # Fixed version, compatible with JDK 17. Obtain its checksum from Google's repository metadata.
-    [xml]$index = (Invoke-WebRequest -UseBasicParsing 'https://dl.google.com/android/repository/repository2-1.xml' -TimeoutSec 120).Content
-    $toolPackage = $index.SelectSingleNode("//*[local-name()='remotePackage' and @path='cmdline-tools;12.0']")
-    if (-not $toolPackage) { throw 'В официальном индексе Google нет cmdline-tools 12.0.' }
+    # Fixed version, compatible with JDK 21. Obtain its checksum from Google's repository metadata.
+    [xml]$index = Get-RemoteText 'https://dl.google.com/android/repository/repository2-3.xml'
+    $toolPackage = $index.SelectSingleNode("//*[local-name()='remotePackage' and @path='cmdline-tools;23.0']")
+    if (-not $toolPackage) { throw 'В официальном индексе Google нет cmdline-tools 23.0.' }
     $win = $toolPackage.SelectSingleNode("archives/archive[host-os='windows']/complete")
-    if (-not $win) { throw 'В индексе Google нет Windows-архива cmdline-tools 12.0.' }
+    if (-not $win) { throw 'В индексе Google нет Windows-архива cmdline-tools 23.0.' }
     $url = 'https://dl.google.com/android/repository/' + $win.SelectSingleNode('url').InnerText
-    $zip = Join-Path $ToolsRoot 'android-commandlinetools-12.zip'
+    $zip = Join-Path $ToolsRoot 'android-commandlinetools-23.zip'
     Download-Verified $url $zip $win.SelectSingleNode('checksum').InnerText 'SHA1'
     $stage = Join-Path $ToolsRoot 'sdk-unpack'
     if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
     Expand-Archive -LiteralPath $zip -DestinationPath $stage -Force
-    $target = Join-Path $SdkRoot 'cmdline-tools\12.0'
+    $target = Join-Path $SdkRoot 'cmdline-tools\23.0'
     New-Item -ItemType Directory -Force (Split-Path $target -Parent) | Out-Null
     if (Test-Path $target) { Remove-Item -Recurse -Force $target }
     Move-Item (Join-Path $stage 'cmdline-tools') $target
@@ -74,95 +78,57 @@ $env:ANDROID_HOME = $SdkRoot
 $env:ANDROID_SDK_ROOT = $SdkRoot
 Invoke-Checked { 1..100 | ForEach-Object { 'y' } | & $SdkManager "--sdk_root=$SdkRoot" --licenses }
 Invoke-Checked { & $SdkManager "--sdk_root=$SdkRoot" 'platform-tools' 'platforms;android-36' 'build-tools;36.0.0' }
-Write-Host 'Получение готовой основы ARVIO TV + Mobile' -ForegroundColor Cyan
-Invoke-Checked { git -C $RepoRoot submodule update --init --depth 1 -- android/arvio }
-$AppRoot = Join-Path $RepoRoot 'android\arvio'
-$Patch = Join-Path $RepoRoot 'android\arvio.patch'
-$ErrorActionPreference = 'Continue'
-try {
-    git -C $AppRoot apply --reverse --check $Patch 2>$null
-    $alreadyApplied = ($LASTEXITCODE -eq 0)
-    git -C $AppRoot apply --check $Patch 2>$null
-    $canApply = ($LASTEXITCODE -eq 0)
-} finally { $ErrorActionPreference = 'Stop' }
-if (-not $alreadyApplied) {
-    if ($canApply) {
-        Invoke-Checked { git -C $AppRoot apply $Patch }
-    } else {
-        # After git pull an older CinemaHall patch may still be applied.
-        # Reverse only a matching historical patch, never reset arbitrary edits.
-        $history = @(git -C $RepoRoot log --format=%H -- 'android/arvio.patch')
-        $upgraded = $false
-        $tempPatch = [IO.Path]::GetTempFileName()
-        try {
-            $utf8 = [System.Text.UTF8Encoding]::new($false)
-            $previousConsoleEncoding = [Console]::OutputEncoding
-            [Console]::OutputEncoding = $utf8
-            try {
-                foreach ($revision in ($history | Select-Object -Skip 1 -First 8)) {
-                    $oldText = (& git -C $RepoRoot show "${revision}:android/arvio.patch") -join "`n"
-                    if ($LASTEXITCODE -ne 0) { continue }
-                    [IO.File]::WriteAllText($tempPatch, $oldText + "`n", $utf8)
-                    $ErrorActionPreference = 'Continue'
-                    try {
-                        git -C $AppRoot apply --reverse --check $tempPatch 2>$null
-                        $matchesPrevious = ($LASTEXITCODE -eq 0)
-                    } finally { $ErrorActionPreference = 'Stop' }
-                    if (-not $matchesPrevious) { continue }
-                    Invoke-Checked { git -C $AppRoot apply --reverse $tempPatch }
-                    try {
-                        Invoke-Checked { git -C $AppRoot apply --check $Patch }
-                        Invoke-Checked { git -C $AppRoot apply $Patch }
-                    } catch {
-                        Invoke-Checked { git -C $AppRoot apply $tempPatch }
-                        throw
-                    }
-                    $upgraded = $true
-                    break
-                }
-            } finally { [Console]::OutputEncoding = $previousConsoleEncoding }
-        } finally { Remove-Item -LiteralPath $tempPatch -Force }
-        if (-not $upgraded) { throw 'ARVIO содержит посторонние изменения: безопасно обновить патч не удалось.' }
-    }
+if ($Target -ne 'tv') {
+    Invoke-Checked { & $SdkManager "--sdk_root=$SdkRoot" 'platforms;android-37.1' }
 }
-Copy-Item -Path (Join-Path $RepoRoot 'android\overlay\*') -Destination $AppRoot -Recurse -Force
-('sdk.dir=' + $SdkRoot.Replace('\','/')) | Set-Content -Encoding ASCII (Join-Path $AppRoot 'local.properties')
+$BuildTargets = if ($Target -eq 'both') { @('tv','mobile') } else { @($Target) }
+foreach ($BuildTarget in $BuildTargets) {
+    $ProjectName = if ($BuildTarget -eq 'tv') { 'nuvio-tv' } else { 'nuvio-mobile' }
+    $AppRoot = Join-Path $RepoRoot ('android\' + $ProjectName)
+    Write-Host "Preparing $ProjectName" -ForegroundColor Cyan
+    Invoke-Checked { git -C $RepoRoot submodule update --init --depth 1 -- ('android/' + $ProjectName) }
+    $Patch = Join-Path $RepoRoot ('android\' + $ProjectName + '.patch')
+    $ErrorActionPreference = 'Continue'
+    try {
+        git -C $AppRoot apply --reverse --check $Patch 2>$null
+        $AlreadyApplied = ($LASTEXITCODE -eq 0)
+        git -C $AppRoot apply --check $Patch 2>$null
+        $CanApply = ($LASTEXITCODE -eq 0)
+    } finally { $ErrorActionPreference = 'Stop' }
+    if (-not $AlreadyApplied) {
+        if (-not $CanApply) { throw "$ProjectName contains local changes. They were preserved; the integration patch could not be applied." }
+        Invoke-Checked { git -C $AppRoot apply $Patch }
+    }
+    ('sdk.dir=' + $SdkRoot.Replace('\','/')) | Set-Content -Encoding ASCII (Join-Path $AppRoot 'local.properties')
+}
 
 Write-Host '[3/6] Встроенный TorrServer, проверка SHA256' -ForegroundColor Cyan
 $engines = @(
-    @{ Abi='arm64-v8a'; Name='TorrServer-android-arm64'; Hash='93250bb1850e69663c6758398be515c2c429595cb4692c6eccb367f2236868d5' }
+    @{ Abi='arm64-v8a'; Name='TorrServer-android-arm64'; Hash='93250bb1850e69663c6758398be515c2c429595cb4692c6eccb367f2236868d5' }, @{ Abi='armeabi-v7a'; Name='TorrServer-android-arm7'; Hash='e775001edf7bfb2adebfde0ba36780357c0951f12203adb367bd69b2b45522b6' }
 )
-if ($Universal) {
-    $engines += @{ Abi='armeabi-v7a'; Name='TorrServer-android-arm7'; Hash='e775001edf7bfb2adebfde0ba367bd69b2b45522b6' }
-}
 foreach ($engine in $engines) {
-    $dir = Join-Path $AppRoot ('app\src\main\jniLibs\' + $engine.Abi)
+    $dir = Join-Path $RepoRoot ('android\core\app\src\main\jniLibs\' + $engine.Abi)
     New-Item -ItemType Directory -Force $dir | Out-Null
     Download-Verified ('https://github.com/YouROK/TorrServer/releases/download/MatriX.147.1/' + $engine.Name) (Join-Path $dir 'libtorrserver.so') $engine.Hash
 }
 
-Write-Host '[4/6] Проверка логики и сборка ARVIO TV + Mobile' -ForegroundColor Cyan
-Push-Location $RepoRoot
-try {
-    New-Item -ItemType Directory -Force 'build\check' | Out-Null
-    Invoke-Checked { & "$JavaRoot\bin\javac.exe" -encoding UTF-8 -d 'build\check' 'android\overlay\app\src\main\java\app\cinemahall\tv\Logic.java' 'tests\LogicCheck.java' }
-    Invoke-Checked { & "$JavaRoot\bin\java.exe" -cp 'build\check' 'app.cinemahall.tv.LogicCheck' }
+Write-Host '[4/6] Build CinemaHall on Nuvio' -ForegroundColor Cyan
+$BuiltApks = @()
+foreach ($BuildTarget in $BuildTargets) {
+    $ProjectName = if ($BuildTarget -eq 'tv') { 'nuvio-tv' } else { 'nuvio-mobile' }
+    $ModuleName = if ($BuildTarget -eq 'tv') { 'app' } else { 'androidApp' }
+    $AppRoot = Join-Path $RepoRoot ('android\' + $ProjectName)
     Push-Location $AppRoot
     try {
-        if ($Universal) {
-            Invoke-Checked { & '.\gradlew.bat' --no-daemon ':app:assembleSideloadDebug' }
-        } else {
-            Invoke-Checked { & '.\gradlew.bat' --no-daemon '-PcinemaArm64Only=true' ':app:assemblePlayDebug' }
-        }
+        Invoke-Checked { & '.\gradlew.bat' --no-daemon '--max-workers=2' '-Dorg.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8' (':' + $ModuleName + ':assembleFullDebug') }
     } finally { Pop-Location }
-} finally { Pop-Location }
-$Apk = if ($Universal) {
-    Join-Path $AppRoot 'app\build\outputs\apk\sideload\debug\app-sideload-debug.apk'
-} else {
-    Join-Path $AppRoot 'app\build\outputs\apk\play\debug\app-play-debug.apk'
+    $Output = Join-Path $AppRoot ($ModuleName + '\build\outputs\apk\full\debug')
+    $ApkFile = Get-ChildItem -LiteralPath $Output -Filter '*.apk' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if (-not $ApkFile) { throw "APK not found: $Output" }
+    $BuiltApks += @{ Path=$ApkFile.FullName; Package=('app.cinemahall.' + $BuildTarget) }
+    Write-Host ("APK: " + $ApkFile.FullName) -ForegroundColor Green
 }
-if (-not (Test-Path $Apk)) { throw "APK не найден: $Apk" }
-if ($BuildOnly) { Write-Host "APK готов: $Apk" -ForegroundColor Green; return }
+if ($BuildOnly) { return }
 
 Write-Host "[5/6] Подключение к ТВ $TvAddress. Разрешите отладку на экране телевизора." -ForegroundColor Cyan
 $Adb = Join-Path $SdkRoot 'platform-tools\adb.exe'
@@ -179,23 +145,11 @@ for ($attempt=0; $attempt -lt 45; $attempt++) {
 }
 if (-not $ready) { throw 'ТВ не авторизовал ADB за 90 секунд. Подтвердите разрешение на ТВ и запустите скрипт повторно.' }
 
-Write-Host '[6/6] Установка и запуск CinemaHall' -ForegroundColor Cyan
-$ErrorActionPreference = 'Continue'
-try { $install = & $Adb -s $TvAddress install -r $Apk 2>&1; $installCode = $LASTEXITCODE } finally { $ErrorActionPreference = 'Stop' }
-$install | ForEach-Object { Write-Host $_ }
-if ($installCode -ne 0 -and ($install -match 'INSTALL_FAILED_UPDATE_INCOMPATIBLE')) {
-    # A downloaded APK and the first local build normally have different debug keys.
-    # Never silently remove the installed app or its history.
-    $allow = $AcceptReinstall
-    if (-not $allow) {
-        Write-Host 'На ТВ установлена версия с другой подписью. Для первой локальной сборки нужно удалить её. Локальная история и избранное будут потеряны.' -ForegroundColor Yellow
-        $answer = Read-Host 'Введите ДА, чтобы переустановить; Enter отменит установку'
-        $allow = ($answer -eq 'ДА' -or $answer -eq 'YES')
-    }
-    if (-not $allow) { throw "Установка отменена. Собранный APK сохранён: $Apk" }
-    Invoke-Checked { & $Adb -s $TvAddress uninstall 'app.cinemahall.tv' }
-    Invoke-Checked { & $Adb -s $TvAddress install $Apk }
-} elseif ($installCode -ne 0) { throw "Ошибка установки: $($install -join ' ')" }
-Invoke-Checked { & $Adb -s $TvAddress shell am start -n 'app.cinemahall.tv/com.arflix.tv.MainActivity' }
-Write-Host "Готово. CinemaHall установлен и запущен на $TvAddress" -ForegroundColor Green
-Write-Host "Следующий запуск обновит приложение с сохранением данных. APK: $Apk"
+Write-Host '[6/6] Install and launch CinemaHall' -ForegroundColor Cyan
+foreach ($BuiltApk in $BuiltApks) {
+    $Apk = $BuiltApk.Path
+    Invoke-Checked { & $Adb -s $TvAddress install -r $Apk }
+    # Resolve each project's real launcher rather than hard-coding upstream Activity names.
+    Invoke-Checked { & $Adb -s $TvAddress shell monkey -p $BuiltApk.Package -c android.intent.category.LAUNCHER 1 }
+}
+Write-Host "CinemaHall installed. Existing upstream apps were preserved." -ForegroundColor Green

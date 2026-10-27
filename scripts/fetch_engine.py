@@ -3,7 +3,7 @@ import hashlib
 from pathlib import Path
 import urllib.request
 
-ROOT = Path(__file__).resolve().parents[1] / "android" / "arvio"
+ROOT = Path(__file__).resolve().parents[1] / "android" / "core"
 VERSION = "MatriX.147.1"
 ASSETS = {
     "arm64-v8a": ("TorrServer-android-arm64", "93250bb1850e69663c6758398be515c2c429595cb4692c6eccb367f2236868d5"),
@@ -15,7 +15,7 @@ for abi, (name, expected) in ASSETS.items():
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():
         with destination.open("rb") as existing:
-            correct = hashlib.file_digest(existing, "sha256").hexdigest() == expected
+            correct = hashlib.sha256(existing.read()).hexdigest() == expected
         if correct:
             print(f"{abi}: checksum verified")
             continue

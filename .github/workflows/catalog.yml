@@ -1,0 +1,65 @@
+name: Catalogue index
+
+on:
+  push:
+    branches: [rewrite/streambert-android]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      pages:
+        description: Popular catalogue pages per type (100 titles each)
+        required: false
+        default: '15'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s tests -p 'test_catalog_builder.py'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: node --test tests/test_catalog_client.mjs
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: |
+          javac -d /tmp/cinemahall-tests android/core/app/src/main/java/app/cinemahall/tv/Logic.java tests/LogicCheck.java
+          java -cp /tmp/cinemahall-tests app.cinemahall.tv.LogicCheck
+      - name: Compile native multi-source search against Android SDK
+        run: |
+          sdk_jar=$(find "${ANDROID_HOME}/platforms" -name android.jar -print -quit)
+          test -f "$sdk_jar"
+          javac -cp "$sdk_jar" -d /tmp/cinemahall-tests \
+            android/core/app/src/main/java/app/cinemahall/tv/Logic.java \
+            android/core/app/src/main/java/app/cinemahall/tv/Net.java \
+            android/core/app/src/main/java/app/cinemahall/tv/Sources.java
+
+  snapshot:
+    if: github.event_name == 'workflow_dispatch'
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Build metadata index
+        env:
+          KINOAPI_KEY: ${{ secrets.KINOAPI_KEY }}
+          TMDB_READ_TOKEN: ${{ secrets.TMDB_READ_TOKEN }}
+          PAGES: ${{ inputs.pages || '15' }}
+        run: python scripts/build_catalog.py --pages "$PAGES" --enrich 30 --details 12 --season-limit 3 --output catalog/index.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cinemahall-catalog
+          path: catalog/
+          retention-days: 14

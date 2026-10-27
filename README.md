@@ -1,69 +1,63 @@
-# CinemaHall — TV + Mobile
+# CinemaHall — Nuvio TV + Mobile
 
-CinemaHall 0.6.0 использует **готовое приложение ARVIO** как основу: главную, карточки, сезоны/эпизоды, навигацию и плеер для Android TV, телефона и планшета. Собственная оболочка прототипа удалена из текущей версии; она доступна в истории Git.
+CinemaHall uses the **actual Nuvio applications**, with their original native interfaces and players:
 
-Upstream: https://github.com/ProdigyV21/ARVIO
-Зафиксированная версия: `814638307236adb8eb572ed343f126de46b61b27`.
+- `android/nuvio-tv` — Nuvio Android TV, pinned to `c3f68d84a5e0ec8fea7a027443a9beca50d32c31`.
+- `android/nuvio-mobile` — Nuvio Mobile / Compose Multiplatform, pinned to `61658f366f985fc7758f0942a14c1754c69aca68`.
+- `android/nuvio-tv.patch`, `android/nuvio-mobile.patch` — CinemaHall branding, separate package identities, our built-in provider, and build integration. Upstream screens, profiles, library, playback and extension support remain in the upstream projects.
+- `android/provider` — **our** catalogue, metadata, search and playback API, shared by both apps.
+- `android/core` — our Zona/KinoAPI/Cinemeta/TVmaze adapters, source grouping, matching and embedded TorrServer.
+- `scripts/build_catalog.py` — our multi-API metadata aggregation pipeline (KinoAPI, optional TMDB, AniList, Cinemeta, TVmaze).
 
-## Устройство проекта
+The Electron-based Streambert shell and the text-only Android Preview are no longer application entry points. GPL notices and upstream source history are preserved. See [THIRD_PARTY.md](THIRD_PARTY.md).
 
-- `android/arvio/` — полный исходный Android-проект ARVIO, закреплённый git submodule.
-- `android/arvio.patch` — изменения конфигурации и точек подключения CinemaHall. Накладываются на закреплённую версию; исходная структура UI сохраняется.
-- `android/overlay/` — наш адаптер каталога и локального воспроизведения, встроенный TorrServer и проверки.
-- `scripts/install-tv.ps1` — автоматическая сборка и установка на ТВ из Windows PowerShell 5.1.
+## Data belongs to the CinemaHall integration
 
-Каталог Zona подключён через штатный механизм native add-on ARVIO. Собственные ID `ch:` сохраняются при открытии карточек, выборе серий и запуске видео; они не смешиваются с TMDB ID. Cinemeta, TVmaze и Wikidata используются для дополнительных изображений, метаданных и точного сопоставления Кинопоиск → IMDb; TMDB, Fanart.tv и OMDb подключаются с бесплатными API-ключами. Внешние аккаунты для основного сценария не нужны; облачные интеграции upstream не настроены как сервисы CinemaHall.
+The built-in provider is registered automatically, including for new local profiles. It supplies our home shelves, all-language search, title metadata, seasons/episodes and quality/voice choices through the clients' normal add-on contract. It is available on loopback only (`127.0.0.1:18991` for TV, `18992` for mobile); no server installation or manual manifest entry is required.
 
-Кнопка «Смотреть» использует автоматический выбор. Панель вариантов в готовом плеере адаптирована под «Качество и озвучка»: вкладки доступных разрешений, внутри — варианты озвучки этих разрешений. Технические ссылки и раздачи адаптер не возвращает в UI. На ТВ с поддержкой 4K автоматическая цель движка — 4K, на остальных устройствах — 1080p. Наличие источников не гарантирует успешного воспроизведения каждого фильма.
+If `android/core/app/src/main/assets/catalog/` contains our generated snapshot, the clients read that multi-API catalogue and load detail shards on demand. The snapshot preserves stable source IDs and collision suffixes. Without a bundled snapshot, live Zona is the catalogue fallback; opened titles can be enriched by our existing metadata adapters. We do not pass Kinopoisk IDs off as IMDb/TMDB IDs. A metadata voice label never becomes a playable track on its own.
 
-Встроенный движок: TorrServer MatriX.147.1. Основной облегчённый APK содержит ARM64, универсальный APK — ARM64 + ARMv7. Локальные порты: 18990 (движок) и 18991 (подготовка воспроизведения), только `127.0.0.1`. RAM-кеш движка 96 МиБ. Бинарники скачиваются отдельно и проверяются SHA256.
+Playback uses our source resolver and embedded TorrServer MatriX.147.1, then passes the prepared HTTP video stream to the native Nuvio player. Source failures during preparation try up to four eligible alternatives of the selected quality/voice. Resolution/voice labels are provider claims until the actual media is inspected. HDR/Dolby Vision, 4K playback, focus behavior and memory usage still require device testing.
 
-## Метаданные без платных сервисов
+Nuvio's optional third-party account/integration screens are retained, but CinemaHall does not inherit upstream backend credentials or service access. Use local storage mode for the base scenario; cloud sync, external accounts and integrations require their own configuration. Core catalogue playback does not require a Nuvio account. Source setup is not implied to be included merely because a settings screen exists.
 
-- **Cinemeta** — постеры, широкие фоны и сведения по IMDb; поиск по оригинальному, английскому и русскому названиям с обязательной проверкой года.
-- **Wikidata** — точное сопоставление ID Кинопоиска с IMDb, если поиск по названиям ничего не дал.
-- **TVmaze** — подтверждённые сезоны, эпизоды и изображения сериалов.
-- **TMDB (необязательно)** — качественные постеры и широкие фоны, описание и жанры для точных совпадений по IMDb или названию + году.
-- **Fanart.tv (необязательно)** — дополнительные постеры, фоны и логотипы высокого разрешения. Связь по IMDb, выбор изображения с учётом разрешения и языка.
-- **OMDb (необязательно)** — режиссёр, актёры и резервное описание по точному IMDb ID.
+## Windows: build and install on TV
 
-Все три источника выше требуют собственных API-ключей. Для некоммерческого использования доступны бесплатные варианты с условиями атрибуции. В `android/arvio/secrets.properties` или переменных окружения задайте `TMDB_API_KEY`, `FANART_API_KEY`, `OMDB_API_KEY` (любую комбинацию). Без ключей приложение работает на Zona, Cinemeta, Wikidata и TVmaze. Ключ, встроенный в APK, нельзя считать секретом.
-
-Обогащение выполняется на карточке и для первой обложки полки, с кешем на 7 дней для найденных данных и на 1 час для отрицательных ответов. Неудачи дополнительных API не мешают каталогу и воспроизведению. Для плавности 14 полок загружаются порциями по 20 карточек; дорогой поиск иллюстраций при первом открытии выполняется только для трёх главных полок. Остальные карточки получают детальные изображения при открытии тайтла. ARVIO получает 14 полок: популярные и новые фильмы/сериалы, высокие рейтинги, фантастика, мультфильмы, комедии, триллеры, ужасы, классика, детективные и драматические сериалы. Пустые API-выдачи не подменяются чужими тайтлами.
-
-## Windows: собрать и установить на ТВ
+Git is required; Python and Android Studio are not required by the Windows script.
 
 ```powershell
-git clone --recurse-submodules https://github.com/ivan-s-2001/cinema.git
-cd cinema
+git clone --branch rewrite/streambert-android --single-branch https://github.com/ivan-s-2001/cinema.git cinema-pr3
+cd cinema-pr3
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-tv.ps1 -TvAddress "192.168.8.118:5555"
 ```
 
-Для существующей копии: `git pull --ff-only`, затем тот же `install-tv.ps1`.
+For an existing checkout, run `git pull --ff-only` first. The script initializes the pinned submodule, applies only the integration patch, downloads verified JDK 21 / command-line tools 23 / SDK / TorrServer packages, builds the full application, installs via ADB, and resolves its actual launcher. It never uninstalls existing apps. If a submodule contains incompatible local modifications, it stops without resetting them. After an integration patch changes, use a fresh checkout if an older patch is still applied.
 
-Скрипт получает JDK 17, Android SDK 36, исходную базу и ARM64-движок (в универсальной сборке ещё ARMv7); применяет адаптер, собирает APK, подключается по ADB и открывает приложение. Python и Android Studio для Windows-сценария не требуются. Первая сборка скачивает большие зависимости. Для компиляции большой базы Kotlin выделено 4 ГБ; Gradle — 2 ГБ, параллельная сборка отключена.
+Other targets:
 
-ТВ и ПК должны быть в общей сети. На телевизоре включите сетевую отладку и подтвердите первое подключение. Для закрытого репозитория потребуется авторизация GitHub. При конфликте подписи скрипт спрашивает подтверждение перед удалением установленного приложения и локальных данных. Последующие сборки на одном ПК используют его постоянный debug-ключ; сохраняйте `%USERPROFILE%\.android\debug.keystore`.
+```powershell
+# Mobile APK, without installing it on the TV
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-tv.ps1 -Target mobile -BuildOnly
 
-Основной APK для ARM64 TV и телефона: `android/arvio/app/build/outputs/apk/play/debug/app-play-debug.apk`. Для старых ARMv7-устройств запустите установщик с `-Universal`: он соберёт `android/arvio/app/build/outputs/apk/sideload/debug/app-sideload-debug.apk`. Пакет `app.cinemahall.tv`; Activity `com.arflix.tv.MainActivity`. `-BuildOnly` собирает без установки.
-
-## Linux / CI
-
-```sh
-git submodule update --init --depth 1
-python3 scripts/prepare_android.py
-python3 scripts/fetch_engine.py
-cd android/arvio
-./gradlew :app:assemblePlayDebug -PcinemaArm64Only=true
-./gradlew :app:testSideloadDebugUnitTest --tests app.cinemahall.tv.CinemaQualityTabsTest
+# Build both applications
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-tv.ps1 -Target both -BuildOnly
 ```
 
-CI публикует оба APK в Artifacts: полный совместимый и облегчённый ARM64. Минимальная версия обеих сборок — Android 8.0 (API 26); SDK 36 и JDK 17.
+TV output: `android/nuvio-tv/app/build/outputs/apk/full/debug/`.
+Mobile output: `android/nuvio-mobile/androidApp/build/outputs/apk/full/debug/`.
+Packages: `app.cinemahall.tv` and `app.cinemahall.mobile`. Both use the PC's local debug key, so subsequent builds on that PC can update without deleting data. An APK signed elsewhere cannot replace it without a matching key.
 
-## Проверки и лицензии
+The first build is substantial: TV uses Gradle 8.13 / Android SDK 36; the pinned mobile rewrite uses Gradle 9.4.1 / SDK 37.1. The wrapper distribution hashes are pinned. The script accepts Android SDK licences. Features have not been removed to claim a small APK; device RAM/scroll performance must be measured.
 
-Сборка APK прошла; 3 теста адаптации прошли. История/избранное старого прототипа не перенесены в формат ARVIO; исходные локальные файлы при обновлении без удаления приложения сохраняются.
+## CI and local checks
 
-Текущий результат проверок: [VERIFICATION.md](VERIFICATION.md). Приложение необходимо испытать на реальных TV и телефоне: сборка не подтверждает правильную работу всех внешних источников и форматов устройства.
+`.github/workflows/android.yml` builds TV and mobile separately. If the existing `KINOAPI_KEY` secret is available, a preceding job generates one multi-API snapshot and bundles it into both APKs. API keys do not enter the JSON or APK. Without a key, both use the live fallback.
 
-ARVIO — Apache-2.0; адаптеры CinemaHall и встроенный TorrServer — GPL-3.0. Уведомления upstream сохранены, дополнительные лицензии упакованы в APK. Подробнее: [THIRD_PARTY.md](THIRD_PARTY.md).
+```bash
+python scripts/prepare_nuvio.py --target both
+python scripts/fetch_engine.py
+python -m unittest discover -s tests -p 'test_catalog_builder.py'
+node --test tests/test_catalog_client.mjs
+```
+
+The shared provider compiles against Android SDK 36 and has an offline `tests/ProviderCheck.java` contract check. Full APK validation must be read from the **new** Nuvio workflow; prior successful Preview builds do not validate this migration. This PR remains a draft until both applications build and the viewing flow is tested on hardware.

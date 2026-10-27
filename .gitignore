@@ -4,7 +4,13 @@
 local.properties
 *.jks
 *.keystore
-app/src/main/jniLibs/**/*.so
-app/src/main/jniLibs/**/*.download
+**/src/main/jniLibs/**/*.so
+**/src/main/jniLibs/**/*.download
 __pycache__/
 *.pyc
+/catalog/
+
+**/src/main/jniLibs/
+
+**/node_modules/
+/android/core/app/src/main/assets/catalog/
