@@ -119,6 +119,7 @@ def normalize(raw):
                              image_url(kp_art.get("poster"))])
     wide = distinct([image_url(art.get("backdrop")),
                      *(image_url(x) for x in art.get("backdrops") or [])])
+    wide = [url for url in wide if url not in p_candidates]
     # Covers have unknown dimensions; let clients use a gradient instead of stretching one.
     b_candidates = distinct(wide + [image_url(art.get("cover")), image_url(kp_art.get("cover"))])
     aliases = distinct([name.get("ru"), name.get("en"), name.get("original")])
@@ -257,6 +258,8 @@ def append_art(row, field, url, verified=False):
     if not url:
         return
     pictures = row["images"]
+    if field == "backdrop" and url in pictures["posters"]:
+        return
     list_key = "backdrops" if field == "backdrop" else "posters"
     pictures[list_key] = distinct(pictures[list_key] + [url])[:12]
     if not pictures[field] or (field == "backdrop" and verified and not pictures["backdropVerified"]):

@@ -101,6 +101,7 @@ final class CinemaCatalog {
             .put("name",film.optString("name_rus").isEmpty()?film.optString("name_original"):film.optString("name_rus"))
             .put("poster",art.optString("poster").isEmpty()?"https://img2.zonapic.com/images/film_240/"+(id.length()>3?id.substring(0,id.length()-3):"0")+"/"+id+".jpg":art.optString("poster"))
             .put("background",art.optString("background")).put("description",film.optString("description")).put("releaseInfo",film.optString("year")).put("imdbRating",film.optString("rating_imdb"));
+        if(result.optString("background").equals(result.optString("poster")))result.remove("background");
         JSONArray genres=new JSONArray();for(String g:film.optString("genre_name").split(","))if(!g.trim().isEmpty())genres.put(g.trim());result.put("genres",genres);
         if(full&&film.optBoolean("serial")){
             JSONArray videos=new JSONArray(),episodes=art.optJSONArray("episodes");HashSet<String> seen=new HashSet<>();

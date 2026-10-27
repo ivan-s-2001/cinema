@@ -2,7 +2,7 @@
 import unittest
 from unittest.mock import patch
 
-from scripts.build_catalog import build, details, enrich, merge_catalog, normalize, split_snapshot, zona_availability
+from scripts.build_catalog import append_art, build, details, enrich, merge_catalog, normalize, split_snapshot, zona_availability
 
 
 def record(kind="movie", imdb="tt0137523", kp=361, tmdb=550, name="Бойцовский клуб"):
@@ -38,6 +38,19 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(row["sourceAvailability"]["zona"], "listed")
         self.assertEqual(row["sourceAvailability"]["reportedResolutions"], ["3840x2160"])
         self.assertEqual(row["playableSources"], [])
+
+    def test_poster_cannot_be_a_backdrop(self):
+        raw = record()
+        portrait = raw["images"]["poster"]
+        raw["images"]["backdrops"] = [portrait]
+        row = normalize(raw)
+        self.assertEqual(row["images"]["backdrop"], "")
+        self.assertFalse(row["images"]["backdropVerified"])
+        append_art(row, "backdrop", portrait, verified=True)
+        self.assertEqual(row["images"]["backdrop"], "")
+        append_art(row, "backdrop", "https://example.org/wide.jpg", verified=True)
+        self.assertEqual(row["images"]["backdrop"], "https://example.org/wide.jpg")
+        self.assertTrue(row["images"]["backdropVerified"])
 
     def test_cover_is_not_a_verified_widescreen_banner(self):
         raw = record()

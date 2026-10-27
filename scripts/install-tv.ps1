@@ -93,6 +93,8 @@ foreach ($BuildTarget in $BuildTargets) {
     if (Test-Path $LocalPatch) { $Patches += $LocalPatch }
     $BuildPatch = Join-Path $RepoRoot ('android\' + $ProjectName + '-build.patch')
     if (Test-Path $BuildPatch) { $Patches += $BuildPatch }
+    $ArtworkPatch = Join-Path $RepoRoot ('android\' + $ProjectName + '-artwork.patch')
+    if (Test-Path $ArtworkPatch) { $Patches += $ArtworkPatch }
     foreach ($Patch in $Patches) {
         $ErrorActionPreference = 'Continue'
         try {

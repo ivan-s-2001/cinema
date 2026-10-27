@@ -62,14 +62,14 @@ final class CinemaSnapshot {
     private JSONObject compact(JSONObject entry) throws Exception {
         JSONObject result=new JSONObject().put("id","ch:snapshot:"+entry.getString("id")).put("type",entry.optString("type").equals("tv")?"series":"movie").put("name",entry.optString("title")).put("poster",entry.optString("poster")).put("releaseInfo",entry.optString("year"));
         JSONObject row=raw("ch:snapshot:"+entry.getString("id"));JSONObject images=row==null?null:row.optJSONObject("images");
-        if(images!=null&&images.optBoolean("backdropVerified"))result.put("background",images.optString("backdrop"));
+        if(images!=null&&images.optBoolean("backdropVerified")&&!images.optString("backdrop").equals(result.optString("poster")))result.put("background",images.optString("backdrop"));
         return result;
     }
     synchronized JSONObject detail(String id) throws Exception {
         JSONObject row=raw(id);if(row==null)return null;JSONObject images=row.optJSONObject("images");
         JSONObject result=new JSONObject().put("id",id).put("type",row.optString("type").equals("tv")?"series":"movie").put("name",row.optString("title"))
             .put("poster",images==null?"":images.optString("poster")).put("description",row.optString("description")).put("releaseInfo",row.optString("year")).put("genres",row.optJSONArray("genres"));
-        if(images!=null&&images.optBoolean("backdropVerified"))result.put("background",images.optString("backdrop"));
+        if(images!=null&&images.optBoolean("backdropVerified")&&!images.optString("backdrop").equals(result.optString("poster")))result.put("background",images.optString("backdrop"));
         if(images!=null&&!images.optString("logo").isEmpty())result.put("logo",images.optString("logo"));
         if(row.optInt("runtimeMinutes")>0)result.put("runtime",row.getInt("runtimeMinutes")+" мин");
         JSONObject scores=row.optJSONObject("ratings");if(scores!=null){

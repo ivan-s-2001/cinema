@@ -22,6 +22,9 @@ def prepare(target):
     build_patch = ROOT / "android" / f"{name}-build.patch"
     if build_patch.exists():
         patches.append(build_patch)
+    artwork_patch = ROOT / "android" / f"{name}-artwork.patch"
+    if artwork_patch.exists():
+        patches.append(artwork_patch)
     for patch in patches:
         def can_apply(*options):
             return subprocess.run(["git", "-C", str(directory), "apply", *options, str(patch)], capture_output=True).returncode == 0
