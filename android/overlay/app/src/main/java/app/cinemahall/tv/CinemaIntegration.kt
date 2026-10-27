@@ -22,6 +22,7 @@ object CinemaIntegration {
     private var server:NanoHTTPD?=null
     private val docs=ConcurrentHashMap<String,JSONObject>()
     private val types=listOf("movie","series")
+    private val heroArtworkCatalogs=setOf("popular","series","top")
     private val available="playable:true AND trailer:false AND adult:false AND tor_count:[1 TO *]"
     private val fields="id,name_rus,name_original,description,year,rating_imdb,serial,genre_name,runtime,min_age,episodes"
     val catalogs get()=listOf(
@@ -92,11 +93,11 @@ object CinemaIntegration {
                     "detective_series" to "детектив","drama_series" to "драма")[catalog]
                 val genreFilter=genre?.let {" AND genre_name:\"$it\""}?:""
                 val classic=if(catalog=="classics")" AND year:[1900 TO 2000] AND rating_kinopoisk:[7 TO *]"else ""
-                val data=Net.select("movie","$available AND serial:$serial$high$genreFilter$classic$query",if(recent)"release_date desc"else "popularity desc",skip,40,fields).getJSONArray("docs")
+                val data=Net.select("movie","$available AND serial:$serial$high$genreFilter$classic$query",if(recent)"release_date desc"else "popularity desc",skip,20,fields).getJSONArray("docs")
                 val metas=JSONArray()
                 for(i in 0 until data.length()){
                     val doc=data.getJSONObject(i);docs[doc.getString("id")]=doc
-                    metas.put(meta(doc,false,i==0))
+                    metas.put(meta(doc,false,skip==0 && i==0 && catalog in heroArtworkCatalogs))
                 }
                 JSONObject().put("metas",metas).toString()
             }
