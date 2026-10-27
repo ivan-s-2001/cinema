@@ -317,6 +317,11 @@ class AddonRepositoryImpl(
 
     override suspend fun fetchAddon(baseUrl: String): NetworkResult<Addon> {
         val cleanBaseUrl = canonicalizeUrl(baseUrl)
+        // Reject third-party manifests before any network request, including
+        // legacy background refresh and profile-sync code paths.
+        if (cleanBaseUrl != "http://127.0.0.1:18991") {
+            return NetworkResult.Error("CinemaHall использует только встроенный каталог")
+        }
         val queryStart = cleanBaseUrl.indexOf('?')
         val basePath = if (queryStart >= 0) cleanBaseUrl.substring(0, queryStart).trimEnd('/') else cleanBaseUrl
         val baseQuery = if (queryStart >= 0) cleanBaseUrl.substring(queryStart) else ""
@@ -339,6 +344,8 @@ class AddonRepositoryImpl(
     }
 
     override suspend fun addAddon(url: String) {
+        // CinemaHall does not accept external catalogue installation.
+        if (canonicalizeUrl(url) != "http://127.0.0.1:18991") return
         val cleanUrl = canonicalizeUrl(url)
         if (!preferences.addAddon(cleanUrl)) return
         triggerRemoteSync()
@@ -360,6 +367,7 @@ class AddonRepositoryImpl(
     }
 
     override suspend fun setAddonEnabled(url: String, enabled: Boolean) {
+        if (canonicalizeUrl(url) != "http://127.0.0.1:18991") return
         val cleanUrl = canonicalizeUrl(url)
         if (!preferences.setAddonEnabled(cleanUrl, enabled)) return
         if (enabled && getCachedManifest(cleanUrl) == null) {
