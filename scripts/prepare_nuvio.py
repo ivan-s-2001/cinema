@@ -19,6 +19,9 @@ def prepare(target):
     local_patch = ROOT / "android" / f"{name}-local.patch"
     if local_patch.exists():
         patches.append(local_patch)
+    build_patch = ROOT / "android" / f"{name}-build.patch"
+    if build_patch.exists():
+        patches.append(build_patch)
     for patch in patches:
         def can_apply(*options):
             return subprocess.run(["git", "-C", str(directory), "apply", *options, str(patch)], capture_output=True).returncode == 0
