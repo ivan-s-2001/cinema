@@ -4,13 +4,14 @@ KinoAPI supplies stable cross-provider IDs and Russian metadata. Optional APIs
 fill gaps only for a bounded number of items; no source is treated as playable.
 """
 import argparse
+import hashlib
 import json
 import os
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -31,8 +32,9 @@ _failed = Counter()
 
 class SameHostRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, request, fp, code, msg, headers, newurl):
-        if urllib.parse.urlparse(newurl).hostname != urllib.parse.urlparse(request.full_url).hostname:
-            return None  # Never forward a private API token to another host.
+        old, new = urllib.parse.urlparse(request.full_url), urllib.parse.urlparse(newurl)
+        if old.scheme != "https" or new.scheme != "https" or old.netloc != new.netloc:
+            return None  # Never leak credentials to another host/port or plaintext HTTP.
         return super().redirect_request(request, fp, code, msg, headers, newurl)
 
 
@@ -205,13 +207,19 @@ def incompatible_ids(a, b):
 
 def merge_catalog(batches):
     rows = []
-    indexes = {}
+    indexes = defaultdict(set)
     for batch in batches:
         for raw in batch:
             row = normalize(raw)
             if not row:
                 continue
-            matches = {indexes[k] for k in identity_keys(row) if k in indexes}
+            candidates = {i for k in identity_keys(row) for i in indexes[k] if rows[i] is not None}
+            matches = {i for i in candidates if not incompatible_ids(rows[i], row)}
+            for i in candidates - matches:
+                # Never combine two records with contradictory film identities.
+                warning = "Conflicting provider IDs on shared identity"
+                rows[i]["identityWarnings"] = distinct(rows[i]["identityWarnings"] + [warning])
+                row["identityWarnings"].append(warning)
             if matches:
                 # Prefer exact TMDB match for a contradictory multi-ID bridge.
                 tmdb = row["ids"].get("tmdb")
@@ -222,15 +230,26 @@ def merge_catalog(batches):
                     if rows[other] is not None and not incompatible_ids(row, rows[other]):
                         merge_rows(row, rows[other])
                         rows[other] = None
-                        for k, v in list(indexes.items()):
-                            if v == other:
-                                indexes[k] = target
+                        for positions in indexes.values():
+                            if other in positions:
+                                positions.remove(other)
+                                positions.add(target)
             else:
                 target = len(rows)
                 rows.append(row)
             for k in identity_keys(row):
-                indexes[k] = target
-    return [row for row in rows if row is not None]
+                indexes[k].add(target)
+    result = [row for row in rows if row is not None]
+    # A bad upstream ID collision must not make two search hits resolve to one shard row.
+    collisions = defaultdict(list)
+    for row in result:
+        collisions[stable_id(row)].append(row)
+    for group in collisions.values():
+        if len(group) > 1:
+            for row in group:
+                signature = json.dumps(row["ids"], sort_keys=True, ensure_ascii=False)
+                row["collisionSuffix"] = hashlib.sha256(signature.encode()).hexdigest()[:12]
+    return result
 
 
 def append_art(row, field, url, verified=False):
@@ -437,7 +456,8 @@ def build(key, pages, enrichment, tmdb_key="", detail_count=0, season_limit=3, a
 def stable_id(row):
     for source in ("tmdb", "kinopoisk", "imdb", "myAnimeList", "shikimori"):
         if row["ids"].get(source):
-            return f"{row['type']}:{source}:{row['ids'][source]}"
+            base = f"{row['type']}:{source}:{row['ids'][source]}"
+            return base + (":" + row["collisionSuffix"] if row.get("collisionSuffix") else "")
     raise ValueError("Title without a stable identifier")
 
 

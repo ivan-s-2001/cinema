@@ -51,10 +51,22 @@ class CatalogTests(unittest.TestCase):
         b = record(imdb="tt002", kp=20, tmdb=2)
         bridge = record(imdb="tt001", kp=20, tmdb=1)
         rows = merge_catalog([[a, b, bridge]])
-        self.assertEqual(len(rows), 2)
+        self.assertEqual(len(rows), 3)
         self.assertEqual({r["ids"]["tmdb"] for r in rows}, {"1", "2"})
         self.assertEqual({r["ids"]["kinopoisk"] for r in rows}, {"10", "20"})
         self.assertTrue(rows[0]["identityWarnings"])
+        snapshot = {"version": 2, "generatedAt": "now", "count": len(rows),
+                    "quality": {}, "filters": {}, "releaseCalendar": [], "titles": rows}
+        files = split_snapshot(snapshot, shard_size=50)
+        self.assertEqual(len({entry["id"] for entry in files["search.json"]}), 3)
+
+    def test_shared_lower_priority_id_cannot_merge_different_films(self):
+        a = record(imdb="tt001", kp=10, tmdb=1)
+        b = record(imdb="tt001", kp=11, tmdb=2)
+        rows = merge_catalog([[a, b]])
+        self.assertEqual(len(rows), 2)
+        self.assertNotEqual(rows[0]["ids"]["tmdb"], rows[1]["ids"]["tmdb"])
+        self.assertTrue(all(r["identityWarnings"] for r in rows))
 
     def test_anime_season_ids_preserved(self):
         a = record(kind="tv")
