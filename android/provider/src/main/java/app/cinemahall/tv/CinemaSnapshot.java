@@ -82,7 +82,7 @@ final class CinemaSnapshot {
             .put("poster",images==null?"":images.optString("poster")).put("description",row.optString("description")).put("releaseInfo",row.optString("year")).put("genres",row.optJSONArray("genres"));
         if(images!=null&&images.optBoolean("backdropVerified")&&!images.optString("backdrop").equals(result.optString("poster")))result.put("background",images.optString("backdrop"));
         if(result.optString("background").isEmpty()){
-            JSONObject fallback=Metadata.load(context,document(id),false);
+            JSONObject fallback=Metadata.cachedArtwork(context,document(id));
             String backdrop=fallback.optString("background");
             if(!backdrop.isEmpty()&&!backdrop.equals(result.optString("poster")))result.put("background",backdrop);
             if(result.optString("poster").isEmpty()&&!fallback.optString("poster").isEmpty())result.put("poster",fallback.getString("poster"));
