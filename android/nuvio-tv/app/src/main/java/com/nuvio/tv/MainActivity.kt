@@ -186,7 +186,6 @@ import com.nuvio.tv.ui.navigation.Screen
 import com.nuvio.tv.ui.navigation.rememberNavSessionViewModelStoreOwner
 import com.nuvio.tv.ui.screens.party.PartyEffects
 import com.nuvio.tv.ui.membership.LocalMemberAccess
-import com.nuvio.tv.ui.screens.addon.EssentialAddonSetupScreen
 import com.nuvio.tv.ui.screens.profile.ProfileSelectionScreen
 import com.nuvio.tv.ui.theme.NuvioComponents
 import com.nuvio.tv.ui.theme.NuvioLayout
@@ -735,22 +734,8 @@ open class MainActivity : ComponentActivity() {
                         ?: if (layoutChosen) ExperienceMode.ADVANCED else null
                     val needsExperienceSelection = effectiveExperienceMode == null
                     // CinemaHall ships its own catalogue; third-party add-on onboarding is unnecessary.
-                    val needsEssentialAddonSetup = false
-                    val pendingDeepLink by pendingDeepLinkUrl.collectAsState()
+                    // CinemaHall opens its built-in catalogue directly.
 
-                    // External add-on manifest links are never installed by CinemaHall.
-                    // Navigation handles these deep links by dismissing them safely.
-
-                    if (needsEssentialAddonSetup) {
-                        startupDestination = StartupDestination.Setup
-                        EssentialAddonSetupScreen(
-                            onSkip = {
-                                lifecycleScope.launch {
-                                    experienceModeDataStore.setAddonSetupSkipped(true)
-                                }
-                            }
-                        )
-                    } else {
                     val sidebarCollapsed = mainUiPrefs.sidebarCollapsed
                     val modernSidebarEnabled = mainUiPrefs.modernSidebarEnabled
                     val modernSidebarBlurEnabled =
@@ -1123,7 +1108,6 @@ open class MainActivity : ComponentActivity() {
                             )
                         }
                     }
-                } 
             } 
         } 
 
