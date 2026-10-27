@@ -59,17 +59,38 @@ final class CinemaSnapshot {
     }
     private static double rating(JSONObject scores){if(scores==null)return 0;for(String key:new String[]{"kinopoisk","imdb","tmdb"}){Object v=scores.opt(key);if(v instanceof Number)return ((Number)v).doubleValue();if(v instanceof JSONObject){double value=((JSONObject)v).optDouble("value",0);if(value>0)return value;}}return 0;}
     private static String words(String value){return value.toLowerCase(Locale.ROOT).replace('ё','е').replaceAll("[^\\p{L}\\p{N}]+"," ").trim();}
+    private static String cleanImage(String value) {
+        String image=value==null?"":value.trim();
+        return image.startsWith("https://")||image.startsWith("http://")?image:"";
+    }
+    private static String title(JSONObject row){
+        for(String key:new String[]{"title","name","originalTitle"}){
+            String value=row.optString(key).trim();
+            if(!value.isEmpty())return value;
+        }
+        return "Название уточняется";
+    }
     private JSONObject compact(JSONObject entry) throws Exception {
         JSONObject result=new JSONObject().put("id","ch:snapshot:"+entry.getString("id")).put("type",entry.optString("type").equals("tv")?"series":"movie").put("name",entry.optString("title")).put("poster",entry.optString("poster")).put("releaseInfo",entry.optString("year"));
         JSONObject row=raw("ch:snapshot:"+entry.getString("id"));JSONObject images=row==null?null:row.optJSONObject("images");
-        if(images!=null&&images.optBoolean("backdropVerified")&&!images.optString("backdrop").equals(result.optString("poster")))result.put("background",images.optString("backdrop"));
+        if(images!=null){
+            String poster=cleanImage(images.optString("poster"));
+            if(!poster.isEmpty())result.put("poster",poster);
+            String backdrop=cleanImage(images.optString("backdrop"));
+            if(images.optBoolean("backdropVerified")&&!backdrop.isEmpty()&&!backdrop.equals(result.optString("poster")))result.put("background",backdrop);
+        }
+        if(row!=null){
+            if(result.optString("name").trim().isEmpty())result.put("name",title(row));
+            String summary=row.optString("description").trim();
+            if(!summary.isEmpty())result.put("description",summary);
+        }
         return result;
     }
     synchronized JSONObject detail(String id) throws Exception {
         JSONObject row=raw(id);if(row==null)return null;JSONObject images=row.optJSONObject("images");
-        JSONObject result=new JSONObject().put("id",id).put("type",row.optString("type").equals("tv")?"series":"movie").put("name",row.optString("title"))
-            .put("poster",images==null?"":images.optString("poster")).put("description",row.optString("description")).put("releaseInfo",row.optString("year")).put("genres",row.optJSONArray("genres"));
-        if(images!=null&&images.optBoolean("backdropVerified")&&!images.optString("backdrop").equals(result.optString("poster")))result.put("background",images.optString("backdrop"));
+        JSONObject result=new JSONObject().put("id",id).put("type",row.optString("type").equals("tv")?"series":"movie").put("name",title(row))
+            .put("poster",images==null?"":cleanImage(images.optString("poster"))).put("description",row.optString("description").trim()).put("releaseInfo",row.optString("year")).put("genres",row.optJSONArray("genres"));
+        if(images!=null&&images.optBoolean("backdropVerified")&&!cleanImage(images.optString("backdrop")).isEmpty()&&!cleanImage(images.optString("backdrop")).equals(result.optString("poster")))result.put("background",cleanImage(images.optString("backdrop")));
         if(result.optString("background").isEmpty()){
             JSONObject fallback=Metadata.load(context,document(id),false);
             String backdrop=fallback.optString("background");
