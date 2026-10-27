@@ -31,6 +31,14 @@ public final class ProviderCheck {
         JSONArray missing=new JSONArray().put(new JSONObject());
         CinemaCatalog.fillEpisodeArtwork(missing,"https://example.org/poster.jpg","https://example.org/poster.jpg");
         if(missing.getJSONObject(0).has("thumbnail"))throw new AssertionError("Portrait cannot be used as episode still");
+        java.util.List<?> cacheKey=java.util.Arrays.asList("361","S1E1");
+        java.util.ArrayList<Sources.Candidate> candidates=new java.util.ArrayList<>();
+        candidates.add(new Sources.Candidate(new JSONObject().put("torrent_download_link","magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567")));
+        Sources.remember(cacheKey,candidates,1000);
+        java.util.ArrayList<Sources.Candidate> cached=Sources.cached(cacheKey,2000);
+        if(cached==null||cached.size()!=1)throw new AssertionError("Playback search should reuse its recent results");
+        cached.clear();
+        if(Sources.cached(cacheKey,2000).size()!=1||Sources.cached(cacheKey,91000)!=null)throw new AssertionError("Cache must isolate lists and expire");
         JSONObject ratings=new JSONObject();
         CinemaRatings.append(ratings,new JSONObject().put("kinopoisk",new JSONObject().put("value",8.2)).put("imdb",7.4).put("anilist",85).put("tmdb",25).put("mal",JSONObject.NULL));
         JSONArray ratingItems=ratings.getJSONArray("cinemaRatings");

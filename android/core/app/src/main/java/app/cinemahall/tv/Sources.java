@@ -6,6 +6,23 @@ import java.util.*;
 
 /** Internal routing only: no torrent vocabulary belongs in the viewing UI. */
 final class Sources {
+    private static final long CACHE_MS=90_000;
+    private static final LinkedHashMap<List<?>,CacheEntry> CACHE=new LinkedHashMap<List<?>,CacheEntry>(8,.75f,true){
+        @Override protected boolean removeEldestEntry(Map.Entry<List<?>,CacheEntry> item){return size()>8;}
+    };
+    private static final class CacheEntry {
+        final long created; final ArrayList<Candidate> candidates;
+        CacheEntry(List<Candidate> candidates,long created){this.candidates=new ArrayList<>(candidates);this.created=created;}
+    }
+    static synchronized ArrayList<Candidate> cached(List<?> key,long now){
+        CacheEntry item=CACHE.get(key);
+        if(item==null)return null;
+        if(now-item.created>=CACHE_MS||now<item.created){CACHE.remove(key);return null;}
+        return new ArrayList<>(item.candidates);
+    }
+    static synchronized void remember(List<?> key,List<Candidate> candidates,long now){
+        if(!candidates.isEmpty())CACHE.put(key,new CacheEntry(candidates,now));
+    }
     static final class Candidate {
         final String link,hash,quality,translation,languages,provider;
         final int seeds;
@@ -41,6 +58,9 @@ final class Sources {
     static ArrayList<Candidate> load(String movieId,String episode,List<String> aliases,int year) throws Exception {
         boolean hasKinopoisk=movieId!=null&&movieId.matches("[0-9]+");
         if(!hasKinopoisk&&(aliases==null||aliases.isEmpty()))throw new Exception("Не найден фильм");
+        List<?> cacheKey=Arrays.asList(movieId,episode,aliases==null?Collections.emptyList():new ArrayList<>(aliases),year);
+        ArrayList<Candidate> previous=cached(cacheKey,System.currentTimeMillis());
+        if(previous!=null)return previous;
         String exact=Logic.catalogEpisode(episode==null?"":episode);
         String fields="hash,torrent_download_link,resolution,size_bytes,translate_info,languages_parser,seeds,episodes_map_auto";
         ArrayList<Candidate> result=new ArrayList<>();HashSet<String>seen=new HashSet<>();
@@ -80,6 +100,8 @@ final class Sources {
             }
         }catch(Exception ignored){} // Embedded engine or extra search may be unavailable.
         if(result.isEmpty()&&zonaError!=null)throw zonaError;
+        // The player immediately requests the same title again when opening a selected variant.
+        remember(cacheKey,result,System.currentTimeMillis());
         return result;
     }
     private static JSONArray search(String path,String term) throws Exception {
