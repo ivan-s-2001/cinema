@@ -736,6 +736,8 @@ open class MainActivity : ComponentActivity() {
                     // CinemaHall ships its own catalogue; third-party add-on onboarding is unnecessary.
                     // CinemaHall opens its built-in catalogue directly.
 
+                    val pendingDeepLink by pendingDeepLinkUrl.collectAsState()
+
                     val sidebarCollapsed = mainUiPrefs.sidebarCollapsed
                     val modernSidebarEnabled = mainUiPrefs.modernSidebarEnabled
                     val modernSidebarBlurEnabled =
