@@ -35,6 +35,12 @@ public final class ProviderCheck {
         CinemaRatings.append(ratings,new JSONObject().put("kinopoisk",new JSONObject().put("value",8.2)).put("imdb",7.4).put("anilist",85).put("tmdb",25).put("mal",JSONObject.NULL));
         JSONArray ratingItems=ratings.getJSONArray("cinemaRatings");
         if(ratingItems.length()!=3||!ratingItems.getJSONObject(0).getString("source").equals("kinopoisk")||ratingItems.getJSONObject(2).getInt("scale")!=100||!ratings.getString("imdbRating").equals("7.4"))throw new AssertionError("Ratings must preserve platform and scale and omit invalid values");
+        JSONObject more=new JSONObject();
+        CinemaRatings.append(more,new JSONObject().put("shikimori",7.9).put("omdb",new JSONArray()
+            .put(new JSONObject().put("Source","Rotten Tomatoes").put("Value","94%"))
+            .put(new JSONObject().put("Source","Metacritic").put("Value","88/100"))));
+        JSONArray extraRatings=more.getJSONArray("cinemaRatings");
+        if(extraRatings.length()!=3||!extraRatings.getJSONObject(0).getString("source").equals("shikimori")||extraRatings.getJSONObject(1).getDouble("value")!=94||extraRatings.getJSONObject(2).getDouble("value")!=88)throw new AssertionError("Shikimori and OMDb ratings must retain their own scale");
         JSONObject artResult=new JSONObject();
         JSONObject art=new JSONObject().put("poster", "https://example.org/poster.jpg")
             .put("backdrop", "https://example.org/poster.jpg")

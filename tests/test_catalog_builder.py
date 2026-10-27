@@ -2,7 +2,7 @@
 import unittest
 from unittest.mock import patch
 
-from scripts.build_catalog import append_art, build, details, enrich, merge_catalog, normalize, split_snapshot, zona_availability, tmdb_image_url
+from scripts.build_catalog import append_art, build, details, enrich, merge_catalog, normalize, split_snapshot, zona_availability, tmdb_image_url, enrich_zona_metadata
 
 
 def record(kind="movie", imdb="tt0137523", kp=361, tmdb=550, name="Бойцовский клуб"):
@@ -42,6 +42,24 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(row["voiceoverLabels"], ["Дублированный", "Субтитры"])
         self.assertEqual(row["playableSources"], [])
         self.assertEqual(row["sourceAvailability"]["zona"], "unchecked")
+
+    @patch("scripts.build_catalog.fetch")
+    def test_zona_russian_name_requires_exact_id_and_year(self, fetch):
+        row = normalize(record())
+        row["title"] = "Fight Club"
+        row["titleRu"] = ""
+        row["description"] = ""
+        fetch.return_value = {"response": {"docs": [{"id": "361", "year": 1999,
+            "name_rus": "Бойцовский клуб", "name_eng": "Fight Club", "description": "Описание",
+            "rating_kinopoisk": 8.6}, {"id": "999", "name_rus": "Чужой фильм"}]}}
+        enrich_zona_metadata([row])
+        self.assertEqual(row["title"], "Бойцовский клуб")
+        self.assertIn("Fight Club", row["aliases"])
+        self.assertEqual(row["ratings"]["kinopoisk"], 8.6)
+        row["title"] = "Fight Club"
+        fetch.return_value["response"]["docs"][0]["year"] = 1984
+        enrich_zona_metadata([row])
+        self.assertEqual(row["title"], "Fight Club")
 
     @patch("scripts.build_catalog.fetch")
     def test_zona_hints_never_claim_verified_streams(self, fetch):

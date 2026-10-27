@@ -10,6 +10,7 @@ final class CinemaRatings {
         {"imdb", "IMDb", "10", "imdb"},
         {"tmdb", "TMDB", "10", "tmdb"},
         {"myanimelist", "MyAnimeList", "10", "myAnimeList", "myanimelist", "mal"},
+        {"shikimori", "Shikimori", "10", "shikimori"},
         {"anilist", "AniList", "100", "anilist", "aniList"},
         {"rottentomatoes", "Rotten Tomatoes", "100", "rottenTomatoes", "rottentomatoes", "tomatoes"},
         {"metacritic", "Metacritic", "100", "metacritic"}
@@ -28,6 +29,18 @@ final class CinemaRatings {
             for(int i=3;i<source.length;i++){
                 double candidate=value(scores.opt(source[i]));
                 if(!Double.isNaN(candidate)&&candidate>0&&candidate<=scale){rating=candidate;break;}
+            }
+            if(Double.isNaN(rating) && (source[0].equals("rottentomatoes") || source[0].equals("metacritic"))){
+                JSONArray omdb=scores.optJSONArray("omdb");
+                if(omdb!=null)for(int i=0;i<omdb.length();i++){
+                    JSONObject item=omdb.optJSONObject(i);if(item==null||!source[1].equalsIgnoreCase(item.optString("Source")))continue;
+                    String text=item.optString("Value").trim();
+                    if(text.endsWith("%"))text=text.substring(0,text.length()-1);
+                    else if(text.endsWith("/100"))text=text.substring(0,text.length()-4);
+                    else continue;
+                    double candidate=value(text);
+                    if(!Double.isNaN(candidate)&&candidate>0&&candidate<=100){rating=candidate;break;}
+                }
             }
             if(Double.isNaN(rating))continue;
             ratings.put(new JSONObject().put("source",source[0]).put("label",source[1]).put("value",rating).put("scale",scale));

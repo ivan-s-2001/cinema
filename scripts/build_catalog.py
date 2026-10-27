@@ -382,6 +382,45 @@ def details(row, key, season_limit=3):
         row["details"] = bundle
 
 
+def enrich_zona_metadata(rows):
+    """Fill Russian metadata only for exact Kinopoisk IDs and compatible years."""
+    by_id = defaultdict(list)
+    for row in rows:
+        kp = row.get("ids", {}).get("kinopoisk", "")
+        if kp.isdigit():
+            by_id[kp].append(row)
+    ids = list(by_id)
+    for offset in range(0, len(ids), 100):
+        batch = ids[offset:offset + 100]
+        params = urllib.parse.urlencode({
+            "wt": "json", "q": "id:(" + " OR ".join(batch) + ") AND adult:false",
+            "rows": 100, "fl": "id,name_rus,name_original,name_eng,description,year,rating_kinopoisk,rating_imdb",
+        })
+        response = fetch("https://zsolr3.zonasearch.com/solr/movie/select?" + params, optional=True) or {}
+        for doc in ((response.get("response") or {}).get("docs") or []):
+            for row in by_id.get(str(doc.get("id", "")), []):
+                old_year, new_year = row.get("year"), doc.get("year")
+                if old_year and new_year and str(old_year) != str(new_year):
+                    continue
+                russian = (doc.get("name_rus") or "").strip()
+                if russian:
+                    row["titleRu"] = russian
+                    row["title"] = russian
+                row["aliases"] = distinct(row["aliases"] + [russian, doc.get("name_eng"), doc.get("name_original")])
+                if not row.get("description") and doc.get("description"):
+                    row["description"] = doc["description"]
+                if not row.get("titleEn") and doc.get("name_eng"):
+                    row["titleEn"] = doc["name_eng"]
+                if not row.get("originalTitle") and doc.get("name_original"):
+                    row["originalTitle"] = doc["name_original"]
+                for field, key in (("rating_kinopoisk", "kinopoisk"), ("rating_imdb", "imdb")):
+                    value = doc.get(field)
+                    if not row["ratings"].get(key) and isinstance(value, (float, int)) and 0 < value <= 10:
+                        row["ratings"][key] = value
+                if "zona-metadata" not in row["sources"]:
+                    row["sources"].append("zona-metadata")
+
+
 def zona_availability(rows, limit=200):
     """Optional provider hints, never a promise that a stream will actually play."""
     selected = [r for r in rows if r["ids"].get("kinopoisk", "").isdigit()][:limit]
@@ -436,6 +475,7 @@ def build(key, pages, enrichment, tmdb_key="", detail_count=0, season_limit=3, a
     for row in candidates[:enrichment]:
         enrich(row, tmdb_key)
     if availability:
+        enrich_zona_metadata(rows)
         zona_availability(rows, availability)
     # Balance film and TV detail cards instead of starving TV behind movie pages.
     movies = [r for r in rows if r["type"] == "movie"]
