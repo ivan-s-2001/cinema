@@ -29,16 +29,12 @@ internal fun visibleSettingsCategories(
     isEssentialMode: Boolean,
     isDebugBuild: Boolean,
     isWatchPartyAvailable: Boolean = false
-): List<SettingsCategory> = SettingsCategory.entries.filter { category ->
-    when (category) {
-        SettingsCategory.ACCOUNT,
-        SettingsCategory.PROFILES -> isPrimaryProfile
-        SettingsCategory.WATCH_PARTY -> isWatchPartyAvailable
-        SettingsCategory.DEBUG -> isDebugBuild && !isEssentialMode
-        SettingsCategory.EXPERIENCE -> false
-        else -> true
-    }
-}
+): List<SettingsCategory> = listOf(
+    SettingsCategory.APPEARANCE,
+    SettingsCategory.LAYOUT,
+    SettingsCategory.PLAYBACK,
+    SettingsCategory.ABOUT
+)
 
 internal fun List<SettingsCategory>.startsNewGroup(index: Int): Boolean =
     index > 0 && this[index - 1].group != this[index].group

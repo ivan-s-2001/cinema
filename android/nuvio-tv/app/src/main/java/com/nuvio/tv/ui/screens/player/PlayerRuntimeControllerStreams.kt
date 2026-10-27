@@ -1900,14 +1900,15 @@ internal fun PlayerRuntimeController.playNextEpisode(userInitiated: Boolean = fa
         try {
             streamRepository.setLocalPluginSearchPaused(false)
             val playerSettings = playerSettingsDataStore.playerSettings.first()
-            val shouldAutoSelectInManualMode =
+            val cinemaEpisode = nextVideo.id.startsWith("ch:")
+            val shouldAutoSelectInManualMode = cinemaEpisode ||
                 playerSettings.streamAutoPlayMode == StreamAutoPlayMode.MANUAL &&
                     (
                         playerSettings.streamAutoPlayNextEpisodeEnabled ||
                             playerSettings.streamAutoPlayPreferBingeGroupForNextEpisode
                         )
             val bingeGroupOnlyManualMode =
-                shouldAutoSelectInManualMode &&
+                !cinemaEpisode && shouldAutoSelectInManualMode &&
                     (!playerSettings.streamAutoPlayNextEpisodeEnabled ||
                         !playerSettings.streamAutoPlayNextEpisodeFallbackEnabled) &&
                     playerSettings.streamAutoPlayPreferBingeGroupForNextEpisode
@@ -1962,6 +1963,7 @@ internal fun PlayerRuntimeController.playNextEpisode(userInitiated: Boolean = fa
             fun trySelectStream(data: List<AddonStreams>): Stream? {
                 val orderedStreams = StreamAutoPlaySelector.orderAddonStreams(data, installedAddonOrder, preferredServerNames)
                 val allStreams = orderedStreams.flatMap { it.streams }
+                if (cinemaEpisode) return cinemaPreferredStream(allStreams, playerSettings.cinemaPreferredQuality)
                 return StreamAutoPlaySelector.selectAutoPlayStream(
                     streams = allStreams,
                     mode = effectiveMode,
@@ -1981,6 +1983,7 @@ internal fun PlayerRuntimeController.playNextEpisode(userInitiated: Boolean = fa
             }
 
             fun tryBingeGroupOnly(data: List<AddonStreams>): Stream? {
+                if (cinemaEpisode) return trySelectStream(data)
                 if (currentStreamBingeGroup == null || !playerSettings.streamAutoPlayPreferBingeGroupForNextEpisode) return null
                 val orderedStreams = StreamAutoPlaySelector.orderAddonStreams(data, installedAddonOrder, preferredServerNames)
                 val allStreams = orderedStreams.flatMap { it.streams }

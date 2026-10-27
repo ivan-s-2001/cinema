@@ -893,23 +893,9 @@ private fun SettingsDetailPane(
             },
             essentialMode = isEssentialMode
         )
-        SettingsCategory.PLAYBACK -> if (isEssentialMode) {
-            EssentialPlaybackSettingsContent(
-                initialFocusRequester = if (allowDetailAutofocus) {
-                    contentFocusRequesters[SettingsCategory.PLAYBACK]
-                } else {
-                    null
-                }
-            )
-        } else {
-            PlaybackSettingsContent(
-                initialFocusRequester = if (allowDetailAutofocus) {
-                    contentFocusRequesters[SettingsCategory.PLAYBACK]
-                } else {
-                    null
-                }
-            )
-        }
+        SettingsCategory.PLAYBACK -> EssentialPlaybackSettingsContent(
+            initialFocusRequester = if (allowDetailAutofocus) contentFocusRequesters[SettingsCategory.PLAYBACK] else null
+        )
         SettingsCategory.ADVANCED -> if (isEssentialMode) {
             EssentialAdvancedSettingsContent(
                 experienceModeViewModel = experienceModeViewModel,
