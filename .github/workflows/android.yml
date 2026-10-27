@@ -4,6 +4,9 @@ on:
     branches: [rewrite/streambert-android]
   pull_request:
   workflow_dispatch:
+concurrency:
+  group: cinemahall-nuvio-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -48,9 +51,12 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           cmdline-tools-version: '16111833'
+          packages: 'platform-tools'
       - uses: gradle/actions/setup-gradle@v4
       - run: python3 scripts/prepare_nuvio.py --target '${{ matrix.target }}'
       - run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - if: matrix.target == 'mobile'
+        run: sdkmanager "platforms;android-37.1"
       - run: python3 scripts/check_provider.py
       - run: python3 scripts/fetch_engine.py
       - uses: actions/download-artifact@v4

@@ -44,7 +44,7 @@ jobs:
             android/core/app/src/main/java/app/cinemahall/tv/Sources.java
 
   snapshot:
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch'
     needs: verify
     runs-on: ubuntu-latest
     steps:
