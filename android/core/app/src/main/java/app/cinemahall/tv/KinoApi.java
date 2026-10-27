@@ -26,7 +26,7 @@ final class KinoApi {
             if (poster.isEmpty() && kp != null) poster = valid(kp.optString("poster"));
             String backdrop = valid(images.optString("backdrop"));
             if (backdrop.equals(poster)) backdrop = "";
-            if (backdrop.isEmpty()) backdrop = first(images.optJSONArray("backdrops"), poster);
+            if (backdrop.isEmpty()) backdrop = firstBackdrop(images.optJSONArray("backdrops"), poster, images.optJSONArray("posters"));
             if (!poster.isEmpty()) result.put("poster", poster);
             if (!backdrop.isEmpty()) result.put("background", backdrop);
             if (result.optString("background").equals(result.optString("poster"))) result.remove("background");
@@ -37,6 +37,20 @@ final class KinoApi {
                 if (title.has(field)) result.put(field, title.get(field));
             result.put("kinoapi", true);
         }
+    }
+
+    private static String firstBackdrop(JSONArray items, String poster, JSONArray posters) {
+        if (items == null) return "";
+        for (int i = 0; i < items.length(); i++) {
+            String url = valid(items.optString(i));
+            if (url.isEmpty() || url.equals(poster)) continue;
+            boolean portrait = false;
+            if (posters != null) for (int j = 0; j < posters.length(); j++) {
+                if (url.equals(posters.optString(j))) { portrait = true; break; }
+            }
+            if (!portrait) return url;
+        }
+        return "";
     }
 
     private static String valid(String url) {
