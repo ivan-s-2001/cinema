@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 final class Metadata {
     static final String CINEMETA="https://v3-cinemeta.strem.io";
     static final String TVMAZE="https://api.tvmaze.com";
+    static final String EPISODATE="https://www.episodate.com/api";
     static JSONArray array(String url) throws Exception {
         return new JSONArray(new String(Net.request(url,null,8*1024*1024),StandardCharsets.UTF_8));
     }
@@ -96,9 +97,37 @@ final class Metadata {
                     }
                 }catch(Exception ignored){}
             }
+            // Keyless TV series fallback, strictly matched by title and premiere year.
+            // EpisoDate is only used for missing episode lists; it does not fabricate stills.
+            if(serial&&details&&(result.optJSONArray("episodes")==null||result.optJSONArray("episodes").length()==0)){
+                try{
+                    JSONArray matches=Net.json(EPISODATE+"/search?q="+Net.enc(title),(JSONObject)null).optJSONArray("tv_shows");
+                    if(matches!=null)for(int i=0;i<Math.min(matches.length(),12);i++){
+                        JSONObject candidate=matches.optJSONObject(i);
+                        if(candidate==null||!Logic.sameTitle(title,film.optInt("year"),candidate.optString("name"),candidate.optString("start_date")))continue;
+                        String id=candidate.optString("id");
+                        if(!id.matches("[0-9]{1,12}"))continue;
+                        JSONObject show=Net.json(EPISODATE+"/show-details?q="+id,(JSONObject)null).optJSONObject("tvShow");
+                        if(show==null||!Logic.sameTitle(title,film.optInt("year"),show.optString("name"),show.optString("start_date")))continue;
+                        JSONArray sourceEpisodes=show.optJSONArray("episodes"),episodes=new JSONArray();
+                        if(sourceEpisodes!=null)for(int j=0;j<sourceEpisodes.length();j++){
+                            JSONObject ep=sourceEpisodes.optJSONObject(j);if(ep==null)continue;
+                            int season=ep.optInt("season"),number=ep.optInt("episode");
+                            if(season<1||number<1)continue;
+                            episodes.put(new JSONObject().put("season",season).put("number",number)
+                                .put("name",ep.optString("name")).put("airdate",ep.optString("air_date")));
+                        }
+                        if(episodes.length()>0){
+                            result.put("episodes",episodes);
+                            result.put("episodate", "https://www.episodate.com/tv-show/"+candidate.optString("permalink"));
+                        }
+                        break;
+                    }
+                }catch(Exception ignored){}
+            }
             if(result.optString("background").equals(result.optString("poster")))result.remove("background");
             // A short negative cache prevents repeated requests for unmatched titles.
-            result.put("fetched",System.currentTimeMillis()-(result.has("imdb")||result.has("tvmaze")?0:82800000L));
+            result.put("fetched",System.currentTimeMillis()-(result.has("imdb")||result.has("tvmaze")||result.has("episodate")?0:82800000L));
             cache.edit().putString(key,result.toString()).apply();
         }catch(Exception ignored){}
         return result;
