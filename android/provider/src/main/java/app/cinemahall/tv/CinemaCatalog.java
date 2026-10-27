@@ -38,13 +38,16 @@ final class CinemaCatalog {
         }
         if(parts[0].equals("meta")){
             JSONObject bundled=snapshot.detail(id);
-            if(bundled!=null&&parts[1].equals("series")&&bundled.getJSONArray("videos").length()==0){
+            if(bundled!=null&&parts[1].equals("series")){
                 JSONObject source=snapshot.document(id);
                 if(source!=null&&source.optString("id").matches("[0-9]{1,12}"))try{
-                    JSONObject live=meta(document("ch:"+source.getString("id")),true);JSONArray videos=live.optJSONArray("videos");
-                    if(videos!=null)for(int i=0;i<videos.length();i++){JSONObject ep=videos.getJSONObject(i);ep.put("id",id+":"+ep.getInt("season")+":"+ep.getInt("episode"));}
+                    JSONObject film=document("ch:"+source.getString("id"));JSONArray videos=bundled.getJSONArray("videos");
+                    mergeKnownEpisodes(id,videos,film.optString("episodes"));
+                    // The enrichment budget limits descriptions, never the actual series navigation.
+                    if(videos.length()==0){JSONObject live=meta(film,true);JSONArray extra=live.optJSONArray("videos");
+                        if(extra!=null)for(int i=0;i<extra.length();i++){JSONObject ep=extra.getJSONObject(i);ep.put("id",id+":"+ep.getInt("season")+":"+ep.getInt("episode"));videos.put(ep);}
+                        if(live.optString("description").contains("TVmaze"))bundled.put("description",live.getString("description"));}
                     bundled.put("videos",videos);
-                    if(live.optString("description").contains("TVmaze"))bundled.put("description",live.getString("description"));
                 }catch(Exception optional){} // Keep the base card if optional episode enrichment fails.
             }
             return new Reply(new JSONObject().put("meta",bundled!=null?bundled:meta(document(id),true)).toString());
@@ -73,6 +76,13 @@ final class CinemaCatalog {
         if(match.matches())return new String[]{match.group(1),"S"+Integer.parseInt(match.group(2))+"E"+Integer.parseInt(match.group(3))};
         return new String[]{id,""};
     }
+    static void mergeKnownEpisodes(String titleId,JSONArray videos,String source) throws Exception {
+        identity(titleId);HashSet<String> known=new HashSet<>();
+        for(int i=0;i<videos.length();i++){JSONObject ep=videos.getJSONObject(i);known.add("S"+ep.getInt("season")+"E"+ep.getInt("episode"));}
+        java.util.regex.Matcher keys=java.util.regex.Pattern.compile("(?i)S([0-9]{1,3})E([0-9]{1,4})").matcher(source);
+        while(keys.find()){int s=Integer.parseInt(keys.group(1)),e=Integer.parseInt(keys.group(2));
+            if(s>0&&e>0&&known.add("S"+s+"E"+e))videos.put(new JSONObject().put("id",titleId+":"+s+":"+e).put("season",s).put("episode",e).put("title","Серия "+e));}
+    }
     private JSONObject catalog(String type,String category,String search,int skip) throws Exception {
         String filter=AVAILABLE+" AND serial:"+type.equals("series");
         if(category.equals("animation"))filter+=" AND genre_name:\"мультфильм\"";if(category.equals("scifi"))filter+=" AND genre_name:\"фантастика\"";
@@ -100,8 +110,7 @@ final class CinemaCatalog {
                 if(ep.optJSONObject("image")!=null)video.put("thumbnail",ep.getJSONObject("image").optString("original"));
                 if(!ep.optString("airdate").isEmpty())video.put("released",ep.optString("airdate")+"T00:00:00.000Z");videos.put(video);
             }
-            java.util.regex.Matcher keys=java.util.regex.Pattern.compile("(?i)S([0-9]{1,3})E([0-9]{1,4})").matcher(film.optString("episodes"));
-            while(keys.find()){int s=Integer.parseInt(keys.group(1)),e=Integer.parseInt(keys.group(2));if(s>0&&e>0&&seen.add("S"+s+"E"+e))videos.put(new JSONObject().put("id","ch:"+id+":"+s+":"+e).put("season",s).put("episode",e).put("title","Серия "+e));}
+            mergeKnownEpisodes("ch:"+id,videos,film.optString("episodes"));
             result.put("videos",videos);if(art.has("tvmaze"))result.put("description",result.optString("description")+"\n\nЭпизоды: TVmaze (CC BY-SA 4.0), "+art.optString("tvmaze"));
         }
         return result;

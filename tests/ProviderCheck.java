@@ -22,6 +22,9 @@ public final class ProviderCheck {
         }
         JSONObject row=new JSONObject().put("type","movie").put("ids",new JSONObject().put("tmdb","42").put("kinopoisk","999")).put("collisionSuffix","alternate");
         if(!CinemaSnapshot.stableId(row).equals("movie:tmdb:42:alternate"))throw new AssertionError("Conflict suffix lost");
+        JSONArray episodes=new JSONArray().put(new JSONObject().put("season",1).put("episode",1).put("title","Known title"));
+        CinemaCatalog.mergeKnownEpisodes(snapshot,episodes,"S01E01 S04E02 S04E02 S00E00");
+        if(episodes.length()!=2||!episodes.getJSONObject(0).getString("title").equals("Known title")||!episodes.getJSONObject(1).getString("id").equals(snapshot+":4:2"))throw new AssertionError("Detail budget must not hide later seasons or overwrite episode metadata");
         System.out.println("CinemaHall provider contract passed");
     }
 }
