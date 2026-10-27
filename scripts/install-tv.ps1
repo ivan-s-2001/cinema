@@ -128,7 +128,7 @@ foreach ($BuildTarget in $BuildTargets) {
     $Output = Join-Path $AppRoot ($ModuleName + '\build\outputs\apk\full\debug')
     $ApkFile = Get-ChildItem -LiteralPath $Output -Filter '*.apk' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
     if (-not $ApkFile) { throw "APK not found: $Output" }
-    $BuiltApks += @{ Path=$ApkFile.FullName; Package=('app.cinemahall.' + $BuildTarget) }
+    $BuiltApks += @{ Output=$Output; Package=('app.cinemahall.' + $BuildTarget) }
     Write-Host ("APK: " + $ApkFile.FullName) -ForegroundColor Green
 }
 if ($BuildOnly) { return }
@@ -148,9 +148,28 @@ for ($attempt=0; $attempt -lt 45; $attempt++) {
 }
 if (-not $ready) { throw 'ТВ не авторизовал ADB за 90 секунд. Подтвердите разрешение на ТВ и запустите скрипт повторно.' }
 
+$DeviceAbiText = (& $Adb -s $TvAddress shell getprop ro.product.cpu.abilist) -join ''
+if ($LASTEXITCODE -ne 0) { throw 'Could not read device ABIs.' }
+$DeviceAbis = @($DeviceAbiText.Trim() -split ',' | Where-Object { $_ })
+if (-not $DeviceAbis.Count) { throw 'Device returned an empty ABI list.' }
+Write-Host ("Device ABIs: " + ($DeviceAbis -join ', ')) -ForegroundColor Cyan
+
 Write-Host '[6/6] Install and launch CinemaHall' -ForegroundColor Cyan
 foreach ($BuiltApk in $BuiltApks) {
-    $Apk = $BuiltApk.Path
+    $Metadata = Get-Content -Raw -LiteralPath (Join-Path $BuiltApk.Output 'output-metadata.json') | ConvertFrom-Json
+    $SelectedApk = $null
+    foreach ($DeviceAbi in $DeviceAbis) {
+        $SelectedApk = $Metadata.elements | Where-Object {
+            @($_.filters | Where-Object { $_.filterType -eq 'ABI' -and $_.value -eq $DeviceAbi }).Count -gt 0
+        } | Select-Object -First 1
+        if ($SelectedApk) { break }
+    }
+    if (-not $SelectedApk) {
+        $SelectedApk = $Metadata.elements | Where-Object { @($_.filters).Count -eq 0 } | Select-Object -First 1
+    }
+    if (-not $SelectedApk) { throw ("No compatible APK for device ABIs: " + ($DeviceAbis -join ', ')) }
+    $Apk = Join-Path $BuiltApk.Output $SelectedApk.outputFile
+    Write-Host ("Installing: " + $Apk) -ForegroundColor Cyan
     Invoke-Checked { & $Adb -s $TvAddress install -r $Apk }
     # Resolve each project's real launcher rather than hard-coding upstream Activity names.
     Invoke-Checked { & $Adb -s $TvAddress shell monkey -p $BuiltApk.Package -c android.intent.category.LAUNCHER 1 }
