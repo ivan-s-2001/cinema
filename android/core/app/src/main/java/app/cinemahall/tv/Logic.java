@@ -56,6 +56,26 @@ public final class Logic {
             if(Pattern.compile("(?<!\\d)"+p+"p?(?!\\d)").matcher(value).find())return p+"p";
         return "Не указано";
     }
+    /** Labels inferred from a release name, not verified video/audio stream capabilities. */
+    public static List<String> releaseTechnologyHints(String raw) {
+        String title=raw==null?"":raw.toUpperCase(Locale.ROOT);
+        LinkedHashSet<String> labels=new LinkedHashSet<>();
+        if(Pattern.compile("(?<![A-Z0-9])(?:DOLBY[ ._-]*VISION|DOVI|DV)(?![A-Z0-9])").matcher(title).find())labels.add("Dolby Vision");
+        if(Pattern.compile("(?<![A-Z0-9])HDR[ ._-]*10\\+|(?<![A-Z0-9])HDR10PLUS").matcher(title).find())labels.add("HDR10+");
+        else if(Pattern.compile("(?<![A-Z0-9])(?:HDR10|HDR)(?![A-Z0-9])").matcher(title).find())labels.add("HDR");
+        if(Pattern.compile("(?<![A-Z0-9])HLG(?![A-Z0-9])").matcher(title).find())labels.add("HLG");
+        if(Pattern.compile("(?<![A-Z0-9])(?:HEVC|H[ ._-]*265|X265)(?![A-Z0-9])").matcher(title).find())labels.add("HEVC");
+        else if(Pattern.compile("(?<![A-Z0-9])(?:AVC|H[ ._-]*264|X264)(?![A-Z0-9])").matcher(title).find())labels.add("H.264");
+        else if(Pattern.compile("(?<![A-Z0-9])AV1(?![A-Z0-9])").matcher(title).find())labels.add("AV1");
+        if(Pattern.compile("(?<![A-Z0-9])ATMOS(?![A-Z0-9])").matcher(title).find())labels.add("Dolby Atmos");
+        if(Pattern.compile("(?<![A-Z0-9])DTS[ ._-]*X(?![A-Z0-9])").matcher(title).find())labels.add("DTS:X");
+        else if(Pattern.compile("(?<![A-Z0-9])DTS[ ._-]*HD(?![A-Z0-9])").matcher(title).find())labels.add("DTS-HD");
+        if(Pattern.compile("(?<![A-Z0-9])(?:TRUEHD|TRUE[ ._-]*HD)(?![A-Z0-9])").matcher(title).find())labels.add("TrueHD");
+        if(Pattern.compile("(?<![A-Z0-9])(?:EAC3|E[ ._-]*AC[ ._-]*3|DDP)(?![A-Z0-9])").matcher(title).find())labels.add("DD+");
+        if(Pattern.compile("(?<![A-Z0-9])(?:WEB[ ._-]*DL|WEBDL)(?![A-Z0-9])").matcher(title).find())labels.add("WEB-DL");
+        else if(Pattern.compile("(?<![A-Z0-9])(?:BLURAY|BLU[ ._-]*RAY|BDREMUX|REMUX)(?![A-Z0-9])").matcher(title).find())labels.add("Blu-ray");
+        return new ArrayList<>(labels);
+    }
     public static String infoHash(String link) {
         Matcher match=Pattern.compile("(?i)(?:[?&])xt=urn:btih:([a-f0-9]{40}|[a-z2-7]{32})(?:&|$)").matcher(link==null?"":link);
         return match.find()?match.group(1).toLowerCase(Locale.ROOT):"";
