@@ -6,9 +6,9 @@ import java.util.*;
 
 /** Internal routing only: no torrent vocabulary belongs in the viewing UI. */
 final class Sources {
-    private static final long CACHE_MS=90_000;
-    private static final LinkedHashMap<List<?>,CacheEntry> CACHE=new LinkedHashMap<List<?>,CacheEntry>(8,.75f,true){
-        @Override protected boolean removeEldestEntry(Map.Entry<List<?>,CacheEntry> item){return size()>8;}
+    private static final long CACHE_MS=180_000;
+    private static final LinkedHashMap<List<?>,CacheEntry> CACHE=new LinkedHashMap<List<?>,CacheEntry>(16,.75f,true){
+        @Override protected boolean removeEldestEntry(Map.Entry<List<?>,CacheEntry> item){return size()>16;}
     };
     private static final class CacheEntry {
         final long created; final ArrayList<Candidate> candidates;
@@ -94,9 +94,9 @@ final class Sources {
                 if(torznab)for(String term:queries){
                     try{append(result,seen,search("/torznab/search/",term),"torznab",names);}
                     catch(Exception ignored){} // Optional indexers must not break Zona.
-                    if(result.size()>=250||result.size()-firstExtra>=30)break;
+                    if(result.size()>=400||result.size()-firstExtra>=80)break;
                 }
-                if(rutor&&!queries.isEmpty()&&result.size()<250){
+                if(rutor&&!queries.isEmpty()&&result.size()<400){
                     try{append(result,seen,search("/search/",queries.get(0)),"rutor",names);}
                     catch(Exception ignored){}
                 }
@@ -112,7 +112,7 @@ final class Sources {
         return new JSONArray(new String(data,StandardCharsets.UTF_8));
     }
     private static void append(ArrayList<Candidate> result,HashSet<String> seen,JSONArray docs,String source,List<String> aliases){
-        for(int i=0;i<docs.length()&&result.size()<300;i++){
+        for(int i=0;i<docs.length()&&result.size()<450;i++){
             JSONObject json=docs.optJSONObject(i);if(json==null)continue;
             if(!"zona".equals(source)&&!Logic.torrentMatches(json.optString("Title",json.optString("Name")),aliases))continue;
             Candidate candidate=new Candidate(json,source);
