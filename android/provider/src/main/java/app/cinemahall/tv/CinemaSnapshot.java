@@ -54,7 +54,14 @@ final class CinemaSnapshot {
             Map<String,Double> ratings=new HashMap<>();for(JSONObject e:matches){double score;if(e.has("topRating"))score=e.optDouble("topRating",0);else{JSONObject row=raw("ch:snapshot:"+e.getString("id"));score=rating(row==null?null:row.optJSONObject("ratings"));}ratings.put(e.getString("id"),score);}
             matches.sort((a,b)->Double.compare(ratings.get(b.optString("id")),ratings.get(a.optString("id"))));
         }
-        for(int i=skip;i<Math.min(matches.size(),skip+24);i++)result.put(compact(matches.get(i)));
+        // Read each shard at most once per page while preserving the requested sort order.
+        ArrayList<JSONObject> page=new ArrayList<>();
+        for(int i=skip;i<Math.min(matches.size(),skip+24);i++)page.add(matches.get(i));
+        ArrayList<JSONObject> grouped=new ArrayList<>(page);
+        grouped.sort(Comparator.comparing(entry->entry.optString("shard")));
+        Map<String,JSONObject> previews=new HashMap<>();
+        for(JSONObject entry:grouped)previews.put(entry.getString("id"),compact(entry));
+        for(JSONObject entry:page)result.put(previews.get(entry.getString("id")));
         return new JSONObject().put("metas",result).put("hasMore",skip+24<matches.size());
     }
     private static double rating(JSONObject scores){if(scores==null)return 0;for(String key:new String[]{"kinopoisk","imdb","tmdb"}){Object v=scores.opt(key);if(v instanceof Number)return ((Number)v).doubleValue();if(v instanceof JSONObject){double value=((JSONObject)v).optDouble("value",0);if(value>0)return value;}}return 0;}
