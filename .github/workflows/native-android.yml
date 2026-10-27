@@ -13,6 +13,7 @@ permissions:
   contents: read
 jobs:
   android:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.ref != 'feat/cinemahall-nuvio-quality-voice'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:

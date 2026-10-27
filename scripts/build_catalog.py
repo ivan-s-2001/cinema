@@ -64,7 +64,7 @@ def fetch(url, *, key="", body=None, optional=False):
         headers["Content-Type"] = "application/json"
     request = urllib.request.Request(url, headers=headers, data=json.dumps(body).encode() if body else None)
     host = urllib.parse.urlparse(url).hostname or "unknown"
-    for attempt in range(3):
+    for attempt in range(5):
         try:
             _requests[host] += 1
             with _opener.open(request, timeout=12) as response:
@@ -75,12 +75,12 @@ def fetch(url, *, key="", body=None, optional=False):
                     raise ValueError("Response too large")
                 return json.loads(payload)
         except urllib.error.HTTPError as error:
-            if error.code in (429, 503) and attempt < 2:
+            if error.code in (429, 503) and attempt < 4:
                 try:
-                    delay = min(5, max(1, int(error.headers.get("Retry-After", "2"))))
+                    delay = max(2 ** attempt, int(error.headers.get("Retry-After", "0")))
                 except ValueError:
-                    delay = 2
-                time.sleep(delay)
+                    delay = 2 ** attempt
+                time.sleep(min(60, max(1, delay)))
                 continue
             if optional:
                 _failed[host] += 1
