@@ -62,6 +62,7 @@ final class CinemaCatalog {
                             if(video.optString("thumbnail").isEmpty()&&image!=null&&!image.optString("original").isEmpty())video.put("thumbnail",image.optString("original"));
                         }
                     }
+                    fillEpisodeArtwork(videos,bundled.optString("background"),bundled.optString("poster"));
                     bundled.put("videos",videos);
                 }catch(Exception optional){} // Keep the base card if optional episode enrichment fails.
             }
@@ -101,6 +102,14 @@ final class CinemaCatalog {
         java.util.regex.Matcher match=java.util.regex.Pattern.compile("^(ch:.*):([0-9]{1,3}):([0-9]{1,4})$").matcher(id);
         if(match.matches())return new String[]{match.group(1),"S"+Integer.parseInt(match.group(2))+"E"+Integer.parseInt(match.group(3))};
         return new String[]{id,""};
+    }
+    /** Use the series backdrop only when an episode still is unavailable. */
+    static void fillEpisodeArtwork(JSONArray videos,String background,String poster) throws JSONException {
+        if(background==null||background.isEmpty()||background.equals(poster))return;
+        for(int i=0;i<videos.length();i++){
+            JSONObject video=videos.optJSONObject(i);
+            if(video!=null&&video.optString("thumbnail").trim().isEmpty())video.put("thumbnail",background);
+        }
     }
     static void mergeKnownEpisodes(String titleId,JSONArray videos,String source) throws Exception {
         identity(titleId);HashSet<String> known=new HashSet<>();

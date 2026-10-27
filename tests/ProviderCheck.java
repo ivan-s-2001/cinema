@@ -25,6 +25,12 @@ public final class ProviderCheck {
         JSONArray episodes=new JSONArray().put(new JSONObject().put("season",1).put("episode",1).put("title","Known title"));
         CinemaCatalog.mergeKnownEpisodes(snapshot,episodes,"S01E01 S04E02 S04E02 S00E00");
         if(episodes.length()!=2||!episodes.getJSONObject(0).getString("title").equals("Known title")||!episodes.getJSONObject(1).getString("id").equals(snapshot+":4:2"))throw new AssertionError("Detail budget must not hide later seasons or overwrite episode metadata");
+        JSONArray pictures=new JSONArray().put(new JSONObject().put("thumbnail","https://example.org/still.jpg")).put(new JSONObject());
+        CinemaCatalog.fillEpisodeArtwork(pictures,"https://example.org/wide.jpg","https://example.org/poster.jpg");
+        if(!pictures.getJSONObject(0).getString("thumbnail").endsWith("still.jpg")||!pictures.getJSONObject(1).getString("thumbnail").endsWith("wide.jpg"))throw new AssertionError("Episode still must take precedence over series backdrop");
+        JSONArray missing=new JSONArray().put(new JSONObject());
+        CinemaCatalog.fillEpisodeArtwork(missing,"https://example.org/poster.jpg","https://example.org/poster.jpg");
+        if(missing.getJSONObject(0).has("thumbnail"))throw new AssertionError("Portrait cannot be used as episode still");
         JSONObject artResult=new JSONObject();
         JSONObject art=new JSONObject().put("poster", "https://example.org/poster.jpg")
             .put("backdrop", "https://example.org/poster.jpg")

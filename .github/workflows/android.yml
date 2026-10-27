@@ -71,7 +71,7 @@ jobs:
         run: |
           if [ '${{ matrix.target }}' = 'tv' ]; then
             cd android/nuvio-tv
-            ./gradlew :app:assembleFullDebug --no-daemon --max-workers=2
+            ./gradlew :app:assembleFullDebug :app:testFullDebugUnitTest --tests "com.nuvio.tv.ui.screens.stream.CinemaQualityTest" --tests "com.nuvio.tv.ui.screens.settings.SettingsCatalogTest" --no-daemon --max-workers=2
           else
             cd android/nuvio-mobile
             ./gradlew :androidApp:assembleFullDebug --no-daemon --max-workers=2
