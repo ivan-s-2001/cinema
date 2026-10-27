@@ -154,7 +154,11 @@ final class CinemaCatalog {
                 qualities.put(new JSONObject().put("id",q.getKey()).put("label",q.getKey()).put("voices",voiceOptions));
             }
             // CinemaHall's own UI uses qualities[]; the native Nuvio adapter uses streams[].
-            return new Reply(new JSONObject().put("streams",streams).put("qualities",qualities).toString());
+            return new Reply(new JSONObject().put("streams",streams).put("qualities",qualities)
+                .put("automatic",streams.length()>0).put("availableReleases",candidates.size())
+                .put("recommendedQuality",preferred.isEmpty()?"":preferred.get(0).quality)
+                .put("recommendedVoice",preferred.isEmpty()?"":preferred.get(0).translation)
+                .toString());
         }
         throw new Exception("Unknown route");
     }
