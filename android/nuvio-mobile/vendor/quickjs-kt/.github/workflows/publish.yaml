@@ -1,0 +1,60 @@
+name: Publish
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Setup JDK
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'adopt'
+          cache: gradle
+
+      # Build system for C
+      - name: Setup CMake
+        uses: jwlawson/actions-setup-cmake@v2.2
+
+      # CMake generator
+      - name: Setup ninja-build
+        uses: seanmiddleditch/gha-setup-ninja@master
+
+      # Cross-compile native libraries
+      - name: Setup Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.12.0
+
+      # Run js/ts scripts
+      - name: Set Bun.js
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install multiplatform JDKs
+        run: bun scripts/setupMultiplatformJdks.ts
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Grant execute permission for scripts
+        run: |
+          chmod +x gradlew
+          chmod +x quickjs/native/cmake/zig-ar.sh
+          chmod +x quickjs/native/cmake/zig-ranlib.sh
+
+      - name: Publish to Sonatype
+        run: ./gradlew publish --no-configuration-cache
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.GPG_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyId: ${{ secrets.GPG_KEY_ID }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.GPG_KEY_PASSWORD }}

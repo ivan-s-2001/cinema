@@ -1,0 +1,99 @@
+diff --git a/audio/out/ao_audiounit.m b/audio/out/ao_audiounit.m
+--- a/audio/out/ao_audiounit.m
++++ b/audio/out/ao_audiounit.m
+@@ -24,6 +24,7 @@
+ #include "ao_coreaudio_utils.h"
+ #include "ao_coreaudio_chmap.h"
+ 
++#include <stddef.h>
+ #include <stdint.h>
+ 
+ #import <AudioUnit/AudioUnit.h>
+@@ -141,6 +142,29 @@
+     return noErr;
+ }
+ 
++static struct mp_chmap select_channel_map(const AudioChannelLayout *layout,
++                                          UInt32 size, bool prefer_stereo)
++{
++    struct mp_chmap stereo = MP_CHMAP_INIT_STEREO;
++    size_t header_size = offsetof(AudioChannelLayout, mChannelDescriptions);
++    if (prefer_stereo || !layout || size < header_size ||
++        layout->mNumberChannelDescriptions == 0 ||
++        layout->mNumberChannelDescriptions > MP_NUM_CHANNELS ||
++        layout->mNumberChannelDescriptions >
++            (size - header_size) / sizeof(AudioChannelDescription))
++        return stereo;
++
++    struct mp_chmap channels = {.num = layout->mNumberChannelDescriptions};
++    for (int n = 0; n < channels.num; n++) {
++        int speaker = ca_label_to_mp_speaker_id(layout->mChannelDescriptions[n].mChannelLabel);
++        if (speaker < 0 || speaker >= MP_SPEAKER_ID_NA)
++            return stereo;
++        channels.speaker[n] = speaker;
++    }
++
++    return mp_chmap_is_valid(&channels) ? channels : stereo;
++}
++
+ static bool init_audiounit(struct ao *ao)
+ {
+     AudioStreamBasicDescription asbd;
+@@ -149,12 +173,6 @@
+     AudioChannelLayout *layout = NULL;
+     struct priv *p = ao->priv;
+     AVAudioSession *instance = AVAudioSession.sharedInstance;
+-    AVAudioSessionPortDescription *port = nil;
+-    NSInteger maxChannels = instance.maximumOutputNumberOfChannels;
+-    NSInteger prefChannels = MIN(maxChannels, ao->channels.num);
+-
+-    MP_VERBOSE(ao, "max channels: %ld, requested: %d\n", maxChannels, (int)ao->channels.num);
+-
+     AVAudioSessionCategoryOptions options = 0;
+     if (!(ao->init_flags & AO_INIT_EXCLUSIVE)) {
+         options |= AVAudioSessionCategoryOptionMixWithOthers;
+@@ -163,7 +181,17 @@
+     [instance setCategory:AVAudioSessionCategoryPlayback withOptions:options error:nil];
+     [instance setMode:AVAudioSessionModeMoviePlayback error:nil];
+     [instance setActive:YES error:nil];
+-    [instance setPreferredOutputNumberOfChannels:prefChannels error:nil];
++
++    bool shared_audio = instance.otherAudioPlaying;
++    NSInteger maxChannels = instance.maximumOutputNumberOfChannels;
++    NSInteger prefChannels = MIN(maxChannels, ao->channels.num);
++    if (shared_audio)
++        prefChannels = MIN(prefChannels, 2);
++    if (prefChannels > 0)
++        [instance setPreferredOutputNumberOfChannels:prefChannels error:nil];
++
++    MP_VERBOSE(ao, "max channels: %ld, requested: %d, other audio: %d\n",
++               maxChannels, (int)ao->channels.num, shared_audio);
+ 
+     AudioComponentDescription desc = (AudioComponentDescription) {
+         .componentType         = kAudioUnitType_Output,
+@@ -199,21 +227,10 @@
+         goto coreaudio_error_audiounit;
+     }
+ 
+-    for (UInt32 i = 0; i < layout->mNumberChannelDescriptions; i++) {
+-        MP_VERBOSE(ao, "channel map: %i: %u\n", i, layout->mChannelDescriptions[i].mChannelLabel);
+-    }
+-
+-    if (af_fmt_is_spdif(ao->format) || instance.outputNumberOfChannels <= 2) {
+-        ao->channels = (struct mp_chmap)MP_CHMAP_INIT_STEREO;
+-        MP_VERBOSE(ao, "using stereo output\n");
+-    } else {
+-        ao->channels.num = (uint8_t)layout->mNumberChannelDescriptions;
+-        for (UInt32 i = 0; i < layout->mNumberChannelDescriptions; i++) {
+-          ao->channels.speaker[i] =
+-              ca_label_to_mp_speaker_id(layout->mChannelDescriptions[i].mChannelLabel);
+-        }
+-        MP_VERBOSE(ao, "using standard channel mapping\n");
+-    }
++    bool prefer_stereo = shared_audio || af_fmt_is_spdif(ao->format) ||
++                         instance.outputNumberOfChannels <= 2;
++    ao->channels = select_channel_map(layout, size, prefer_stereo);
++    MP_VERBOSE(ao, "using AudioUnit channel map: %s\n", mp_chmap_to_str(&ao->channels));
+ 
+     ca_fill_asbd(ao, &asbd);
+     size = sizeof(AudioStreamBasicDescription);

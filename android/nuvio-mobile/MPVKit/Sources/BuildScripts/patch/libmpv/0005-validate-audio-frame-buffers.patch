@@ -1,0 +1,21 @@
+diff --git a/audio/out/buffer.c b/audio/out/buffer.c
+--- a/audio/out/buffer.c
++++ b/audio/out/buffer.c
+@@ -143,6 +143,17 @@
+ 
+         int copy = mp_aframe_get_size(p->pending);
+         uint8_t **fdata = mp_aframe_get_data_ro(p->pending);
++        bool valid = fdata && mp_aframe_get_planes(p->pending) == ao->num_planes &&
++                     mp_aframe_get_sstride(p->pending) == ao->sstride &&
++                     mp_aframe_get_format(p->pending) == ao->format;
++        for (int n = 0; valid && n < ao->num_planes; n++)
++            valid = fdata[n] != NULL;
++        if (!valid) {
++            MP_ERR(ao, "Invalid audio frame buffers; reinitializing audio output\n");
++            TA_FREEP(&p->pending);
++            ao_request_reload(ao);
++            break;
++        }
+         copy = MPMIN(copy, samples - pos);
+         for (int n = 0; n < ao->num_planes; n++) {
+             memcpy((char *)data[n] + pos * ao->sstride,

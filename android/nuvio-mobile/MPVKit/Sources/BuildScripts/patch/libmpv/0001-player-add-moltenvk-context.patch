@@ -1,0 +1,471 @@
+diff --git forkSrcPrefix/meson.build forkDstPrefix/meson.build
+index 7572769e0e6f280391668c6797d67e37e2dea30f..e6109987a3d38025a5eede04441c03ee23413255 100644
+--- forkSrcPrefix/meson.build
++++ forkDstPrefix/meson.build
+@@ -1315,6 +1315,17 @@ if features['vulkan'] and features['x11']
+      sources += files('video/out/vulkan/context_xlib.c')
+ endif
+ 
++if host_machine.system() == 'darwin'
++    moltenvk = get_option('moltenvk').require(
++        features['vulkan'],
++        error_message: 'vulkan or moltenvk header could not be found!',
++    )
++    features += {'moltenvk': moltenvk.allowed()}
++    if features['vulkan'] and features['moltenvk']
++        sources += files('video/out/vulkan/context_moltenvk.m')
++    endif
++endif
++
+ features += {'vk-khr-display': vulkan.type_name() == 'internal' or
+                                cc.has_function('vkCreateDisplayPlaneSurfaceKHR', prefix: '#include <vulkan/vulkan_core.h>',
+                                                dependencies: [vulkan])}
+diff --git forkSrcPrefix/video/out/gpu/context.c forkDstPrefix/video/out/gpu/context.c
+index 75dd804005ba3a1e36375b47dcc9d9bb756ab867..299841cb256372a04c3d1603f856695ce246ec01 100644
+--- forkSrcPrefix/video/out/gpu/context.c
++++ forkDstPrefix/video/out/gpu/context.c
+@@ -50,6 +50,7 @@ extern const struct ra_ctx_fns ra_ctx_vulkan_xlib;
+ extern const struct ra_ctx_fns ra_ctx_vulkan_android;
+ extern const struct ra_ctx_fns ra_ctx_vulkan_display;
+ extern const struct ra_ctx_fns ra_ctx_vulkan_mac;
++extern const struct ra_ctx_fns ra_ctx_vulkan_moltenvk;
+ 
+ /* Direct3D 11 */
+ extern const struct ra_ctx_fns ra_ctx_d3d11;
+@@ -93,6 +94,9 @@ static const struct ra_ctx_fns *contexts[] = {
+ #if HAVE_X11
+     &ra_ctx_vulkan_xlib,
+ #endif
++#if HAVE_MOLTENVK
++     &ra_ctx_vulkan_moltenvk,
++#endif
+ #if HAVE_COCOA && HAVE_SWIFT
+     &ra_ctx_vulkan_mac,
+ #endif
+diff --git forkSrcPrefix/video/out/vulkan/common.h forkDstPrefix/video/out/vulkan/common.h
+index e75cb228f8d99462ccecf7780098ea97ae7cfe02..afc17284773204563f4c90b4860758e61068d460 100644
+--- forkSrcPrefix/video/out/vulkan/common.h
++++ forkDstPrefix/video/out/vulkan/common.h
+@@ -22,6 +22,9 @@
+ #if HAVE_WIN32_DESKTOP
+ #define VK_USE_PLATFORM_WIN32_KHR
+ #endif
++#if HAVE_MOLTENVK
++#include <MoltenVK/mvk_vulkan.h>
++#endif
+ #if HAVE_COCOA
+ #define VK_USE_PLATFORM_METAL_EXT
+ #endif
+diff --git forkSrcPrefix/video/out/vulkan/context_moltenvk.m forkDstPrefix/video/out/vulkan/context_moltenvk.m
+new file mode 100644
+index 0000000000000000000000000000000000000000..1111111111111111111111111111111111111111
+--- /dev/null
++++ forkDstPrefix/video/out/vulkan/context_moltenvk.m
+@@ -0,0 +1,395 @@
++/*
++ * This file is part of mpv.
++ *
++ * mpv is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * mpv is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with mpv.  If not, see <http://www.gnu.org/licenses/>.
++ */
++
++#include <TargetConditionals.h>
++#if TARGET_OS_OSX
++#import <AppKit/AppKit.h>
++#else
++#import <UIKit/UIKit.h>
++#endif
++#include <CoreGraphics/CoreGraphics.h>
++#import <Metal/Metal.h>
++#include <QuartzCore/CAMetalLayer.h>
++#include <MoltenVK/mvk_vulkan.h>
++#include <math.h>
++
++#include "video/out/gpu/context.h"
++#include "osdep/timer.h"
++#include "common.h"
++#include "context.h"
++#include "utils.h"
++
++struct priv {
++    struct mpvk_ctx vk;
++    CAMetalLayer *layer;
++    CGSize last_drawable_size;
++    CGSize pending_drawable_size;
++    int64_t pending_resize_ns;
++    bool logged_hdr_target;
++};
++
++static void set_bool_with_selector(id target, NSString *selector_name, BOOL value)
++{
++    SEL selector = NSSelectorFromString(selector_name);
++    if (!target || !selector || ![target respondsToSelector:selector])
++        return;
++
++    typedef void (*Setter)(id, SEL, BOOL);
++    Setter setter = (Setter)[target methodForSelector:selector];
++    setter(target, selector, value);
++}
++
++static double double_with_selector(id target, NSString *selector_name, double fallback)
++{
++    SEL selector = NSSelectorFromString(selector_name);
++    if (!target || !selector || ![target respondsToSelector:selector])
++        return fallback;
++
++    typedef double (*Getter)(id, SEL);
++    Getter getter = (Getter)[target methodForSelector:selector];
++    return getter(target, selector);
++}
++
++static CGColorSpaceRef layer_color_space(CAMetalLayer *layer)
++{
++    SEL selector = NSSelectorFromString(@"colorspace");
++    if (!layer || !selector || ![layer respondsToSelector:selector])
++        return NULL;
++
++    typedef CGColorSpaceRef (*Getter)(id, SEL);
++    Getter getter = (Getter)[layer methodForSelector:selector];
++    return getter(layer, selector);
++}
++
++static bool set_layer_color_space(CAMetalLayer *layer, CGColorSpaceRef color_space)
++{
++    SEL selector = NSSelectorFromString(@"setColorspace:");
++    if (!layer || !color_space || !selector || ![layer respondsToSelector:selector])
++        return false;
++
++    typedef void (*Setter)(id, SEL, CGColorSpaceRef);
++    Setter setter = (Setter)[layer methodForSelector:selector];
++    setter(layer, selector, color_space);
++    return true;
++}
++
++static bool color_space_name_equals(CGColorSpaceRef color_space, CFStringRef expected)
++{
++    if (!color_space || !expected)
++        return false;
++
++    CFStringRef name = CGColorSpaceCopyName(color_space);
++    if (!name)
++        return false;
++
++    bool matches = CFStringCompare(name, expected, 0) == kCFCompareEqualTo;
++    CFRelease(name);
++    return matches;
++}
++
++static bool color_space_name_contains(CGColorSpaceRef color_space, CFStringRef needle)
++{
++    if (!color_space || !needle)
++        return false;
++
++    CFStringRef name = CGColorSpaceCopyName(color_space);
++    if (!name)
++        return false;
++
++    CFRange range = CFStringFind(name, needle, kCFCompareCaseInsensitive);
++    bool matches = range.location != kCFNotFound;
++    CFRelease(name);
++    return matches;
++}
++
++static bool layer_color_space_is_hdr(CAMetalLayer *layer)
++{
++    CGColorSpaceRef color_space = layer_color_space(layer);
++    return color_space_name_equals(color_space, kCGColorSpaceITUR_2100_PQ) ||
++           color_space_name_contains(color_space, CFSTR("2100")) ||
++           color_space_name_contains(color_space, CFSTR("PQ")) ||
++           color_space_name_contains(color_space, CFSTR("HLG"));
++}
++
++#if TARGET_OS_OSX
++static NSScreen *screen_for_layer(CAMetalLayer *layer)
++{
++    id delegate = layer.delegate;
++    if ([delegate isKindOfClass:NSView.class]) {
++        NSScreen *screen = ((NSView *)delegate).window.screen;
++        if (screen)
++            return screen;
++    }
++
++    return NSScreen.mainScreen ?: NSScreen.screens.firstObject;
++}
++#endif
++
++static bool layer_in_live_resize(CAMetalLayer *layer)
++{
++    SEL layer_selector = NSSelectorFromString(@"isNuvioLiveResize");
++    if (layer && layer_selector && [layer respondsToSelector:layer_selector]) {
++        typedef BOOL (*Getter)(id, SEL);
++        Getter getter = (Getter)[layer methodForSelector:layer_selector];
++        if (getter(layer, layer_selector))
++            return true;
++    }
++
++    id delegate = layer.delegate;
++    SEL view_selector = NSSelectorFromString(@"inLiveResize");
++    if (delegate && view_selector && [delegate respondsToSelector:view_selector]) {
++        typedef BOOL (*Getter)(id, SEL);
++        Getter getter = (Getter)[delegate methodForSelector:view_selector];
++        return getter(delegate, view_selector);
++    }
++
++    return false;
++}
++
++#if TARGET_OS_OSX
++static double screen_edr_max(NSScreen *screen)
++{
++    NSScreen *target = screen ?: NSScreen.mainScreen;
++    double potential = double_with_selector(
++        target,
++        @"maximumPotentialExtendedDynamicRangeColorComponentValue",
++        1.0
++    );
++    double current = double_with_selector(
++        target,
++        @"maximumExtendedDynamicRangeColorComponentValue",
++        potential
++    );
++    double value = fmax(potential, current);
++    return isfinite(value) && value > 0.0 ? value : 1.0;
++}
++#else
++static double screen_edr_max(void)
++{
++    UIScreen *screen = UIScreen.mainScreen;
++    double potential = double_with_selector(screen, @"potentialEDRHeadroom", 1.0);
++    double current = double_with_selector(screen, @"currentEDRHeadroom", potential);
++    double value = fmax(potential, current);
++    return isfinite(value) && value > 0.0 ? value : 1.0;
++}
++#endif
++
++static void configure_layer_for_edr(CAMetalLayer *layer)
++{
++    if (!layer)
++        return;
++
++    if (!layer.device) {
++        id<MTLDevice> device = MTLCreateSystemDefaultDevice();
++        layer.device = device;
++#if !__has_feature(objc_arc)
++        [device release];
++#endif
++    }
++
++    layer.pixelFormat = MTLPixelFormatRGBA16Float;
++    layer.framebufferOnly = YES;
++    layer.opaque = YES;
++    set_bool_with_selector(layer, @"setWantsExtendedDynamicRangeContent:", YES);
++}
++
++static int moltenvk_color_depth(struct ra_ctx *ctx)
++{
++    struct priv *p = ctx->priv;
++    return p->layer && p->layer.pixelFormat == MTLPixelFormatRGBA16Float ? 16 : -1;
++}
++
++static bool moltenvk_check_visible(struct ra_ctx *ctx)
++{
++    struct priv *p = ctx->priv;
++    if (!p->layer || p->layer.hidden)
++        return false;
++
++    CGSize size = p->layer.drawableSize;
++    return size.width > 0.0 && size.height > 0.0;
++}
++
++static bool drawable_size_valid(CGSize size)
++{
++    return isfinite(size.width) && isfinite(size.height) &&
++           size.width > 1.0 && size.height > 1.0;
++}
++
++static bool drawable_size_changed(CGSize current, CGSize previous)
++{
++    return fabs(current.width - previous.width) >= 1.0 ||
++           fabs(current.height - previous.height) >= 1.0;
++}
++
++static bool moltenvk_resize_to_size(struct ra_ctx *ctx, CGSize size, const char *reason)
++{
++    struct priv *p = ctx->priv;
++    if (!drawable_size_valid(size))
++        return false;
++
++    int width = MPMAX(1, (int)llround(size.width));
++    int height = MPMAX(1, (int)llround(size.height));
++    ctx->vo->dwidth = width;
++    ctx->vo->dheight = height;
++    p->last_drawable_size = size;
++    p->pending_drawable_size = CGSizeZero;
++    p->pending_resize_ns = 0;
++    MP_INFO(ctx, "MoltenVK resize drawable=%dx%d reason=%s\n", width, height, reason ? reason : "unknown");
++
++    CGColorSpaceRef previous_color_space = layer_color_space(p->layer);
++    if (previous_color_space)
++        CFRetain(previous_color_space);
++
++    bool ok = ra_vk_ctx_resize(ctx, width, height);
++    if (previous_color_space) {
++        set_layer_color_space(p->layer, previous_color_space);
++        CFRelease(previous_color_space);
++    }
++
++    return ok;
++}
++
++static bool moltenvk_resize(struct ra_ctx *ctx)
++{
++    struct priv *p = ctx->priv;
++    if (!p->layer)
++        return false;
++
++    return moltenvk_resize_to_size(ctx, p->layer.drawableSize, "reconfig");
++}
++
++static pl_color_space_t moltenvk_preferred_csp(struct ra_ctx *ctx)
++{
++    struct priv *p = ctx->priv;
++#if TARGET_OS_OSX
++    double edr_max = screen_edr_max(screen_for_layer(p->layer));
++#else
++    double edr_max = screen_edr_max();
++#endif
++
++    if (!p->layer || edr_max <= 1.0 || !layer_color_space_is_hdr(p->layer))
++        return (pl_color_space_t){0};
++
++    struct pl_color_space csp = pl_color_space_hdr10;
++    csp.primaries = PL_COLOR_PRIM_BT_2020;
++    csp.transfer = PL_COLOR_TRC_PQ;
++    csp.hdr = pl_hdr_metadata_hdr10;
++    csp.hdr.prim = *pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020);
++    csp.hdr.min_luma = PL_COLOR_HDR_BLACK;
++    if (csp.hdr.max_luma <= 0.0f)
++        csp.hdr.max_luma = 1000.0f;
++    csp.hdr.max_cll = csp.hdr.max_luma;
++    csp.hdr.max_fall = 0.0f;
++
++    if (!p->logged_hdr_target) {
++        p->logged_hdr_target = true;
++        MP_INFO(ctx, "MoltenVK HDR target colorspace active primaries=bt.2020 transfer=pq peak=%.0f edr=%.2f\n",
++                csp.hdr.max_luma, edr_max);
++    }
++
++    return csp;
++}
++
++static void moltenvk_uninit(struct ra_ctx *ctx)
++{
++    struct priv *p = ctx->priv;
++    ra_vk_ctx_uninit(ctx);
++    mpvk_uninit(&p->vk);
++}
++
++static bool moltenvk_init(struct ra_ctx *ctx)
++{
++    struct priv *p = ctx->priv = talloc_zero(ctx, struct priv);
++    struct mpvk_ctx *vk = &p->vk;
++    int msgl = ctx->opts.probing ? MSGL_V : MSGL_ERR;
++
++    if (ctx->vo->opts->WinID == -1) {
++        MP_MSG(ctx, msgl, "WinID missing\n");
++        goto fail;
++    }
++
++    if (!mpvk_init(vk, ctx, VK_EXT_METAL_SURFACE_EXTENSION_NAME))
++        goto fail;
++
++    p->layer = (__bridge CAMetalLayer *)(intptr_t)ctx->vo->opts->WinID;
++    configure_layer_for_edr(p->layer);
++    VkMetalSurfaceCreateInfoEXT info = {
++         .sType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT,
++         .pLayer = p->layer,
++    };
++
++    struct ra_ctx_params params = {
++        .check_visible = moltenvk_check_visible,
++        .color_depth = moltenvk_color_depth,
++        .preferred_csp = moltenvk_preferred_csp,
++    };
++
++    VkInstance inst = vk->vkinst->instance;
++    VkResult res = vkCreateMetalSurfaceEXT(inst, &info, NULL, &vk->surface);
++    if (res != VK_SUCCESS) {
++        MP_MSG(ctx, msgl, "Failed creating MoltenVK surface\n");
++        goto fail;
++    }
++
++    if (!ra_vk_ctx_init(ctx, vk, params, VK_PRESENT_MODE_FIFO_KHR))
++        goto fail;
++
++    return true;
++fail:
++    moltenvk_uninit(ctx);
++    return false;
++}
++
++static bool moltenvk_reconfig(struct ra_ctx *ctx)
++{
++    return moltenvk_resize(ctx);
++}
++
++static int moltenvk_control(struct ra_ctx *ctx, int *events, int request, void *arg)
++{
++    struct priv *p = ctx->priv;
++
++    if (request == VOCTRL_CHECK_EVENTS && p->layer) {
++        CGSize size = p->layer.drawableSize;
++        if (drawable_size_valid(size) && drawable_size_changed(size, p->last_drawable_size)) {
++            if (layer_in_live_resize(p->layer)) {
++                p->pending_drawable_size = size;
++                p->pending_resize_ns = mp_time_ns();
++                return VO_TRUE;
++            }
++
++            const char *reason = p->pending_resize_ns > 0
++                ? "live-resize-ended"
++                : "size-changed";
++            if (!moltenvk_resize_to_size(ctx, size, reason))
++                return VO_ERROR;
++            *events |= VO_EVENT_RESIZE | VO_EVENT_EXPOSE;
++        }
++        return VO_TRUE;
++    }
++
++    return VO_NOTIMPL;
++}
++
++const struct ra_ctx_fns ra_ctx_vulkan_moltenvk = {
++    .type           = "vulkan",
++    .name           = "moltenvk",
++    .reconfig       = moltenvk_reconfig,
++    .control        = moltenvk_control,
++    .init           = moltenvk_init,
++    .uninit         = moltenvk_uninit,
++};
+diff --git forkSrcPrefix/meson.options forkDstPrefix/meson.options
+index dae0a333ef71b75a6bb36a236de7feebd99bda40..6ed28af20a09501b4997ca81e86bb198e75327fd 100644
+--- forkSrcPrefix/meson.options
++++ forkDstPrefix/meson.options
+@@ -101,6 +101,7 @@ option('gl-dxinterop-d3d9', type: 'feature', value: 'auto', description: 'OpenGL
+ option('ios-gl', type: 'feature', value: 'auto', description: 'iOS OpenGL ES interop support')
+ option('videotoolbox-gl', type: 'feature', value: 'auto', description: 'Videotoolbox with OpenGL')
+ option('videotoolbox-pl', type: 'feature', value: 'auto', description: 'Videotoolbox with libplacebo')
++option('moltenvk', type: 'feature', value: 'auto', description: 'Moltenvk context')
+ 
+ # macOS features
+ option('macos-10-15-4-features', type: 'feature', value: 'auto', description: 'macOS 10.15.4 SDK Features')

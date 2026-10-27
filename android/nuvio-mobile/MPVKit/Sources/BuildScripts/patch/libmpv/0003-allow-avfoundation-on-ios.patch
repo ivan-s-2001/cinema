@@ -1,0 +1,143 @@
+diff --git a/audio/out/ao_avfoundation.m b/audio/out/ao_avfoundation.m
+index 09f3ef0..830c6f0 100644
+--- a/audio/out/ao_avfoundation.m
++++ b/audio/out/ao_avfoundation.m
+@@ -206,10 +206,9 @@ static int control(struct ao *ao, enum aocontrol cmd, void *arg)
+     return self;
+ }
+ - (void)handleRestartNotification:(NSNotification*)notification {
+-    char *name = cfstr_get_cstr((CFStringRef)notification.name);
++    const char *name = notification.name ? notification.name.UTF8String : "";
+     MP_WARN(ao, "restarting due to system notification; this will cause desync\n");
+     MP_VERBOSE(ao, "notification name: %s\n", name);
+-    talloc_free(name);
+     stop(ao);
+     start(ao);
+ }
+@@ -249,9 +248,11 @@ static int init(struct ao *ao)
+         goto error;
+     }
+ 
++#if !TARGET_OS_IPHONE
+     if (ao->device && ao->device[0]) {
+         [p->renderer setAudioOutputDeviceUniqueID:(NSString*)cfstr_from_cstr(ao->device)];
+     }
++#endif
+ 
+     [p->synchronizer addRenderer:p->renderer];
+ #if HAVE_MACOS_11_3_FEATURES
+diff --git a/audio/out/ao_coreaudio_chmap.c b/audio/out/ao_coreaudio_chmap.c
+index 2c6131f..aade8b2 100644
+--- a/audio/out/ao_coreaudio_chmap.c
++++ b/audio/out/ao_coreaudio_chmap.c
+@@ -338,6 +338,9 @@ AudioChannelLayout *ca_get_acl(struct ao *ao, size_t *out_layout_size)
+     return layout;
+ }
+ 
++#endif
++
++#if HAVE_COREAUDIO
+ 
+ #define CHMAP(n, ...) &(struct mp_chmap) MP_CONCAT(MP_CHMAP, n) (__VA_ARGS__)
+ 
+diff --git a/audio/out/ao_coreaudio_chmap.h b/audio/out/ao_coreaudio_chmap.h
+index d8bdc59..b4aea23 100644
+--- a/audio/out/ao_coreaudio_chmap.h
++++ b/audio/out/ao_coreaudio_chmap.h
+@@ -30,6 +30,9 @@ AudioChannelLabel mp_speaker_id_to_ca_label(int speaker_id);
+ AudioChannelLayout *ca_find_standard_layout(void *talloc_ctx, AudioChannelLayout *l);
+ AudioChannelLayout *ca_get_acl(struct ao *ao, size_t *out_layout_size);
+ void ca_log_layout(struct ao *ao, int l, AudioChannelLayout *layout);
++#endif
++
++#if HAVE_COREAUDIO
+ bool ca_init_chmap(struct ao *ao, AudioDeviceID device);
+ void ca_get_active_chmap(struct ao *ao, AudioDeviceID device, int channel_count,
+                          struct mp_chmap *out_map);
+diff --git a/audio/out/ao_coreaudio_utils.c b/audio/out/ao_coreaudio_utils.c
+index 8ff76a8..c85f8a9 100644
+--- a/audio/out/ao_coreaudio_utils.c
++++ b/audio/out/ao_coreaudio_utils.c
+@@ -28,14 +28,14 @@
+ #include "audio/format.h"
+ #include "osdep/mac/compat.h"
+ 
+-#if HAVE_COREAUDIO || HAVE_AVFOUNDATION
++#if HAVE_COREAUDIO
+ #include "audio/out/ao_coreaudio_properties.h"
+ #include <CoreAudio/HostTime.h>
+ #else
+ #include <mach/mach_time.h>
+ #endif
+ 
+-#if HAVE_COREAUDIO || HAVE_AVFOUNDATION
++#if HAVE_COREAUDIO
+ static bool ca_is_output_device(struct ao *ao, AudioDeviceID dev)
+ {
+     size_t n_buffers;
+@@ -133,6 +133,10 @@ coreaudio_error:
+     return err;
+ }
+ #endif
++#if !HAVE_COREAUDIO
++void ca_get_device_list(struct ao *ao, struct ao_device_list *list)
++{}
++#endif
+ 
+ bool check_ca_st(struct ao *ao, int level, OSStatus code, const char *message)
+ {
+@@ -300,7 +304,7 @@ int64_t ca_frames_to_ns(struct ao *ao, uint32_t frames)
+ 
+ int64_t ca_get_latency(const AudioTimeStamp *ts)
+ {
+-#if HAVE_COREAUDIO || HAVE_AVFOUNDATION
++#if HAVE_COREAUDIO
+     uint64_t out = AudioConvertHostTimeToNanos(ts->mHostTime);
+     uint64_t now = AudioConvertHostTimeToNanos(AudioGetCurrentHostTime());
+ 
+@@ -323,7 +327,7 @@ int64_t ca_get_latency(const AudioTimeStamp *ts)
+ #endif
+ }
+ 
+-#if HAVE_COREAUDIO || HAVE_AVFOUNDATION
++#if HAVE_COREAUDIO
+ bool ca_stream_supports_compressed(struct ao *ao, AudioStreamID stream)
+ {
+     AudioStreamRangedDescription *formats = NULL;
+diff --git a/audio/out/ao_coreaudio_utils.h b/audio/out/ao_coreaudio_utils.h
+index 85f674b..6df8005 100644
+--- a/audio/out/ao_coreaudio_utils.h
++++ b/audio/out/ao_coreaudio_utils.h
+@@ -53,7 +53,7 @@ bool check_ca_st(struct ao *ao, int level, OSStatus code, const char *message);
+     } while (0)
+ 
+ void ca_get_device_list(struct ao *ao, struct ao_device_list *list);
+-#if HAVE_COREAUDIO || HAVE_AVFOUNDATION
++#if HAVE_COREAUDIO
+ OSStatus ca_select_device(struct ao *ao, char* name, AudioDeviceID *device);
+ #endif
+ 
+@@ -71,7 +71,7 @@ bool ca_asbd_is_better(AudioStreamBasicDescription *req,
+ int64_t ca_frames_to_ns(struct ao *ao, uint32_t frames);
+ int64_t ca_get_latency(const AudioTimeStamp *ts);
+ 
+-#if HAVE_COREAUDIO || HAVE_AVFOUNDATION
++#if HAVE_COREAUDIO
+ bool ca_stream_supports_compressed(struct ao *ao, AudioStreamID stream);
+ OSStatus ca_lock_device(AudioDeviceID device, pid_t *pid);
+ OSStatus ca_unlock_device(AudioDeviceID device, pid_t *pid);
+diff --git a/meson.build b/meson.build
+index fb10be5..694f808 100644
+--- a/meson.build
++++ b/meson.build
+@@ -838,10 +838,6 @@ if features['audiounit'] or features['coreaudio'] or features['avfoundation']
+                      'audio/out/ao_coreaudio_utils.c')
+ endif
+ 
+-if features['avfoundation']
+-    sources += files('audio/out/ao_coreaudio_properties.c')
+-endif
+-
+ jack_opt = get_option('jack').require(
+     get_option('gpl'),
+     error_message: 'the build is not GPL!',
