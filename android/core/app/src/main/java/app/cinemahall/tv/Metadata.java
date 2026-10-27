@@ -21,6 +21,15 @@ final class Metadata {
         try{return new JSONObject(prefs.getString(identity+":art","{}"));}
         catch(JSONException invalid){return new JSONObject();}
     }
+    /** Previously fetched episode metadata only; opening a bundled title never waits on TVmaze. */
+    static JSONObject cachedDetails(Context context,JSONObject film){
+        SharedPreferences cache=context.getSharedPreferences("metadata_v2",0);
+        String identity=film.optString("id");
+        if(identity.isEmpty())identity=film.optString("imdb");
+        if(identity.isEmpty())identity=film.optString("name_original")+":"+film.optString("name_rus")+":"+film.optInt("year");
+        try{return new JSONObject(cache.getString(identity+":detail","{}"));}
+        catch(JSONException invalid){return new JSONObject();}
+    }
     static JSONObject load(Context context,JSONObject film,boolean details){
         SharedPreferences cache=context.getSharedPreferences("metadata_v2",0);
         String identity=film.optString("id");
