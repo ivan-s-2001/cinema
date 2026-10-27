@@ -1,0 +1,11 @@
+diff --git a/app/src/main/java/com/nuvio/tv/ui/navigation/NuvioNavHost.kt b/app/src/main/java/com/nuvio/tv/ui/navigation/NuvioNavHost.kt
+--- a/app/src/main/java/com/nuvio/tv/ui/navigation/NuvioNavHost.kt
++++ b/app/src/main/java/com/nuvio/tv/ui/navigation/NuvioNavHost.kt
+@@ -14,6 +14,7 @@
+ import androidx.compose.animation.fadeIn
+ import androidx.compose.animation.fadeOut
+ import androidx.compose.runtime.Composable
++import androidx.compose.runtime.LaunchedEffect
+ import androidx.compose.runtime.CompositionLocalProvider
+ import androidx.compose.runtime.getValue
+ import androidx.compose.runtime.collectAsState
