@@ -467,7 +467,9 @@ def stable_id(row):
 def compact(row):
     return {"id": stable_id(row), "type": row["type"], "ids": row["ids"],
             "title": row["title"], "aliases": row["aliases"], "year": row["year"],
-            "poster": row["images"]["poster"]}
+            "poster": row["images"]["poster"],
+            "background": (row["images"]["backdrop"] if row["images"]["backdropVerified"] and
+                           row["images"]["backdrop"] != row["images"]["poster"] else "")}
 
 
 def split_snapshot(result, shard_size=250):
