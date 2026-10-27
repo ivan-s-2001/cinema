@@ -88,16 +88,21 @@ foreach ($BuildTarget in $BuildTargets) {
     Write-Host "Preparing $ProjectName" -ForegroundColor Cyan
     Invoke-Checked { git -C $RepoRoot submodule update --init --depth 1 -- ('android/' + $ProjectName) }
     $Patch = Join-Path $RepoRoot ('android\' + $ProjectName + '.patch')
-    $ErrorActionPreference = 'Continue'
-    try {
-        git -C $AppRoot apply --reverse --check $Patch 2>$null
-        $AlreadyApplied = ($LASTEXITCODE -eq 0)
-        git -C $AppRoot apply --check $Patch 2>$null
-        $CanApply = ($LASTEXITCODE -eq 0)
-    } finally { $ErrorActionPreference = 'Stop' }
-    if (-not $AlreadyApplied) {
-        if (-not $CanApply) { throw "$ProjectName contains local changes. They were preserved; the integration patch could not be applied." }
-        Invoke-Checked { git -C $AppRoot apply $Patch }
+    $Patches = @($Patch)
+    $LocalPatch = Join-Path $RepoRoot ('android\' + $ProjectName + '-local.patch')
+    if (Test-Path $LocalPatch) { $Patches += $LocalPatch }
+    foreach ($Patch in $Patches) {
+        $ErrorActionPreference = 'Continue'
+        try {
+            git -C $AppRoot apply --reverse --check $Patch 2>$null
+            $AlreadyApplied = ($LASTEXITCODE -eq 0)
+            git -C $AppRoot apply --check $Patch 2>$null
+            $CanApply = ($LASTEXITCODE -eq 0)
+        } finally { $ErrorActionPreference = 'Stop' }
+        if (-not $AlreadyApplied) {
+            if (-not $CanApply) { throw "$ProjectName contains local changes. They were preserved; the integration patch could not be applied." }
+            Invoke-Checked { git -C $AppRoot apply $Patch }
+        }
     }
     $PropertiesPath = Join-Path $AppRoot 'local.properties'
     $ExistingProperties = if (Test-Path $PropertiesPath) { @(Get-Content -LiteralPath $PropertiesPath) } else { @() }
