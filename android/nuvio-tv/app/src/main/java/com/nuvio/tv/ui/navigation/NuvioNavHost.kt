@@ -1243,8 +1243,8 @@ private fun PlaybackNavHost(
         composable(Screen.Settings.route) {
             SettingsScreen(
                 showBuiltInHeader = !hideBuiltInHeaders,
-                onNavigateToAddons = { navController.navigate(Screen.AddonManager.route) },
-                onNavigateToPlugins = { navController.navigate(Screen.Plugins.route) },
+                onNavigateToAddons = {},
+                onNavigateToPlugins = {},
                 onNavigateToAuthQrSignIn = { navController.navigate(Screen.ManageProfiles.route) },
                 onNavigateToManageProfiles = { navController.navigate(Screen.ManageProfiles.route) },
                 onNavigateToSupportersContributors = {
