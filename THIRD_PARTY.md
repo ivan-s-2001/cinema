@@ -22,6 +22,8 @@ Executables are packaged as libtorrserver.so for nativeLibraryDir extraction and
 - Zona: independently implemented catalogue requests; no proprietary application code is bundled.
 - Cinemeta: public Stremio metadata add-on, https://v3-cinemeta.strem.io/manifest.json. Images remain subject to their respective owners.
 - TVmaze: episode metadata, CC BY-SA 4.0, https://www.tvmaze.com/api. The source show URL and attribution accompany detailed episode metadata.
+- Wikidata: Kinopoisk/IMDb identifier mapping, CC0, https://www.wikidata.org/wiki/Wikidata:Data_access. Attribution appreciated.
+- TMDB: optional metadata and original artwork, requires a free API key and mandatory attribution. https://developer.themoviedb.org/docs/faq. "This product uses the TMDB API but is not endorsed or certified by TMDB." The upstream app already includes a TMDB attribution entry in its About/Credits strings.
 
 ## CinemaHall
 

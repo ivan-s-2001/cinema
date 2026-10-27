@@ -26,7 +26,8 @@ object CinemaIntegration {
     private val fields="id,name_rus,name_original,description,year,rating_imdb,serial,genre_name,runtime,min_age,episodes"
     val catalogs get()=listOf(
         catalog("popular","Сейчас смотрят","movie"),catalog("new","Новые фильмы","movie"),
-        catalog("series","Сериалы","series"),catalog("top","Высокий рейтинг","movie")
+        catalog("series","Сериалы","series"),catalog("new_series","Новые сериалы","series"),
+        catalog("top","Лучшие фильмы","movie"),catalog("top_series","Лучшие сериалы","series")
     )
     private fun catalog(id:String,title:String,type:String):CatalogConfig {
         val hash=java.security.MessageDigest.getInstance("SHA-256").digest("$ID|$type|$id".toByteArray()).take(8).joinToString(""){"%02x".format(it)}
@@ -79,8 +80,9 @@ object CinemaIntegration {
                 val query=extra["search"]?.take(160)?.let {" AND ${Logic.searchQuery(it)}"}.orEmpty()
                 val skip=extra["skip"]?.toIntOrNull()?.coerceIn(0,100000)?:0
                 val serial=if(type=="series")"true"else "false"
-                val high=if(catalog=="top")" AND rating_kinopoisk:[8 TO *]"else ""
-                val data=Net.select("movie","$available AND serial:$serial$high$query",if(catalog=="new")"release_date desc"else "popularity desc",skip,40,fields).getJSONArray("docs")
+                val high=if(catalog=="top"||catalog=="top_series")" AND rating_kinopoisk:[8 TO *]"else ""
+                val recent=catalog=="new"||catalog=="new_series"
+                val data=Net.select("movie","$available AND serial:$serial$high$query",if(recent)"release_date desc"else "popularity desc",skip,40,fields).getJSONArray("docs")
                 val metas=JSONArray()
                 for(i in 0 until data.length()){
                     val doc=data.getJSONObject(i);docs[doc.getString("id")]=doc
@@ -114,8 +116,10 @@ object CinemaIntegration {
         val poster="https://img2.zonapic.com/images/film_240/${id.dropLast(3).ifEmpty {"0"}}/$id.jpg"
         val result=JSONObject().put("id","ch:$id").put("type",if(serial)"series"else "movie").put("name",doc.optString("name_rus").ifBlank {doc.optString("name_original")})
             .put("poster",enriched.optString("poster").ifBlank {poster}).put("background",enriched.optString("background"))
-            .put("description",doc.optString("description")).put("releaseInfo",doc.optInt("year").toString()).put("year",doc.optInt("year").toString())
-            .put("genres",JSONArray(doc.optString("genre_name").split(',').map {it.trim()}.filter {it.isNotBlank()}))
+            .put("description",doc.optString("description").ifBlank {enriched.optString("description")}).put("releaseInfo",doc.optInt("year").toString()).put("year",doc.optInt("year").toString())
+            .put("genres",JSONArray(doc.optString("genre_name").split(',').map {it.trim()}.filter {it.isNotBlank()}).takeIf {it.length()>0}?:enriched.optJSONArray("genres")?:JSONArray())
+        enriched.optString("imdb").takeIf {it.isNotEmpty()}?.let {result.put("imdb_id",it)}
+        enriched.optInt("tmdb").takeIf {it>0}?.let {result.put("tmdb_id",it.toString())}
         if(full&&serial){
             val videos=JSONArray();val episodes=enriched.optJSONArray("episodes")?:JSONArray()
             for(i in 0 until episodes.length()){

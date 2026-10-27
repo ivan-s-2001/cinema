@@ -2,73 +2,213 @@ package app.cinemahall.tv;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import com.arflix.tv.BuildConfig;
 import org.json.*;
 import java.nio.charset.StandardCharsets;
+import java.util.*;
 
-/** Optional enrichment: failures never block the catalogue or playback. */
+/** Best-effort metadata enrichment; catalogue and playback never depend on these APIs. */
 final class Metadata {
-    static final String CINEMETA="https://v3-cinemeta.strem.io";
-    static final String TVMAZE="https://api.tvmaze.com";
+    static final String CINEMETA = "https://v3-cinemeta.strem.io";
+    static final String TVMAZE = "https://api.tvmaze.com";
+    static final String TMDB = "https://api.themoviedb.org/3";
+    private static final long DAY = 86400000L;
+
     static JSONArray array(String url) throws Exception {
-        return new JSONArray(new String(Net.request(url,null,8*1024*1024),StandardCharsets.UTF_8));
+        return new JSONArray(new String(Net.request(url, null, 8 * 1024 * 1024), StandardCharsets.UTF_8));
     }
-    static JSONObject load(Context context,JSONObject film,boolean details){
-        SharedPreferences cache=context.getSharedPreferences("metadata",0);
-        String key=film.optString("id")+(details?":detail":":art");
-        JSONObject result=new JSONObject();
-        try{
-            String stored=cache.getString(key,"");
-            if(!stored.isEmpty()){
-                result=new JSONObject(stored);
-                if(System.currentTimeMillis()-result.optLong("fetched")<86400000L)return result;
+
+    private static List<String> titles(JSONObject film) {
+        LinkedHashSet<String> names = new LinkedHashSet<>();
+        for (String field : new String[]{"name_original", "name_eng", "name_rus"}) {
+            String name = film.optString(field).trim();
+            if (!name.isEmpty()) names.add(name);
+        }
+        return new ArrayList<>(names);
+    }
+
+    private static JSONObject cinemetaSearch(String type, List<String> names, int year) {
+        for (String name : names) {
+            try {
+                JSONArray hits = Net.json(CINEMETA + "/catalog/" + type + "/top/search=" + Net.enc(name) + ".json", null).optJSONArray("metas");
+                if (hits == null) continue;
+                for (int i = 0; i < hits.length(); i++) {
+                    JSONObject hit = hits.getJSONObject(i);
+                    if (Logic.sameTitle(name, year, hit.optString("name"), hit.optString("releaseInfo"))) return hit;
+                }
+            } catch (Exception ignored) {}
+        }
+        return null;
+    }
+
+    private static void cinemetaDetails(JSONObject result, String type, String imdb) {
+        try {
+            JSONObject full = Net.json(CINEMETA + "/meta/" + type + "/" + imdb + ".json", null).getJSONObject("meta");
+            for (String field : new String[]{"background", "poster", "cast", "director", "imdbRating", "description"}) {
+                if (full.has(field) && !full.isNull(field)) result.put(field, full.get(field));
             }
-            boolean serial=film.optBoolean("serial");String type=serial?"series":"movie";
-            JSONObject meta=null;
-            // Exact normalized title AND original release year: never take the first fuzzy hit.
-            String title=film.optString("name_original");if(title.isEmpty())title=film.optString("name_rus");
-            JSONArray hits=null;
-            try{hits=Net.json(CINEMETA+"/catalog/"+type+"/top/search="+Net.enc(title)+".json",null).optJSONArray("metas");}catch(Exception ignored){}
-            if(hits!=null)for(int i=0;i<hits.length();i++){
-                JSONObject hit=hits.getJSONObject(i);
-                if(Logic.sameTitle(title,film.optInt("year"),hit.optString("name"),hit.optString("releaseInfo"))){meta=hit;break;}
+        } catch (Exception ignored) {}
+    }
+
+    /** Match a Kinopoisk ID to IMDb without guessing between remakes with identical names. */
+    private static String wikidataImdb(String kinopoiskId) {
+        if (!kinopoiskId.matches("[0-9]{1,9}")) return "";
+        try {
+            String sparql = "SELECT ?imdb WHERE { ?work <http://www.wikidata.org/prop/direct/P2603> \"" +
+                kinopoiskId + "\"; <http://www.wikidata.org/prop/direct/P345> ?imdb. } LIMIT 1";
+            JSONArray bindings = Net.json("https://query.wikidata.org/sparql?format=json&query=" + Net.enc(sparql), null)
+                .getJSONObject("results").getJSONArray("bindings");
+            for (int i = 0; i < bindings.length(); i++) {
+                String id = bindings.getJSONObject(i).getJSONObject("imdb").optString("value");
+                if (id.matches("tt[0-9]+")) return id;
             }
-            if(meta!=null&&meta.optString("id").matches("tt[0-9]+")){
-                String imdb=meta.getString("id");
-                result.put("imdb",imdb).put("background",meta.optString("background")).put("poster",meta.optString("poster"));
-                if(details){
-                    try{
-                        JSONObject full=Net.json(CINEMETA+"/meta/"+type+"/"+imdb+".json",null).getJSONObject("meta");
-                        for(String field:new String[]{"background","poster","cast","director","imdbRating"})if(full.has(field))result.put(field,full.get(field));
-                    }catch(Exception ignored){}
+        } catch (Exception ignored) {}
+        return "";
+    }
+
+    private static void tvmaze(JSONObject result, List<String> names, int year) {
+        try {
+            JSONObject show = null;
+            String imdb = result.optString("imdb");
+            if (imdb.matches("tt[0-9]+")) {
+                try { show = Net.json(TVMAZE + "/lookup/shows?imdb=" + imdb, null); } catch (Exception ignored) {}
+            }
+            if (show == null) for (String name : names) {
+                try {
+                    JSONArray hits = array(TVMAZE + "/search/shows?q=" + Net.enc(name));
+                    for (int i = 0; i < hits.length(); i++) {
+                        JSONObject candidate = hits.getJSONObject(i).getJSONObject("show");
+                        if (Logic.sameTitle(name, year, candidate.optString("name"), candidate.optString("premiered"))) {
+                            show = candidate;
+                            break;
+                        }
+                    }
+                } catch (Exception ignored) {}
+                if (show != null) break;
+            }
+            if (show == null) return;
+            int id = show.getInt("id");
+            result.put("tvmaze", show.optString("url")).put("status", show.optString("status"));
+            result.put("episodes", array(TVMAZE + "/shows/" + id + "/episodes"));
+            JSONObject mainImage = show.optJSONObject("image");
+            if (result.optString("poster").isEmpty() && mainImage != null) {
+                result.put("poster", mainImage.optString("original"));
+            }
+            if (result.optString("background").isEmpty()) {
+                JSONArray images = array(TVMAZE + "/shows/" + id + "/images");
+                int bestWidth = 0;
+                for (int i = 0; i < images.length(); i++) {
+                    JSONObject item = images.getJSONObject(i);
+                    if (!"background".equals(item.optString("type"))) continue;
+                    JSONObject original = item.optJSONObject("resolutions") == null ? null :
+                        item.getJSONObject("resolutions").optJSONObject("original");
+                    if (original != null && !original.optString("url").isEmpty()) {
+                        int width = original.optInt("width", 1);
+                        if (width > bestWidth) {
+                            result.put("background", original.getString("url"));
+                            bestWidth = width;
+                        }
+                    }
                 }
             }
-            if(serial&&details){
-                try{
-                    JSONObject show=null;
-                    if(result.has("imdb"))show=Net.json(TVMAZE+"/lookup/shows?imdb="+result.getString("imdb"),null);
-                    else{
-                        JSONArray shows=array(TVMAZE+"/search/shows?q="+Net.enc(title));
-                        for(int i=0;i<shows.length();i++){
-                            JSONObject candidate=shows.getJSONObject(i).getJSONObject("show");
-                            if(Logic.sameTitle(title,film.optInt("year"),candidate.optString("name"),candidate.optString("premiered"))){show=candidate;break;}
-                        }
-                    }
-                    if(show!=null){
-                        int id=show.getInt("id");result.put("tvmaze",show.optString("url")).put("status",show.optString("status"));
-                        result.put("episodes",array(TVMAZE+"/shows/"+id+"/episodes"));
-                        if(result.optString("background").isEmpty()){
-                            JSONArray images=array(TVMAZE+"/shows/"+id+"/images");
-                            for(int i=0;i<images.length();i++)if(images.getJSONObject(i).optString("type").equals("background")){
-                                result.put("background",images.getJSONObject(i).getJSONObject("resolutions").getJSONObject("original").getString("url"));break;
-                            }
-                        }
-                    }
-                }catch(Exception ignored){}
+        } catch (Exception ignored) {}
+    }
+
+    static String tmdbArtwork(String path, boolean backdrop) {
+        if (!path.matches("/[A-Za-z0-9._-]+\\.(?:jpg|jpeg|png|webp)")) return "";
+        return "https://image.tmdb.org/t/p/" + (backdrop ? "original" : "w780") + path;
+    }
+
+    /** Optional provider: TMDB requires a free developer key and source attribution. */
+    private static void tmdb(JSONObject result, JSONObject film, List<String> names, boolean serial) {
+        String key = BuildConfig.TMDB_API_KEY.trim();
+        if (key.isEmpty()) return;
+        String type = serial ? "tv" : "movie";
+        String auth = "api_key=" + Net.enc(key);
+        int id = 0;
+        try {
+            String imdb = result.optString("imdb");
+            if (imdb.matches("tt[0-9]+")) {
+                JSONObject found = Net.json(TMDB + "/find/" + imdb + "?" + auth + "&external_source=imdb_id", null);
+                JSONArray matches = found.optJSONArray(type + "_results");
+                if (matches != null && matches.length() > 0) id = matches.getJSONObject(0).optInt("id");
             }
-            // A short negative cache prevents repeated requests for unmatched titles.
-            result.put("fetched",System.currentTimeMillis()-(result.has("imdb")||result.has("tvmaze")?0:82800000L));
-            cache.edit().putString(key,result.toString()).apply();
-        }catch(Exception ignored){}
+            if (id == 0) for (String title : names) {
+                JSONArray hits = Net.json(TMDB + "/search/" + type + "?" + auth + "&query=" +
+                    Net.enc(title) + "&language=ru-RU&include_adult=false", null).optJSONArray("results");
+                if (hits == null) continue;
+                for (int i = 0; i < Math.min(20, hits.length()); i++) {
+                    JSONObject hit = hits.getJSONObject(i);
+                    String date = hit.optString(serial ? "first_air_date" : "release_date");
+                    String original = hit.optString(serial ? "original_name" : "original_title");
+                    String localized = hit.optString(serial ? "name" : "title");
+                    if (Logic.sameTitle(title, film.optInt("year"), original, date) ||
+                        Logic.sameTitle(title, film.optInt("year"), localized, date)) {
+                        id = hit.optInt("id");
+                        break;
+                    }
+                }
+                if (id > 0) break;
+            }
+            if (id <= 0) return;
+            JSONObject detail = Net.json(TMDB + "/" + type + "/" + id + "?" + auth + "&language=ru-RU", null);
+            result.put("tmdb", id);
+            String poster = tmdbArtwork(detail.optString("poster_path"), false);
+            String background = tmdbArtwork(detail.optString("backdrop_path"), true);
+            if (!poster.isEmpty()) result.put("poster", poster);
+            if (!background.isEmpty()) result.put("background", background);
+            if (film.optString("description").isEmpty() && !detail.optString("overview").isEmpty()) {
+                result.put("description", detail.getString("overview"));
+            }
+            if (film.optString("genre_name").isEmpty()) {
+                JSONArray genres = detail.optJSONArray("genres");
+                if (genres != null) {
+                    JSONArray values = new JSONArray();
+                    for (int i = 0; i < genres.length(); i++) {
+                        String name = genres.getJSONObject(i).optString("name");
+                        if (!name.isEmpty()) values.put(name);
+                    }
+                    result.put("genres", values);
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+
+    static JSONObject load(Context context, JSONObject film, boolean details) {
+        SharedPreferences cache = context.getSharedPreferences("metadata-v2", 0);
+        String key = film.optString("id") + (details ? ":detail" : ":art");
+        JSONObject result = new JSONObject();
+        try {
+            String stored = cache.getString(key, "");
+            if (!stored.isEmpty()) {
+                result = new JSONObject(stored);
+                if (System.currentTimeMillis() - result.optLong("fetched") < (result.optBoolean("matched") ? 7 * DAY : DAY / 24)) {
+                    return result;
+                }
+            }
+            result = new JSONObject();
+            boolean serial = film.optBoolean("serial");
+            String type = serial ? "series" : "movie";
+            List<String> names = titles(film);
+            JSONObject match = cinemetaSearch(type, names, film.optInt("year"));
+            if (match != null && match.optString("id").matches("tt[0-9]+")) {
+                result.put("imdb", match.getString("id"));
+                result.put("background", match.optString("background"));
+                result.put("poster", match.optString("poster"));
+            }
+            if (details) {
+                if (!result.has("imdb")) {
+                    String mapped = wikidataImdb(film.optString("id"));
+                    if (!mapped.isEmpty()) result.put("imdb", mapped);
+                }
+                if (result.has("imdb")) cinemetaDetails(result, type, result.getString("imdb"));
+                if (serial) tvmaze(result, names, film.optInt("year"));
+                tmdb(result, film, names, serial);
+            }
+            boolean matched = result.has("imdb") || result.has("tvmaze") || result.has("tmdb");
+            result.put("matched", matched).put("fetched", System.currentTimeMillis());
+            cache.edit().putString(key, result.toString()).apply();
+        } catch (Exception ignored) {}
         return result;
     }
 }

@@ -19,7 +19,7 @@ index 34f6781..c4ca4b2 100644
  }
  
  // On-device speech recognition for sync by hearing (sherpa-onnx, Apache-2.0). The AAR is ~50 MB, so it is downloaded once into libs/ (git-ignored)
-@@ -63,20 +60,19 @@ val includeX86Abis = providers.gradleProperty("includeX86Abis")
+@@ -63,20 +60,20 @@ val includeX86Abis = providers.gradleProperty("includeX86Abis")
  android {
      namespace = "com.arflix.tv"
      compileSdk = 36
@@ -39,10 +39,11 @@ index 34f6781..c4ca4b2 100644
 -        versionName = "2.3"
 -        buildConfigField("String", "GITHUB_OWNER", "\"ProdigyV21\"")
 -        buildConfigField("String", "GITHUB_REPO", "\"ARVIO\"")
-+        versionCode = 4
-+        versionName = "0.4.0"
++        versionCode = 5
++        versionName = "0.5.0"
 +        buildConfigField("String", "GITHUB_OWNER", "\"ivan-s-2001\"")
 +        buildConfigField("String", "GITHUB_REPO", "\"cinema\"")
++        buildConfigField("String", "TMDB_API_KEY", "\"${escapeBuildConfigString(localSecretValue("TMDB_API_KEY"))}\"")
          buildConfigField("Boolean", "FEATURE_PLUGINS_ENABLED", "false")
          // Use the same resolution for generated values and release validation.
          buildConfigField("String", "TELEGRAM_API_ID", "\"${escapeBuildConfigString(localSecretValue("TELEGRAM_API_ID"))}\"")
