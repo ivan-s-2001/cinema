@@ -33,7 +33,7 @@ final class Metadata {
             // Exact normalized title AND original release year: never take the first fuzzy hit.
             String title=film.optString("name_original");if(title.isEmpty())title=film.optString("name_rus");
             JSONArray hits=null;
-            try{hits=Net.json(CINEMETA+"/catalog/"+type+"/top/search="+Net.enc(title)+".json",null).optJSONArray("metas");}catch(Exception ignored){}
+            try{hits=Net.json(CINEMETA+"/catalog/"+type+"/top/search="+Net.enc(title)+".json",(JSONObject)null).optJSONArray("metas");}catch(Exception ignored){}
             if(hits!=null)for(int i=0;i<hits.length();i++){
                 JSONObject hit=hits.getJSONObject(i);
                 if(Logic.sameTitle(title,film.optInt("year"),hit.optString("name"),hit.optString("releaseInfo"))){meta=hit;break;}
@@ -45,7 +45,7 @@ final class Metadata {
                 if(result.optString("poster").isEmpty())result.put("poster",meta.optString("poster"));
                 if(details){
                     try{
-                        JSONObject full=Net.json(CINEMETA+"/meta/"+type+"/"+imdb+".json",null).getJSONObject("meta");
+                        JSONObject full=Net.json(CINEMETA+"/meta/"+type+"/"+imdb+".json",(JSONObject)null).getJSONObject("meta");
                         for(String field:new String[]{"background","poster","cast","director","imdbRating"})if(full.has(field)&&!result.has(field))result.put(field,full.get(field));
                     }catch(Exception ignored){}
                 }
@@ -53,7 +53,7 @@ final class Metadata {
             if(serial&&details){
                 try{
                     JSONObject show=null;
-                    if(result.has("imdb"))show=Net.json(TVMAZE+"/lookup/shows?imdb="+result.getString("imdb"),null);
+                    if(result.has("imdb"))show=Net.json(TVMAZE+"/lookup/shows?imdb="+result.getString("imdb"),(JSONObject)null);
                     else{
                         JSONArray shows=array(TVMAZE+"/search/shows?q="+Net.enc(title));
                         for(int i=0;i<shows.length();i++){

@@ -39,3 +39,17 @@ test('failed responses are retried and unsafe paths never fetched', async () => 
   assert.deepEqual(await client.browse('../secret', 0), []);
   assert.equal(calls, 2);
 });
+
+
+test('detail preserves disambiguated IDs instead of returning the wrong title', async () => {
+  const alternate = { ...film, id: `${film.id}:alternate`, ids: { ...film.ids, kinopoisk: '999' } };
+  const data = {
+    'search.json': [film, alternate],
+    'shards/movie-001.json': [film, { ...alternate, collisionSuffix: 'alternate', details: { cast: ['Other actor'] } }],
+  };
+  const client = createCatalogClient('https://example.org/catalog', async url => ({
+    ok: true, json: async () => data[url.split('/catalog/')[1]],
+  }));
+  assert.equal((await client.detail(alternate.id)).ids.kinopoisk, '999');
+  assert.equal((await client.detail(film.id)).ids.imdb, film.ids.imdb);
+});

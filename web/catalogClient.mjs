@@ -74,7 +74,8 @@ export function createCatalogClient(baseUrl, fetcher = fetch) {
       return cards.find(x => {
         const source = ["tmdb", "kinopoisk", "imdb", "myAnimeList", "shikimori"]
           .find(name => x.ids[name]);
-        return source && `${x.type}:${source}:${x.ids[source]}` === entry.id;
+        const suffix = x.collisionSuffix ? `:${x.collisionSuffix}` : "";
+        return source && `${x.type}:${source}:${x.ids[source]}${suffix}` === entry.id;
       }) || null;
     },
   };
