@@ -16,7 +16,7 @@ Upstream: https://github.com/ProdigyV21/ARVIO
 
 Кнопка «Смотреть» использует автоматический выбор. Панель вариантов в готовом плеере адаптирована под «Качество и озвучка»: вкладки доступных разрешений, внутри — варианты озвучки этих разрешений. Технические ссылки и раздачи адаптер не возвращает в UI. На ТВ с поддержкой 4K автоматическая цель движка — 4K, на остальных устройствах — 1080p. Наличие источников не гарантирует успешного воспроизведения каждого фильма.
 
-Встроенный движок: TorrServer MatriX.147.1, ARM64 + ARMv7. Локальные порты: 18990 (движок) и 18991 (подготовка воспроизведения), только `127.0.0.1`. RAM-кеш движка 96 МиБ. Бинарники скачиваются отдельно и проверяются SHA256.
+Встроенный движок: TorrServer MatriX.147.1. Основной облегчённый APK содержит ARM64, универсальный APK — ARM64 + ARMv7. Локальные порты: 18990 (движок) и 18991 (подготовка воспроизведения), только `127.0.0.1`. RAM-кеш движка 96 МиБ. Бинарники скачиваются отдельно и проверяются SHA256.
 
 ## Метаданные без платных сервисов
 
@@ -45,7 +45,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-tv.ps1 -Tv
 
 ТВ и ПК должны быть в общей сети. На телевизоре включите сетевую отладку и подтвердите первое подключение. Для закрытого репозитория потребуется авторизация GitHub. При конфликте подписи скрипт спрашивает подтверждение перед удалением установленного приложения и локальных данных. Последующие сборки на одном ПК используют его постоянный debug-ключ; сохраняйте `%USERPROFILE%\.android\debug.keystore`.
 
-Один APK для TV и телефона: `android/arvio/app/build/outputs/apk/sideload/debug/app-sideload-debug.apk`. Пакет `app.cinemahall.tv`; Activity `com.arflix.tv.MainActivity`. `-BuildOnly` собирает без установки.
+Основной APK для ARM64 TV и телефона: `android/arvio/app/build/outputs/apk/play/debug/app-play-debug.apk`. Для старых ARMv7-устройств запустите установщик с `-Universal`: он соберёт `android/arvio/app/build/outputs/apk/sideload/debug/app-sideload-debug.apk`. Пакет `app.cinemahall.tv`; Activity `com.arflix.tv.MainActivity`. `-BuildOnly` собирает без установки.
 
 ## Linux / CI
 
@@ -54,11 +54,11 @@ git submodule update --init --depth 1
 python3 scripts/prepare_android.py
 python3 scripts/fetch_engine.py
 cd android/arvio
-./gradlew :app:assembleSideloadDebug
+./gradlew :app:assemblePlayDebug -PcinemaArm64Only=true
 ./gradlew :app:testSideloadDebugUnitTest --tests app.cinemahall.tv.CinemaQualityTabsTest
 ```
 
-CI публикует универсальный APK в Artifacts. Минимальная версия основной sideload-сборки — Android 8.0; SDK 36 и JDK 17.
+CI публикует оба APK в Artifacts: полный совместимый и облегчённый ARM64. Минимальная версия основной sideload-сборки — Android 8.0; SDK 36 и JDK 17.
 
 ## Проверки и лицензии
 
