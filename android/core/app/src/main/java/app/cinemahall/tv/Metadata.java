@@ -12,6 +12,15 @@ final class Metadata {
     static JSONArray array(String url) throws Exception {
         return new JSONArray(new String(Net.request(url,null,8*1024*1024),StandardCharsets.UTF_8));
     }
+    /** Instant fallback from previously fetched metadata; never performs a network request. */
+    static JSONObject cachedArtwork(Context context,JSONObject film){
+        SharedPreferences prefs=context.getSharedPreferences("metadata_v2",0);
+        String identity=film.optString("id");
+        if(identity.isEmpty())identity=film.optString("imdb");
+        if(identity.isEmpty())identity=film.optString("name_original")+":"+film.optString("name_rus")+":"+film.optInt("year");
+        try{return new JSONObject(prefs.getString(identity+":art","{}"));}
+        catch(JSONException invalid){return new JSONObject();}
+    }
     static JSONObject load(Context context,JSONObject film,boolean details){
         SharedPreferences cache=context.getSharedPreferences("metadata_v2",0);
         String identity=film.optString("id");
