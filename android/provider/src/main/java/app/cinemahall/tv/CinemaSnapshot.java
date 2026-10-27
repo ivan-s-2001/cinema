@@ -12,6 +12,8 @@ final class CinemaSnapshot {
     private JSONArray lookup;
     private final Map<String,JSONObject> byId=new HashMap<>();
     private boolean checked;
+    private final LinkedHashMap<String,Map<String,JSONObject>> shardRows=new LinkedHashMap<String,Map<String,JSONObject>>(4,.75f,true){@Override protected boolean removeEldestEntry(Map.Entry<String,Map<String,JSONObject>> e){return size()>2;}};
+    private final LinkedHashMap<String,String> pages=new LinkedHashMap<String,String>(24,.75f,true){@Override protected boolean removeEldestEntry(Map.Entry<String,String> e){return size()>24;}};
     private final LinkedHashMap<String,JSONArray> shards=new LinkedHashMap<String,JSONArray>(4,.75f,true){@Override protected boolean removeEldestEntry(Map.Entry<String,JSONArray> e){return size()>2;}};
     CinemaSnapshot(Context context){this.context=context;}
     private JSONObject index;
@@ -28,15 +30,18 @@ final class CinemaSnapshot {
         init();if(index==null||!id.startsWith("ch:snapshot:"))return null;
         String wanted=id.substring(12);search();JSONObject entry=byId.get(wanted);
         if(entry==null)return null;
-        JSONArray cards=shard(entry.getString("shard"));
-        for(int i=0;i<cards.length();i++){JSONObject row=cards.getJSONObject(i);if(wanted.equals(stableId(row)))return row;}
-        return null;
+        String path=entry.getString("shard");
+        Map<String,JSONObject> rows=shardRows.get(path);
+        if(rows==null){rows=new HashMap<>();JSONArray cards=shard(path);for(int i=0;i<cards.length();i++){JSONObject row=cards.getJSONObject(i);rows.put(stableId(row),row);}shardRows.put(path,rows);}
+        return rows.get(wanted);
     }
     static String stableId(JSONObject row) throws JSONException {
         JSONObject ids=row.getJSONObject("ids");for(String source:new String[]{"tmdb","kinopoisk","imdb","myAnimeList","shikimori"})if(!ids.optString(source).isEmpty())return row.getString("type")+":"+source+":"+ids.getString(source)+(row.optString("collisionSuffix").isEmpty()?"":":"+row.optString("collisionSuffix"));throw new JSONException("No id");
     }
-    JSONObject catalog(String type,String category,String query,int skip) throws Exception {
+    synchronized JSONObject catalog(String type,String category,String query,int skip) throws Exception {
         init();if(index==null)return null;
+        String key=type+"|"+category+"|"+query+"|"+skip;
+        String cached=pages.get(key);if(cached!=null)return new JSONObject(cached);
         JSONArray all=search(),result=new JSONArray();String needle=words(query);ArrayList<JSONObject> matches=new ArrayList<>();
         for(int i=0;i<all.length();i++){
             JSONObject entry=all.getJSONObject(i);if(!entry.optString("type").equals(type.equals("series")?"tv":"movie"))continue;
@@ -62,7 +67,9 @@ final class CinemaSnapshot {
         Map<String,JSONObject> previews=new HashMap<>();
         for(JSONObject entry:grouped)previews.put(entry.getString("id"),compact(entry));
         for(JSONObject entry:page)result.put(previews.get(entry.getString("id")));
-        return new JSONObject().put("metas",result).put("hasMore",skip+24<matches.size());
+        JSONObject response=new JSONObject().put("metas",result).put("hasMore",skip+24<matches.size());
+        pages.put(key,response.toString());
+        return response;
     }
     private static double rating(JSONObject scores){if(scores==null)return 0;for(String key:new String[]{"kinopoisk","imdb","tmdb"}){Object v=scores.opt(key);if(v instanceof Number)return ((Number)v).doubleValue();if(v instanceof JSONObject){double value=((JSONObject)v).optDouble("value",0);if(value>0)return value;}}return 0;}
     private static String words(String value){return value.toLowerCase(Locale.ROOT).replace('ё','е').replaceAll("[^\\p{L}\\p{N}]+"," ").trim();}
