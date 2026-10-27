@@ -99,7 +99,10 @@ foreach ($BuildTarget in $BuildTargets) {
         if (-not $CanApply) { throw "$ProjectName contains local changes. They were preserved; the integration patch could not be applied." }
         Invoke-Checked { git -C $AppRoot apply $Patch }
     }
-    ('sdk.dir=' + $SdkRoot.Replace('\','/')) | Set-Content -Encoding ASCII (Join-Path $AppRoot 'local.properties')
+    $PropertiesPath = Join-Path $AppRoot 'local.properties'
+    $ExistingProperties = if (Test-Path $PropertiesPath) { @(Get-Content -LiteralPath $PropertiesPath) } else { @() }
+    $Properties = @($ExistingProperties | Where-Object { $_ -notmatch '^\s*sdk\.dir\s*=' }) + ('sdk.dir=' + $SdkRoot.Replace('\','/'))
+    [IO.File]::WriteAllLines($PropertiesPath, [string[]]$Properties, (New-Object Text.UTF8Encoding($false)))
 }
 
 Write-Host '[3/6] Встроенный TorrServer, проверка SHA256' -ForegroundColor Cyan
