@@ -64,9 +64,10 @@ internal fun PlayerStreamList(
         StreamBadgeSettingsRepository.ensureLoaded()
         StreamBadgeSettingsRepository.uiState
     }.collectAsStateWithLifecycle()
-    val streams = streamsUiState.allStreams
+    // CinemaHall is the only playback catalogue; never offer third-party add-on releases.
+    val streams = streamsUiState.allStreams.filter { it.addonName == "CinemaHall" }
     val visibleGroups = streamsUiState.filteredGroups
-    val cinemaOnly = streams.isNotEmpty() && streams.all { it.addonName == "CinemaHall" && it.name?.startsWith("CinemaHall · ") == true }
+    val cinemaOnly = streams.isNotEmpty()
 
     when {
         streams.isEmpty() && streamsUiState.isAnyLoading -> {
