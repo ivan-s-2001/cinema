@@ -76,6 +76,19 @@ public final class Logic {
         if(!names.isEmpty())queries.add(names.iterator().next());
         return new ArrayList<>(queries);
     }
+    public static boolean torrentMatches(String candidate,List<String> aliases){
+        String title=torrentWords(candidate);
+        if(aliases==null)return false;
+        for(String alias:aliases){
+            String name=torrentWords(alias);
+            if(name.length()>=6&&title.contains(name))return true;
+        }
+        return false;
+    }
+    private static String torrentWords(String value){
+        return " "+(value==null?"":value).toLowerCase(Locale.ROOT).replace('ё','е')
+            .replaceAll("[^\\p{L}\\p{N}]+"," ").trim().replaceAll(" +"," ")+" ";
+    }
     public static long seekTarget(long current,long duration,long delta) {
         long target=Math.max(0,current+delta);return duration>0?Math.min(duration,target):target;
     }

@@ -41,7 +41,7 @@ final class Sources {
     static ArrayList<Candidate> load(String movieId,String episode,List<String> aliases,int year) throws Exception {
         boolean hasKinopoisk=movieId!=null&&movieId.matches("[0-9]+");
         if(!hasKinopoisk&&(aliases==null||aliases.isEmpty()))throw new Exception("Не найден фильм");
-        String exact=Logic.catalogEpisode(episode);
+        String exact=Logic.catalogEpisode(episode==null?"":episode);
         String fields="hash,torrent_download_link,resolution,size_bytes,translate_info,languages_parser,seeds,episodes_map_auto";
         ArrayList<Candidate> result=new ArrayList<>();HashSet<String>seen=new HashSet<>();
         Exception zonaError=null;
@@ -49,7 +49,7 @@ final class Sources {
             String query="kinopoisk_id:"+movieId+" AND playable:true AND trailer:false";
             JSONArray docs=Net.select("torrent",query+(exact.isEmpty()?"":" AND episodes:\""+exact+"\""),"seeds desc",0,200,fields).getJSONArray("docs");
             if(docs.length()==0&&!exact.isEmpty())docs=Net.select("torrent",query,"seeds desc",0,200,fields).getJSONArray("docs");
-            append(result,seen,docs,"zona");
+            append(result,seen,docs,"zona",Collections.emptyList());
         }}catch(Exception error){zonaError=error;}
         // Search is local to TorrServer; Jackett/Prowlarr runs on another device/server.
         try {
@@ -67,13 +67,14 @@ final class Sources {
                     }
                 }
                 List<String> queries=Logic.torrentQueries(names,year,episode);
+                int firstExtra=result.size();
                 if(torznab)for(String term:queries){
-                    try{append(result,seen,search("/torznab/search/",term),"torznab");}
+                    try{append(result,seen,search("/torznab/search/",term),"torznab",names);}
                     catch(Exception ignored){} // Optional indexers must not break Zona.
-                    if(result.size()>=250)break;
+                    if(result.size()>=250||result.size()-firstExtra>=30)break;
                 }
                 if(rutor&&!queries.isEmpty()&&result.size()<250){
-                    try{append(result,seen,search("/search/",queries.get(0)),"rutor");}
+                    try{append(result,seen,search("/search/",queries.get(0)),"rutor",names);}
                     catch(Exception ignored){}
                 }
             }
@@ -85,9 +86,10 @@ final class Sources {
         byte[] data=Net.request(Net.ENGINE+path+"?query="+Net.enc(term),null,2*1024*1024);
         return new JSONArray(new String(data,StandardCharsets.UTF_8));
     }
-    private static void append(ArrayList<Candidate> result,HashSet<String> seen,JSONArray docs,String source){
+    private static void append(ArrayList<Candidate> result,HashSet<String> seen,JSONArray docs,String source,List<String> aliases){
         for(int i=0;i<docs.length()&&result.size()<300;i++){
             JSONObject json=docs.optJSONObject(i);if(json==null)continue;
+            if(!"zona".equals(source)&&!Logic.torrentMatches(json.optString("Title",json.optString("Name")),aliases))continue;
             Candidate candidate=new Candidate(json,source);
             String identity=candidate.hash.isEmpty()?candidate.link:candidate.hash;
             if(Logic.validLink(candidate.link)&&seen.add(identity))result.add(candidate);

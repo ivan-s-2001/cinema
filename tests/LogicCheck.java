@@ -16,6 +16,7 @@ public final class LogicCheck {
         java.util.List<String> queries=Logic.torrentQueries(java.util.Arrays.asList("Бойцовский клуб","Fight Club","Бойцовский клуб"),1999,"");
         if(queries.size()!=3||!queries.get(0).equals("Бойцовский клуб 1999")||!queries.get(1).equals("Fight Club 1999")||!queries.get(2).equals("Бойцовский клуб"))throw new AssertionError("Multi-language search bounds");
         if(!Logic.torrentQueries(java.util.Arrays.asList("Шоу"),2020,"S1E2").get(0).equals("Шоу S01E02"))throw new AssertionError("Episode-aware search");
+        if(!Logic.torrentMatches("Fight.Club.1999.1080p.WEB-DL",java.util.Arrays.asList("Бойцовский клуб","Fight Club"))||Logic.torrentMatches("The Fight Clubbers 2023",java.util.Arrays.asList("Бойцовский клуб","Fight Club"))||Logic.torrentMatches("The Matrix 1999",java.util.Arrays.asList("Fight Club")))throw new AssertionError("Indexer titles must belong to requested film");
         if(Logic.seekTarget(5000,30000,-10000)!=0||Logic.seekTarget(25000,30000,10000)!=30000||Logic.seekTarget(10000,-1,10000)!=20000)throw new AssertionError("Seek bounds");
         if(!Logic.time(3661000).equals("1:01:01")||!Logic.time(-1).equals("00:00"))throw new AssertionError("Timeline");
         if(Logic.naturalCompare("episode2.mkv","episode10.mkv")>=0||Logic.naturalCompare("S01E02.mkv","S01E01.mkv")<=0)throw new AssertionError("Episode ordering");

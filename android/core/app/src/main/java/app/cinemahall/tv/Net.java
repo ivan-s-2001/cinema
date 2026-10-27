@@ -52,7 +52,7 @@ final class Net {
     }
     static JSONObject select(String core, String query, String sort, int start, int rows, String fields) throws Exception {
         return json(CATALOG + core + "/select?wt=json&q=" + enc(query) + "&sort=" + enc(sort)
-            + "&start=" + start + "&rows=" + rows + "&fl=" + enc(fields), null).getJSONObject("response");
+            + "&start=" + start + "&rows=" + rows + "&fl=" + enc(fields), (JSONObject) null).getJSONObject("response");
     }
     static JSONObject action(String path, String action) throws Exception {
         return json(ENGINE + path, new JSONObject().put("action", action));
