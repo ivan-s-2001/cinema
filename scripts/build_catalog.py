@@ -419,10 +419,11 @@ def build(key, pages, enrichment, tmdb_key="", detail_count=0, season_limit=3, a
     batches.append(calendar[:100])
     rows = merge_catalog(batches)
     # Enrich the most visible cards and those without usable art; bound requests.
+    featured = {id(r) for kind in ("movie", "tv") for r in [x for x in rows if x["type"] == kind][:36]}
     candidates = sorted((r for r in rows if r["ids"].get("myAnimeList") or
                          r["ids"].get("imdb", "").startswith("tt") or
                          (tmdb_key and r["ids"].get("tmdb"))),
-                        key=lambda r: (r["images"]["backdropVerified"],
+                        key=lambda r: (id(r) not in featured, r["images"]["backdropVerified"],
                                        bool(r["images"]["poster"]),
                                        not bool(r["ids"].get("myAnimeList"))))
     for row in candidates[:enrichment]:
