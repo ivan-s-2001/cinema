@@ -25,6 +25,8 @@ def prepare(target):
         print(f"{name}: integration applied")
     else:
         raise RuntimeError(f"{name}: patch does not match; local edits were preserved")
+    # Mobile runtime config declares this as an input even when no service keys are configured.
+    (directory / "local.properties").touch(exist_ok=True)
     module = "app" if target == "tv" else "androidApp"
     ET.parse(directory / module / "src/main/AndroidManifest.xml")
 
