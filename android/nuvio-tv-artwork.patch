@@ -1,7 +1,7 @@
 diff --git a/app/src/main/java/com/nuvio/tv/domain/model/Meta.kt b/app/src/main/java/com/nuvio/tv/domain/model/Meta.kt
 --- a/app/src/main/java/com/nuvio/tv/domain/model/Meta.kt
 +++ b/app/src/main/java/com/nuvio/tv/domain/model/Meta.kt
-@@ -51,7 +51,8 @@
+@@ -51,7 +51,9 @@
          get() = type.toApiString(rawType)
  
      val backdropUrl: String?
@@ -15,7 +15,7 @@ diff --git a/app/src/main/java/com/nuvio/tv/domain/model/Meta.kt b/app/src/main/
 diff --git a/app/src/main/java/com/nuvio/tv/domain/model/MetaPreview.kt b/app/src/main/java/com/nuvio/tv/domain/model/MetaPreview.kt
 --- a/app/src/main/java/com/nuvio/tv/domain/model/MetaPreview.kt
 +++ b/app/src/main/java/com/nuvio/tv/domain/model/MetaPreview.kt
-@@ -42,5 +42,6 @@
+@@ -42,5 +42,7 @@
          get() = type.toApiString(rawType)
  
      val backdropUrl: String?
