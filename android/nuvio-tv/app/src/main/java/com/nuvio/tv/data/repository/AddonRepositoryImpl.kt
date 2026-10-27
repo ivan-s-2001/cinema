@@ -107,23 +107,9 @@ class AddonRepositoryImpl(
 
     private fun normalizeUrl(url: String): String = canonicalizeUrl(url).lowercase()
 
-    private fun triggerRemoteSync() {
-        if (isSyncingFromRemote) {
-            Log.d(TAG, "triggerRemoteSync: skipped (syncing from remote)")
-            return
-        }
-        if (!authManager.isAuthenticated) {
-            Log.d(TAG, "triggerRemoteSync: skipped (not authenticated, state=${authManager.authState.value})")
-            return
-        }
-        Log.d(TAG, "triggerRemoteSync: scheduling push in 500ms")
-        syncJob?.cancel()
-        syncJob = syncScope.launch {
-            delay(500)
-            val result = addonSyncService.pushToRemote()
-            Log.d(TAG, "triggerRemoteSync: push result=${result.isSuccess} ${result.exceptionOrNull()?.message ?: ""}")
-        }
-    }
+    // CinemaHall is a local, account-free app. Never push add-on settings
+    // to Nuvio cloud when older settings code calls this method.
+    private fun triggerRemoteSync() = Unit
 
     private val gson = Gson()
     private val manifestCache = mutableMapOf<String, Addon>()
