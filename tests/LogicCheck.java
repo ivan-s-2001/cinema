@@ -2,11 +2,15 @@ package app.cinemahall.tv;
 
 public final class LogicCheck {
     public static void main(String[] args) {
+        if(!Logic.sameTitle("Game of Thrones",2011,"Game of Thrones","2011-2019")||!Logic.sameTitle("Spider-Man",2002,"Spider Man","2002"))throw new AssertionError("Metadata title normalization");
+        if(!Logic.catalogEpisode("S8E1").equals("S08E01")||!Logic.catalogEpisode("OR *:*").isEmpty())throw new AssertionError("Episode query identity");
+        if(Logic.sameTitle("Dune",2021,"Dune","1984")||Logic.sameTitle("Inception",2010,"Bikini Inception","2010")||Logic.sameTitle("Inception",2010,"Inception","")||Logic.sameTitle("",2010,"","2010"))throw new AssertionError("Unrelated metadata accepted");
         String query=Logic.searchQuery("  Dune\" OR *:*  ");
         if(!query.contains("Dune\\\" OR \\*\\:\\*"))throw new AssertionError("Solr operators must be escaped");
         if(!Logic.isVideo("Season 1/episode.MKV")||Logic.isVideo("poster.jpg")||Logic.isVideo("movie.mkv.exe"))throw new AssertionError("Wrong video selection");
         if(!Logic.validLink("magnet:?xt=urn:btih:0123456789abcdef")||Logic.validLink("file:///etc/passwd")||Logic.validLink("https://user:pass@example.com/torrent"))throw new AssertionError("Unsafe link accepted");
         if(!Logic.qualityLabel("1920x800").equals("1080p")||!Logic.qualityLabel("3840x1600").equals("4K")||!Logic.qualityLabel("").equals("Не указано"))throw new AssertionError("Quality tier");
+        if(!Logic.qualityLabel("2560x1440").equals("2K")||!Logic.qualityLabel("1280x544").equals("720p")||!Logic.qualityLabel("720x576").equals("576p")||!Logic.qualityLabel("720x304").equals("480p")||!Logic.qualityLabel("640x360").equals("360p")||!Logic.qualityLabel("426x240").equals("240p"))throw new AssertionError("Standard quality tabs");
         if(Logic.seekTarget(5000,30000,-10000)!=0||Logic.seekTarget(25000,30000,10000)!=30000||Logic.seekTarget(10000,-1,10000)!=20000)throw new AssertionError("Seek bounds");
         if(!Logic.time(3661000).equals("1:01:01")||!Logic.time(-1).equals("00:00"))throw new AssertionError("Timeline");
         if(Logic.naturalCompare("episode2.mkv","episode10.mkv")>=0||Logic.naturalCompare("S01E02.mkv","S01E01.mkv")<=0)throw new AssertionError("Episode ordering");

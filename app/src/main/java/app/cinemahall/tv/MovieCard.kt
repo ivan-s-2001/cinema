@@ -49,7 +49,7 @@ fun MovieCard(
                         shape = JetStreamCardShape
                     )
                 ),
-                scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
+                scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f),
                 content = image
             )
         },

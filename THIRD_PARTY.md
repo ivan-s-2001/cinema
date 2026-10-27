@@ -27,6 +27,12 @@ CinemaHall source: GPL-3.0. Catalog protocol was independently implemented from 
 The application shell adapts Google Android TV Samples / JetStream Compose (Apache-2.0):
 https://github.com/android/tv-samples/tree/15ac8df7df91a07450751a5fe8c6fd17a6a4297f/JetStreamCompose
 
-`MovieCard.kt` and `JetStreamFocusTheme.kt` retain upstream components with package/import changes. `MainActivity.kt` adapts the HomeScreen/MoviesRow/Dashboard structure for the Zona catalog and direct playback. Original copyright notices are preserved. Full Apache-2.0 license is in `licenses/JetStream-Apache-2.0.txt`. Demo movies, Google branding, server login, and sample playback logic are not used.
+`MovieCard.kt` and `JetStreamFocusTheme.kt` retain upstream components with package/import and focus style changes. `MainActivity.kt` adapts the HomeScreen/MoviesRow/Dashboard structure for the Zona catalog and direct playback. Original copyright notices are preserved. Full Apache-2.0 license is in `licenses/JetStream-Apache-2.0.txt`. Demo movies, Google branding, server login, and sample playback logic are not used.
 
 Coil 2.7.0: Apache-2.0, https://github.com/coil-kt/coil. Compose for TV 1.0.0 and AndroidX Activity Compose 1.10.1: Apache-2.0.
+
+## External metadata services
+
+Cinemeta: https://v3-cinemeta.strem.io/manifest.json — official Stremio metadata add-on. Access follows the public HTTP add-on protocol; no Stremio implementation code is bundled. Images and credits are supplied remotely, subject to their respective owners.
+
+TVmaze: https://www.tvmaze.com/api — episode metadata is licensed CC BY-SA 4.0. Detail pages attribute TVmaze and show the source show URL. Shared episode metadata retains this license: https://creativecommons.org/licenses/by-sa/4.0/. Metadata is kept distinct from application source code.

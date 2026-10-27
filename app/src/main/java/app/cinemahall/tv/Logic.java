@@ -6,6 +6,11 @@ import java.util.regex.*;
 
 public final class Logic {
     private Logic() {}
+    public static boolean sameTitle(String title,int year,String candidate,String release){
+        String a=title.toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{N}]","");
+        String b=candidate.toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{N}]","");
+        return !a.isEmpty()&&a.equals(b)&&year>1800&&release.matches("^"+year+"(?:\\D.*)?$");
+    }
     public static String searchQuery(String input) {
         StringBuilder escaped = new StringBuilder();
         for (char c : input.trim().toCharArray()) {
@@ -30,9 +35,13 @@ public final class Logic {
         if(!m.find())return "Не указано";
         int width=Integer.parseInt(m.group(1)),height=Integer.parseInt(m.group(2));
         if(width>=3600||height>=2000)return "4K";
+        if(width>=2500||height>=1400)return "2K";
         if(width>=1800||height>=1000)return "1080p";
         if(width>=1200||height>=700)return "720p";
-        return "SD";
+        if(height>=550)return "576p";
+        if(width>=700||height>=450)return "480p";
+        if(width>=600||height>=330)return "360p";
+        return "240p";
     }
     public static long seekTarget(long current,long duration,long delta) {
         long target=Math.max(0,current+delta);return duration>0?Math.min(duration,target):target;
@@ -62,13 +71,17 @@ public final class Logic {
         if(key.startsWith("S")){int e=key.indexOf('E');return "Сезон "+key.substring(1,e)+" · Серия "+key.substring(e+1);}
         return "Серия "+key.substring(1);
     }
+    public static String catalogEpisode(String episode){
+        Matcher match=Pattern.compile("S(\\d+)E(\\d+)").matcher(episode);
+        return match.matches()?String.format(Locale.ROOT,"S%02dE%02d",Integer.parseInt(match.group(1)),Integer.parseInt(match.group(2))):"";
+    }
     public static int sourceScore(String quality,String languages,String translation,int seeds,String target){
         String lang=languages.toLowerCase(Locale.ROOT),dub=translation.toLowerCase(Locale.ROOT);
         boolean russian=Pattern.compile("(?:^|[^a-z])(?:ru|rus)(?:$|[^a-z])").matcher(lang).find();
         boolean otherKnown=!lang.trim().isEmpty()&&!russian;
         boolean inferred=!otherKnown&&!dub.contains("украин")&&(dub.contains("дубляж")||dub.contains("закадров")||dub.contains("одноголос")||dub.contains("многоголос")||dub.contains("русск"));
         int language=russian?1000:inferred?900:lang.trim().isEmpty()?600:0;
-        int resolution=quality.equals(target)?300:quality.equals("1080p")?200:quality.equals("720p")?120:quality.equals("4K")?100:30;
+        int resolution=quality.equals(target)?300:quality.equals("2K")?240:quality.equals("1080p")?200:quality.equals("720p")?120:quality.equals("4K")?100:quality.equals("576p")?90:quality.equals("480p")?80:30;
         return language+resolution+(int)Math.min(80,Math.log1p(Math.max(0,seeds))*15);
     }
 }

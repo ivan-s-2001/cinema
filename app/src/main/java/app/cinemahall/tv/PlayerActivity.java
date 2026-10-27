@@ -32,21 +32,25 @@ public final class PlayerActivity extends Activity {
     private final ArrayList<Sources.Candidate> candidates=new ArrayList<>();
     private final HashSet<String> attempted=new HashSet<>();
     private String desiredQuality="",desiredTranslation="",wantedEpisode="",wantedFilename="",autoTarget="1080p";
+    private String sourceEpisodeFilename="";
     private int attempts;
     private boolean selectingSource;
     private ArrayList<JSONObject> files=new ArrayList<>();
     private int fileIndex=-1,resizeIndex;
     private boolean dragging;
     private long pendingPosition;
+    private float playbackSpeed=1f;
+    private String preferredAudioLanguage="ru";
     private final Runnable hide=()->{if(player!=null&&player.isPlaying()&&panel==null&&!dragging)hideControls();};
     private final Runnable startupTimeout=()->{if(!closed&&player!=null&&player.getPlaybackState()==Player.STATE_BUFFERING)retrySource();};
     private final Runnable tick=new Runnable(){public void run(){
         if(closed)return;
         if(player!=null&&timeline!=null){
             long duration=player.getDuration(),position=player.getCurrentPosition();
+            timeline.setSecondaryProgress(duration>0?(int)Math.min(1000,player.getBufferedPosition()*1000/duration):0);
             if(!dragging){timeline.setEnabled(duration>0);timeline.setProgress(duration>0?(int)(position*1000/duration):0);timeNow.setText(Logic.time(position));}
             timeEnd.setText(duration>0?Logic.time(duration):"—:—");
-            pauseButton.setText(player.isPlaying()?"Пауза":"Смотреть");Ui.icon(PlayerActivity.this,pauseButton,player.isPlaying()?R.drawable.ic_pause:R.drawable.ic_play);
+            pauseButton.setText(player.isPlaying()?"Пауза":"Смотреть");pauseButton.setContentDescription(player.isPlaying()?"Пауза":"Смотреть");Ui.icon(PlayerActivity.this,pauseButton,player.isPlaying()?R.drawable.ic_pause:R.drawable.ic_play);
         }
         handler.postDelayed(this,1000);
     }};
@@ -54,6 +58,9 @@ public final class PlayerActivity extends Activity {
         super.onCreate(saved);getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         title=getIntent().getStringExtra("title");
+        wantedEpisode=getIntent().getStringExtra("episode");if(wantedEpisode==null)wantedEpisode="";
+        if(wantedEpisode.isEmpty()&&getIntent().getBooleanExtra("serial",false))wantedEpisode=getSharedPreferences("history",0).getString("episode:"+getIntent().getStringExtra("movieId"),"S1E1");
+        desiredQuality=getSharedPreferences("playerSettings",0).getString("quality","");
         Display.Mode display=getWindowManager().getDefaultDisplay().getMode();if(Math.max(display.getPhysicalWidth(),display.getPhysicalHeight())>=3800)autoTarget="4K";
         root=new FrameLayout(this);root.setBackgroundColor(Color.BLACK);root.setOnClickListener(v->showControls());setContentView(root);
         loading("Подготавливаем просмотр");TorrentService.failure=null;
@@ -64,8 +71,8 @@ public final class PlayerActivity extends Activity {
         int token=++generation;
         worker.execute(()->{
             try{
-                ArrayList<Sources.Candidate> found=Sources.load(getIntent().getStringExtra("movieId"));
-                runOnUiThread(()->{if(!closed&&token==generation){candidates.clear();candidates.addAll(found);attempted.clear();attempts=0;tryNextSource();}});
+                ArrayList<Sources.Candidate> found=Sources.load(getIntent().getStringExtra("movieId"),wantedEpisode);
+                runOnUiThread(()->{if(!closed&&token==generation){candidates.clear();candidates.addAll(found);if(!desiredQuality.isEmpty()){boolean available=false;for(Sources.Candidate c:found)if(c.quality.equals(desiredQuality)){available=true;break;}if(!available)desiredQuality="";}attempted.clear();attempts=0;tryNextSource();}});
             }catch(Exception e){runOnUiThread(()->{if(!closed&&token==generation)fail("Не удалось начать просмотр. Проверьте подключение.");});}
         });
     }
@@ -76,6 +83,7 @@ public final class PlayerActivity extends Activity {
         for(Sources.Candidate candidate:options)if(!attempted.contains(candidate.hash)){next=candidate;break;}
         if(next==null||attempts>=6){selectingSource=false;fail("Просмотр сейчас недоступен. Попробуйте другое качество или повторите позже.");return;}
         attempted.add(next.hash);attempts++;String previous=hash;link=next.link;quality=next.quality;selectingSource=true;
+        sourceEpisodeFilename=next.episodeFile(wantedEpisode);
         releasePlayer();loading(attempts==1?"Подготавливаем просмотр":"Подбираем доступное видео…");prepareSource(link,previous);
     }
     private void retrySource(){
@@ -128,6 +136,9 @@ public final class PlayerActivity extends Activity {
             String saved=wantedEpisode.isEmpty()?getSharedPreferences("history",0).getString("episode:"+getIntent().getStringExtra("movieId"),""):wantedEpisode;
             if(!saved.isEmpty()){
                 index=-1;for(int i=0;i<files.size();i++)if(saved.equals(Logic.episodeKey(files.get(i).optString("path")))){index=i;break;}
+                if(index<0&&!sourceEpisodeFilename.isEmpty())for(int i=0;i<files.size();i++){
+                    String mapped=sourceEpisodeFilename.substring(sourceEpisodeFilename.lastIndexOf('/')+1);if(mapped.equals(fileName(files.get(i)))){index=i;break;}
+                }
                 if(index<0){retrySource();return;}
             }else{
                 String filename=wantedFilename.isEmpty()?getSharedPreferences("history",0).getString("filename:"+getIntent().getStringExtra("movieId"),""):wantedFilename;
@@ -166,21 +177,27 @@ public final class PlayerActivity extends Activity {
         if(index<0||index>=files.size())return;
         JSONObject file=files.get(index);int id=file.optInt("id",-1);if(id<1){retrySource();return;}
         releasePlayer();fileIndex=index;
-        positionKey=getIntent().getStringExtra("movieId")+":"+hash+":"+id;
-        long resume=pendingPosition>0?pendingPosition:getSharedPreferences("history",0).getLong(positionKey,0);pendingPosition=0;
+        String movieId=getIntent().getStringExtra("movieId");
+        String episode=Logic.episodeKey(file.optString("path"));
+        positionKey="position:"+movieId+":"+(getIntent().getBooleanExtra("serial",false)?(episode.isEmpty()?fileName(file):episode):"movie");
+        long legacy=getSharedPreferences("history",0).getLong(movieId+":"+hash+":"+id,0);
+        long resume=pendingPosition>0?pendingPosition:getSharedPreferences("history",0).getLong(positionKey,legacy);pendingPosition=0;
         String stream=Net.ENGINE+"/stream/video?link="+Net.enc(hash)+"&index="+id+"&play&preload";
         root.removeAllViews();video=new PlayerView(this);video.setUseController(false);video.setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS);root.addView(video,new FrameLayout.LayoutParams(-1,-1));
         player=new ExoPlayer.Builder(this).build();video.setPlayer(player);
-        player.setTrackSelectionParameters(player.getTrackSelectionParameters().buildUpon().setPreferredAudioLanguage("ru").build());
+        player.setPlaybackSpeed(playbackSpeed);
+        video.setResizeMode(new int[]{AspectRatioFrameLayout.RESIZE_MODE_FIT,AspectRatioFrameLayout.RESIZE_MODE_ZOOM,AspectRatioFrameLayout.RESIZE_MODE_FILL}[resizeIndex]);
+        player.setTrackSelectionParameters(player.getTrackSelectionParameters().buildUpon().setPreferredAudioLanguage(preferredAudioLanguage).build());
         buildControls();player.addListener(new Player.Listener(){
             @Override public void onPlayerError(PlaybackException error){handler.removeCallbacks(hide);retrySource();}
             @Override public void onIsPlayingChanged(boolean playing){if(!playing)showControls();else scheduleHide();}
             @Override public void onPlaybackStateChanged(int state){
                 if(state==Player.STATE_READY)handler.removeCallbacks(startupTimeout);
+                if(state==Player.STATE_BUFFERING){handler.removeCallbacks(startupTimeout);handler.postDelayed(startupTimeout,25000);}
                 if(subtitle!=null)subtitle.setText(state==Player.STATE_BUFFERING?"Буферизация…":fileSubtitle());
                 if(state==Player.STATE_ENDED&&fileIndex+1<files.size()){
                     ArrayList<String> labels=new ArrayList<>(Arrays.asList("Следующая серия","Остаться"));
-                    ArrayList<Runnable> actions=new ArrayList<>();actions.add(()->playFile(fileIndex+1));actions.add(()->{});showPanel("Продолжить просмотр?",labels,actions,0);
+                    ArrayList<Runnable> actions=new ArrayList<>();actions.add(()->{pendingPosition=0;playFile(fileIndex+1);});actions.add(()->{});showPanel("Продолжить просмотр?",labels,actions,0);
                 }
             }
         });
@@ -200,7 +217,7 @@ public final class PlayerActivity extends Activity {
         overlay.addView(bottom,new FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM));
         LinearLayout times=new LinearLayout(this);times.setGravity(Gravity.CENTER_VERTICAL);
         timeNow=Ui.text(this,"00:00",15,Ui.TEXT);timeNow.setMinWidth(dp(64));times.addView(timeNow);
-        timeline=new SeekBar(this);timeline.setMax(1000);timeline.setKeyProgressIncrement(10);timeline.setProgressTintList(android.content.res.ColorStateList.valueOf(Ui.ACCENT));timeline.setThumbTintList(android.content.res.ColorStateList.valueOf(Ui.ACCENT));timeline.setContentDescription("Позиция воспроизведения");
+        timeline=new SeekBar(this);timeline.setMax(1000);timeline.setKeyProgressIncrement(10);timeline.setProgressTintList(android.content.res.ColorStateList.valueOf(Ui.ACCENT));timeline.setSecondaryProgressTintList(android.content.res.ColorStateList.valueOf(0xff727984));timeline.setThumbTintList(android.content.res.ColorStateList.valueOf(Ui.ACCENT));timeline.setContentDescription("Позиция воспроизведения");
         times.addView(timeline,new LinearLayout.LayoutParams(0,dp(48),1));timeEnd=Ui.text(this,"—:—",15,Ui.MUTED);timeEnd.setMinWidth(dp(64));timeEnd.setGravity(Gravity.END);times.addView(timeEnd);bottom.addView(times);
         timeline.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
             public void onStartTrackingTouch(SeekBar bar){dragging=true;handler.removeCallbacks(hide);}
@@ -212,8 +229,7 @@ public final class PlayerActivity extends Activity {
         });
         HorizontalScrollView scroll=new HorizontalScrollView(this);scroll.setHorizontalScrollBarEnabled(false);LinearLayout controls=new LinearLayout(this);controls.setGravity(Gravity.CENTER_VERTICAL);scroll.addView(controls);bottom.addView(scroll);
         pauseButton=control(controls,"Пауза",R.drawable.ic_pause,this::toggle);
-        control(controls,"Качество",R.drawable.ic_quality,this::showSources);
-        control(controls,"Озвучка",R.drawable.ic_audio,()->tracks(C.TRACK_TYPE_AUDIO));
+        control(controls,"Качество и озвучка",R.drawable.ic_quality,this::showSources);
         control(controls,"Субтитры",R.drawable.ic_subtitles,()->tracks(C.TRACK_TYPE_TEXT));
         if(getIntent().getBooleanExtra("serial",false)&&files.size()>1)control(controls,"Серии",R.drawable.ic_list,this::showFiles);
         control(controls,"Скорость",R.drawable.ic_speed,this::speed);
@@ -222,7 +238,7 @@ public final class PlayerActivity extends Activity {
     }
     private TextView control(LinearLayout row,String label,int icon,Runnable action){
         TextView b=Ui.button(this,label,0,false,()->{action.run();scheduleHide();});b.setTextSize(12);b.setGravity(Gravity.CENTER);b.setPadding(dp(6),dp(8),dp(6),dp(8));Ui.icon(this,b,icon);
-        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(84),dp(76));lp.rightMargin=dp(8);row.addView(b,lp);b.setOnFocusChangeListener((v,focused)->{if(focused)scheduleHide();});return b;
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(label.equals("Качество и озвучка")?136:84),dp(76));lp.rightMargin=dp(8);row.addView(b,lp);b.setOnFocusChangeListener((v,focused)->{if(focused)scheduleHide();});return b;
     }
     private void showControls(){if(overlay!=null){boolean hidden=overlay.getVisibility()!=View.VISIBLE;overlay.setVisibility(View.VISIBLE);if(hidden&&pauseButton!=null)pauseButton.requestFocus();scheduleHide();}}
     private void hideControls(){if(overlay!=null)overlay.setVisibility(View.GONE);root.requestFocus();}
@@ -243,9 +259,12 @@ public final class PlayerActivity extends Activity {
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=dp(8);choices.addView(b,lp);if(focus==null||i==selected)focus=b;
         }
         TextView cancel=Ui.button(this,"Закрыть",R.drawable.ic_back,false,dialog::dismiss);layout.addView(cancel);
+        presentDialog(dialog,layout,focus!=null?focus:cancel,500);
+    }
+    private void presentDialog(Dialog dialog,LinearLayout layout,View focus,int width){
         dialog.setContentView(layout);dialog.setOnDismissListener(d->{if(panel==dialog)panel=null;scheduleHide();});dialog.show();
-        Window window=dialog.getWindow();if(window!=null){window.setBackgroundDrawableResource(android.R.color.transparent);window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);WindowManager.LayoutParams attributes=window.getAttributes();attributes.dimAmount=.45f;attributes.gravity=Gravity.END|Gravity.CENTER_VERTICAL;window.setAttributes(attributes);window.setLayout(dp(Math.min(500,getResources().getConfiguration().screenWidthDp-48)),(int)(getResources().getDisplayMetrics().heightPixels*.88f));}
-        if(focus!=null)focus.requestFocus();else cancel.requestFocus();
+        Window window=dialog.getWindow();if(window!=null){window.setBackgroundDrawableResource(android.R.color.transparent);window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);WindowManager.LayoutParams attributes=window.getAttributes();attributes.dimAmount=.45f;attributes.gravity=Gravity.END|Gravity.CENTER_VERTICAL;window.setAttributes(attributes);window.setLayout(dp(Math.min(width,getResources().getConfiguration().screenWidthDp-48)),(int)(getResources().getDisplayMetrics().heightPixels*.88f));}
+        focus.requestFocus();
     }
     private void tracks(int type){
         if(player==null)return;ArrayList<String> labels=new ArrayList<>();ArrayList<Runnable> actions=new ArrayList<>();int selected=0;
@@ -265,7 +284,7 @@ public final class PlayerActivity extends Activity {
     }
     private void speed(){
         ArrayList<String> labels=new ArrayList<>();ArrayList<Runnable> actions=new ArrayList<>();int selected=0;float[] speeds={.75f,1,1.25f,1.5f,2};
-        for(int i=0;i<speeds.length;i++){float speed=speeds[i];labels.add(speed==1?"Обычная · 1×":speed+"×");actions.add(()->{if(player!=null)player.setPlaybackSpeed(speed);});if(player!=null&&Math.abs(player.getPlaybackParameters().speed-speed)<.01)selected=i;}
+        for(int i=0;i<speeds.length;i++){float speed=speeds[i];labels.add(speed==1?"Обычная · 1×":speed+"×");actions.add(()->{playbackSpeed=speed;if(player!=null)player.setPlaybackSpeed(speed);});if(player!=null&&Math.abs(player.getPlaybackParameters().speed-speed)<.01)selected=i;}
         showPanel("Скорость",labels,actions,selected);
     }
     private void resize(){
@@ -282,18 +301,61 @@ public final class PlayerActivity extends Activity {
         }
     }
     private void changePreferences(String resolution,String translation){
+        getSharedPreferences("playerSettings",0).edit().putString("quality",resolution).apply();
         preserveCurrent();desiredQuality=resolution;desiredTranslation=translation;attempted.clear();attempts=0;tryNextSource();
     }
     private void showSources(){
         if(candidates.isEmpty()){releasePlayer();loading("Подготавливаем просмотр");loadSources();return;}
-        ArrayList<String> labels=new ArrayList<>();ArrayList<Runnable> actions=new ArrayList<>();
-        labels.add("Автоматически");actions.add(()->{if(!desiredQuality.isEmpty()||player==null)changePreferences("",desiredTranslation);});int selected=0;
-        String[] tiers={"4K","1080p","720p","SD"};String[] names={"4K Ultra HD","Full HD · 1080p","HD · 720p","Стандартное · SD"};
-        for(int i=0;i<tiers.length;i++){
-            final String tier=tiers[i];boolean available=false;for(Sources.Candidate candidate:candidates)if(candidate.quality.equals(tier)&&(desiredTranslation.isEmpty()||desiredTranslation.equals(candidate.translation))){available=true;break;}
-            if(!available)continue;labels.add(names[i]);actions.add(()->{if(!desiredQuality.equals(tier)||player==null)changePreferences(tier,desiredTranslation);});if(tier.equals(desiredQuality))selected=labels.size()-1;
+        if(panel!=null)panel.dismiss();handler.removeCallbacks(hide);
+        Dialog dialog=new Dialog(this);panel=dialog;
+        LinearLayout layout=new LinearLayout(this);layout.setOrientation(LinearLayout.VERTICAL);layout.setPadding(dp(24),dp(24),dp(24),dp(16));layout.setBackground(Ui.shape(this,Ui.PANEL,0xff3d424b,1,14));
+        TextView heading=Ui.text(this,"Качество и озвучка",23,Ui.TEXT);heading.setPadding(0,0,0,dp(18));layout.addView(heading);
+        ArrayList<String> tiers=new ArrayList<>();tiers.add("");
+        for(String tier:new String[]{"4K","2K","1080p","720p","576p","480p","360p","240p"}){
+            for(Sources.Candidate candidate:candidates)if(candidate.quality.equals(tier)){tiers.add(tier);break;}
         }
-        showPanel("Качество видео",labels,actions,selected);
+        HorizontalScrollView strip=new HorizontalScrollView(this);strip.setHorizontalScrollBarEnabled(false);
+        LinearLayout tabs=new LinearLayout(this);strip.addView(tabs);layout.addView(strip,new LinearLayout.LayoutParams(-1,dp(52)));
+        TextView hint=Ui.text(this,"Выберите озвучку для этого качества",13,Ui.MUTED);hint.setPadding(0,dp(16),0,dp(14));layout.addView(hint);
+        ScrollView scroll=new ScrollView(this);LinearLayout voices=new LinearLayout(this);voices.setOrientation(LinearLayout.VERTICAL);scroll.addView(voices);layout.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        String[] selected={tiers.contains(desiredQuality)?desiredQuality:""};
+        ArrayList<TextView> buttons=new ArrayList<>();
+        Runnable render=()->{
+            voices.removeAllViews();
+            for(int i=0;i<buttons.size();i++){
+                boolean active=tiers.get(i).equals(selected[0]);buttons.get(i).setBackground(Ui.background(this,active));buttons.get(i).setTextColor(active?Ui.BG:Ui.TEXT);
+            }
+            LinkedHashSet<String> translations=new LinkedHashSet<>();translations.add("");
+            for(Sources.Candidate candidate:candidates)if(selected[0].isEmpty()||selected[0].equals(candidate.quality))if(!candidate.translation.isEmpty())translations.add(candidate.translation);
+            for(String translation:translations){
+                final String resolution=selected[0];boolean active=desiredQuality.equals(resolution)&&desiredTranslation.equals(translation);
+                TextView choice=Ui.button(this,translation.isEmpty()?"Автоматически · предпочитать русский":translation,active?R.drawable.ic_check:R.drawable.ic_audio,false,()->{
+                    dialog.dismiss();if(player==null||!desiredQuality.equals(resolution)||!desiredTranslation.equals(translation))changePreferences(resolution,translation);
+                });if(active)choice.setTextColor(Ui.ACCENT);
+                LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=dp(8);voices.addView(choice,lp);
+            }
+            // These tracks are verified in the currently playing video, unlike catalog descriptions.
+            if(player!=null&&(selected[0].isEmpty()||selected[0].equals(quality))){
+                TextView label=Ui.text(this,"Звуковые дорожки текущего видео",13,Ui.MUTED);label.setPadding(0,dp(16),0,dp(12));voices.addView(label);
+                for(Tracks.Group group:player.getCurrentTracks().getGroups())if(group.getType()==C.TRACK_TYPE_AUDIO)for(int i=0;i<group.length;i++)if(group.isTrackSupported(i)){
+                    final String resolution=selected[0];
+                    final int index=i;Format f=group.getTrackFormat(i);String language=f.language==null?"":new Locale(f.language).getDisplayLanguage(new Locale("ru"));
+                    String name=f.label!=null?f.label:language.isEmpty()?"Дорожка "+(i+1):language;
+                    TextView track=Ui.button(this,name+(f.channelCount>0?" · "+f.channelCount+" кан.":""),group.isTrackSelected(i)?R.drawable.ic_check:R.drawable.ic_audio,false,()->{
+                        dialog.dismiss();desiredQuality=resolution;getSharedPreferences("playerSettings",0).edit().putString("quality",resolution).apply();if(f.language!=null)preferredAudioLanguage=f.language;
+                        if(player!=null)player.setTrackSelectionParameters(player.getTrackSelectionParameters().buildUpon().setPreferredAudioLanguage(preferredAudioLanguage).setTrackTypeDisabled(C.TRACK_TYPE_AUDIO,false).setOverrideForType(new TrackSelectionOverride(group.getMediaTrackGroup(),index)).build());
+                    });LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=dp(8);voices.addView(track,lp);
+                }
+            }
+            scroll.scrollTo(0,0);
+        };
+        for(String tier:tiers){
+            TextView tab=Ui.button(this,tier.isEmpty()?"Авто":tier,0,false,()->{selected[0]=tier;render.run();});tab.setGravity(Gravity.CENTER);tab.setTextSize(14);
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(94),dp(48));lp.rightMargin=dp(8);tabs.addView(tab,lp);buttons.add(tab);
+        }
+        render.run();TextView cancel=Ui.button(this,"Закрыть",R.drawable.ic_back,false,dialog::dismiss);layout.addView(cancel);
+        TextView focus=buttons.get(tiers.indexOf(selected[0]));presentDialog(dialog,layout,focus,700);
+        strip.post(()->strip.smoothScrollTo(Math.max(0,focus.getLeft()-dp(20)),0));
     }
     private void fail(String message){
         if(closed)return;
