@@ -86,7 +86,7 @@ foreach ($BuildTarget in $BuildTargets) {
     $ProjectName = if ($BuildTarget -eq 'tv') { 'nuvio-tv' } else { 'nuvio-mobile' }
     $AppRoot = Join-Path $RepoRoot ('android\' + $ProjectName)
     Write-Host "Preparing $ProjectName" -ForegroundColor Cyan
-    Invoke-Checked { git -C $RepoRoot submodule update --init --depth 1 -- ('android/' + $ProjectName) }
+    if (-not (Test-Path (Join-Path $AppRoot 'gradlew.bat'))) { throw "Missing vendored $ProjectName sources" }
     $Patch = Join-Path $RepoRoot ('android\' + $ProjectName + '.patch')
     $Patches = @($Patch)
     $LocalPatch = Join-Path $RepoRoot ('android\' + $ProjectName + '-local.patch')
@@ -132,7 +132,7 @@ foreach ($BuildTarget in $BuildTargets) {
     $AppRoot = Join-Path $RepoRoot ('android\' + $ProjectName)
     Push-Location $AppRoot
     try {
-        Invoke-Checked { & '.\gradlew.bat' --no-daemon '--max-workers=2' '-Dorg.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8' (':' + $ModuleName + ':assembleFullDebug') }
+        Invoke-Checked { & '.\gradlew.bat' '--build-cache' '--parallel' '--max-workers=2' (':' + $ModuleName + ':assembleFullDebug') }
     } finally { Pop-Location }
     $Output = Join-Path $AppRoot ($ModuleName + '\build\outputs\apk\full\debug')
     $ApkFile = Get-ChildItem -LiteralPath $Output -Filter '*.apk' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
