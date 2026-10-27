@@ -49,6 +49,12 @@ class CatalogRepositoryImpl @Inject constructor(
     ): Flow<NetworkResult<CatalogRow>> = flow {
         emit(NetworkResult.Loading)
 
+        // CinemaHall is the only content catalogue; never query third-party add-ons.
+        if (!CinemaHallSourcePolicy.isOwnCatalog(addonBaseUrl, addonId)) {
+            emit(NetworkResult.Error("Каталог доступен только через CinemaHall API"))
+            return@flow
+        }
+
         if (ServerCatalog.isServerAddon(addonBaseUrl)) {
             val row = try {
                 serverCatalog.catalog(addonBaseUrl, addonId, addonName, catalogId, catalogName, type, skip, extraArgs)
