@@ -9,7 +9,7 @@ import java.net.URLDecoder;
 final class CinemaCatalog {
     static final String[][] ROWS={{"popular","Сейчас смотрят","movie"},{"series","Популярные сериалы","series"},{"new","Новые фильмы","movie"},{"new_series","Новые сериалы","series"},{"top","Лучшие фильмы","movie"},{"top_series","Лучшие сериалы","series"},{"animation","Мультфильмы","movie"},{"scifi","Фантастика","movie"}};
     static final String AVAILABLE="playable:true AND trailer:false AND adult:false AND tor_count:[1 TO *]";
-    static final String FIELDS="id,name_rus,name_eng,name_original,description,year,rating_imdb,serial,genre_name,runtime,episodes";
+    static final String FIELDS="id,name_rus,name_eng,name_original,description,year,rating_imdb,rating_kinopoisk,serial,genre_name,runtime,episodes";
     private final Context context;
     private final String base,playToken=UUID.randomUUID().toString();
     private final CinemaSnapshot snapshot;
@@ -133,9 +133,13 @@ final class CinemaCatalog {
     private JSONObject meta(JSONObject film,boolean full) throws Exception {
         String id=film.getString("id");JSONObject art=full?Metadata.load(context,film,true):new JSONObject();
         JSONObject result=new JSONObject().put("id","ch:"+id).put("type",film.optBoolean("serial")?"series":"movie")
-            .put("name",film.optString("name_rus").isEmpty()?film.optString("name_original"):film.optString("name_rus"))
+            .put("name",film.optString("name_rus").isEmpty()?(film.optString("name_original").isEmpty()?film.optString("name_eng"):film.optString("name_original")):film.optString("name_rus"))
             .put("poster",art.optString("poster").isEmpty()?"https://img2.zonapic.com/images/film_240/"+(id.length()>3?id.substring(0,id.length()-3):"0")+"/"+id+".jpg":art.optString("poster"))
             .put("background",art.optString("background")).put("description",film.optString("description")).put("releaseInfo",film.optString("year")).put("imdbRating",film.optString("rating_imdb"));
+        JSONArray aliases=new JSONArray();for(String field:new String[]{"name_rus","name_eng","name_original"}){String name=film.optString(field).trim();if(!name.isEmpty())aliases.put(name);}result.put("aliases",aliases);
+        JSONObject scores=new JSONObject().put("kinopoisk",film.opt("rating_kinopoisk")).put("imdb",film.opt("rating_imdb"));
+        JSONObject enriched=art.optJSONObject("ratings");if(enriched!=null){Iterator<String> keys=enriched.keys();while(keys.hasNext()){String key=keys.next();scores.put(key,enriched.opt(key));}}
+        CinemaRatings.append(result,scores);
         if(result.optString("background").equals(result.optString("poster")))result.remove("background");
         JSONArray genres=new JSONArray();for(String g:film.optString("genre_name").split(","))if(!g.trim().isEmpty())genres.put(g.trim());result.put("genres",genres);
         if(full&&film.optBoolean("serial")){

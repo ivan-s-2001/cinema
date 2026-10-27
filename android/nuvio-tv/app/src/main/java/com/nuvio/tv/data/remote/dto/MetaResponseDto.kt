@@ -23,6 +23,7 @@ data class MetaDto(
     @Json(name = "released") val released: String? = null,
     @Json(name = "status") val status: String? = null,
     @Json(name = "imdbRating") val imdbRating: String? = null,
+    @Json(name = "cinemaRatings") val cinemaRatings: List<CinemaRatingDto>? = null,
     @Json(name = "imdb_id") val imdbId: String? = null,
     @Json(name = "slug") val slug: String? = null,
     @Json(name = "genres") val genres: List<String>? = null,
@@ -49,6 +50,14 @@ data class MetaDto(
     @Json(name = "_hasLogo") val hasLogo: Boolean? = null,
     @Json(name = "_hasLinks") val hasLinks: Boolean? = null,
     @Json(name = "_hasVideos") val hasVideos: Boolean? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class CinemaRatingDto(
+    @Json(name = "source") val source: String,
+    @Json(name = "label") val label: String,
+    @Json(name = "value") val value: Double,
+    @Json(name = "scale") val scale: Int
 )
 
 @JsonClass(generateAdapter = true)

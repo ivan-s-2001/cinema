@@ -71,7 +71,7 @@ final class CinemaSnapshot {
         return image.startsWith("https://")||image.startsWith("http://")?image:"";
     }
     private static String title(JSONObject row){
-        for(String key:new String[]{"title","name","originalTitle"}){
+        for(String key:new String[]{"titleRu","title","name","originalTitle"}){
             String value=row.optString(key).trim();
             if(!value.isEmpty())return value;
         }
@@ -87,7 +87,9 @@ final class CinemaSnapshot {
             if(images.optBoolean("backdropVerified")&&!backdrop.isEmpty()&&!backdrop.equals(result.optString("poster")))result.put("background",backdrop);
         }
         if(row!=null){
-            if(result.optString("name").trim().isEmpty())result.put("name",title(row));
+            CinemaRatings.append(result,row.optJSONObject("ratings"));
+            if(row.optJSONArray("aliases")!=null)result.put("aliases",row.optJSONArray("aliases"));
+            if(!row.optString("titleRu").trim().isEmpty()||result.optString("name").trim().isEmpty())result.put("name",title(row));
             String summary=row.optString("description").trim();
             if(!summary.isEmpty())result.put("description",summary);
         }
@@ -106,10 +108,8 @@ final class CinemaSnapshot {
         }
         if(images!=null&&!images.optString("logo").isEmpty())result.put("logo",images.optString("logo"));
         if(row.optInt("runtimeMinutes")>0)result.put("runtime",row.getInt("runtimeMinutes")+" мин");
-        JSONObject scores=row.optJSONObject("ratings");if(scores!=null){
-            Object imdb=scores.opt("imdb");double value=imdb instanceof Number?((Number)imdb).doubleValue():imdb instanceof JSONObject?((JSONObject)imdb).optDouble("value",((JSONObject)imdb).optDouble("rating",0)):0;
-            if(value>0&&value<=10)result.put("imdbRating",String.format(Locale.ROOT,"%.1f",value));
-        }
+        CinemaRatings.append(result,row.optJSONObject("ratings"));
+        if(row.optJSONArray("aliases")!=null)result.put("aliases",row.optJSONArray("aliases"));
         JSONObject details=row.optJSONObject("details");JSONArray seasons=details==null?null:details.optJSONArray("seasons"),videos=new JSONArray();
         if(seasons!=null)for(int s=0;s<seasons.length();s++){
             JSONObject season=seasons.getJSONObject(s);int sn=season.optInt("number");JSONArray episodes=season.optJSONArray("episodes");if(episodes==null)continue;
@@ -119,7 +119,8 @@ final class CinemaSnapshot {
     }
     synchronized JSONObject document(String id) throws Exception {
         JSONObject row=raw(id);if(row==null)return null;JSONObject ids=row.getJSONObject("ids");JSONArray aliases=row.optJSONArray("aliases");
-        String original=row.optString("title");if(aliases!=null&&aliases.length()>1)original=aliases.optString(1);
-        return new JSONObject().put("serial",row.optString("type").equals("tv")).put("id",ids.optString("kinopoisk")).put("imdb",ids.optString("imdb")).put("name_rus",row.optString("title")).put("name_original",original).put("year",row.optInt("year"));
+        String original=row.optString("originalTitle");if(original.isEmpty()&&aliases!=null&&aliases.length()>1)original=aliases.optString(1);
+        if(original.isEmpty())original=row.optString("title");
+        return new JSONObject().put("serial",row.optString("type").equals("tv")).put("id",ids.optString("kinopoisk")).put("imdb",ids.optString("imdb")).put("name_rus",row.optString("title")).put("name_eng",row.optString("titleEn")).put("name_original",original).put("year",row.optInt("year"));
     }
 }

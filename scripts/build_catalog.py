@@ -136,7 +136,7 @@ def normalize(raw):
     anime = raw.get("anime") or {}
     return {
         "type": kind, "ids": ids, "title": (name.get("ru") or name.get("original") or aliases[0]) if aliases else "",
-        "aliases": aliases, "year": release.get("year"), "releaseDate": release.get("date"),
+        "aliases": aliases, "titleRu": name.get("ru") or "", "titleEn": name.get("en") or "", "originalTitle": name.get("original") or "", "year": release.get("year"), "releaseDate": release.get("date"),
         "status": release.get("status"), "runtimeMinutes": release.get("runtimeMinutes"),
         "ageRating": release.get("ageRating"), "description": desc.get("ru") or desc.get("en") or "",
         "tagline": (raw.get("tagline") or {}).get("ru") or (raw.get("tagline") or {}).get("en") or "",
@@ -176,7 +176,9 @@ def merge_rows(old, new):
                 warning = f"{field}: {original} != {value}"
                 if warning not in old["identityWarnings"]:
                     old["identityWarnings"].append(warning)
-    for field in ("title", "year", "status", "description", "releaseDate", "runtimeMinutes", "ageRating", "tagline"):
+    if not old.get("titleRu") and new.get("titleRu"):
+        old["title"] = new["titleRu"]
+    for field in ("title", "titleRu", "titleEn", "originalTitle", "year", "status", "description", "releaseDate", "runtimeMinutes", "ageRating", "tagline"):
         if not old.get(field) and new.get(field):
             old[field] = new[field]
     for field in ("aliases", "genres", "countries", "studios", "voiceoverLabels", "sources"):

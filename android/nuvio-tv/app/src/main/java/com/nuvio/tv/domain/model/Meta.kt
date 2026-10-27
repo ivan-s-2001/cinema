@@ -45,7 +45,8 @@ data class Meta(
     val hasLandscapePoster: Boolean? = null,
     val hasLogo: Boolean? = null,
     val hasLinks: Boolean? = null,
-    val hasVideos: Boolean? = null
+    val hasVideos: Boolean? = null,
+    val cinemaRatings: List<CinemaRating> = emptyList()
 ) {
     val apiType: String
         get() = type.toApiString(rawType)
@@ -60,6 +61,8 @@ data class Meta(
      */
     fun watchableEpisodes(): List<Video> = videos.watchableEpisodes()
 }
+
+data class CinemaRating(val source: String, val label: String, val value: Double, val scale: Int)
 
 fun List<Video>.watchableEpisodes(): List<Video> {
     val candidates = filter {

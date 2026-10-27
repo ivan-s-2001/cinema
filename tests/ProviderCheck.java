@@ -31,6 +31,10 @@ public final class ProviderCheck {
         JSONArray missing=new JSONArray().put(new JSONObject());
         CinemaCatalog.fillEpisodeArtwork(missing,"https://example.org/poster.jpg","https://example.org/poster.jpg");
         if(missing.getJSONObject(0).has("thumbnail"))throw new AssertionError("Portrait cannot be used as episode still");
+        JSONObject ratings=new JSONObject();
+        CinemaRatings.append(ratings,new JSONObject().put("kinopoisk",new JSONObject().put("value",8.2)).put("imdb",7.4).put("anilist",85).put("tmdb",25).put("mal",JSONObject.NULL));
+        JSONArray ratingItems=ratings.getJSONArray("cinemaRatings");
+        if(ratingItems.length()!=3||!ratingItems.getJSONObject(0).getString("source").equals("kinopoisk")||ratingItems.getJSONObject(2).getInt("scale")!=100||!ratings.getString("imdbRating").equals("7.4"))throw new AssertionError("Ratings must preserve platform and scale and omit invalid values");
         JSONObject artResult=new JSONObject();
         JSONObject art=new JSONObject().put("poster", "https://example.org/poster.jpg")
             .put("backdrop", "https://example.org/poster.jpg")

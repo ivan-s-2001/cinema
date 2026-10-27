@@ -786,6 +786,23 @@ private fun MetaInfoRow(
             }
         }
 
+        val cinemaRatings = meta.cinemaRatings.filter { rating ->
+            rating.source != "imdb" && !(rating.source == "tmdb" && tmdbRating != null)
+        }
+        if (cinemaRatings.isNotEmpty()) {
+            cinemaRatings.chunked(3).forEach { ratings ->
+                Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    ratings.forEach { rating ->
+                        val value = if (rating.scale == 100) String.format(java.util.Locale.ROOT, "%.0f", rating.value)
+                            else String.format(java.util.Locale.ROOT, "%.1f", rating.value)
+                        Text("${rating.label} $value/${rating.scale}", style = MaterialTheme.typography.labelLarge,
+                            color = NuvioTheme.extendedColors.textSecondary)
+                    }
+                }
+            }
+        }
+
         // Secondary row: Runtime, Age Rating, Status, Country, Language
         if (ageRatingBadge != null || statusBadge != null || secondaryItems.isNotEmpty()) {
             Row(

@@ -3,6 +3,7 @@ package com.nuvio.tv.data.mapper
 import com.nuvio.tv.data.remote.dto.MetaDto
 import com.nuvio.tv.data.remote.dto.MetaLinkDto
 import com.nuvio.tv.data.remote.dto.VideoDto
+import com.nuvio.tv.domain.model.CinemaRating
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.Meta
 import com.nuvio.tv.domain.model.MetaLink
@@ -36,6 +37,8 @@ fun MetaDto.toDomain(episodeLabel: String = "Episode"): Meta {
         releaseInfo = releaseInfo,
         status = status?.trim()?.takeIf { it.isNotBlank() },
         imdbRating = imdbRating?.toFloatOrNull(),
+        cinemaRatings = cinemaRatings.orEmpty().filter { it.value > 0 && it.scale > 0 && it.value <= it.scale }
+            .map { CinemaRating(it.source, it.label, it.value, it.scale) },
         genres = genres ?: emptyList(),
         runtime = runtime,
         director = directors,

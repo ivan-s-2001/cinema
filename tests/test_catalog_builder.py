@@ -24,6 +24,15 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(tmdb_image_url("https://example.org/still.jpg"), "https://example.org/still.jpg")
         self.assertEqual(tmdb_image_url("//example.org/still.jpg"), "")
 
+    def test_russian_name_and_original_aliases_are_retained(self):
+        raw = record()
+        raw["title"] = {"ru": "Бойцовский клуб", "en": "Fight Club", "original": "Fight Club original"}
+        row = normalize(raw)
+        self.assertEqual(row["title"], "Бойцовский клуб")
+        self.assertEqual(row["originalTitle"], "Fight Club original")
+        self.assertIn("Fight Club", row["aliases"])
+        self.assertIn("Fight Club original", row["aliases"])
+
     def test_art_aliases_voiceovers_are_not_streams(self):
         row = normalize(record())
         self.assertEqual(row["images"]["backdrop"], "https://image.tmdb.org/t/p/original/landscape.jpg")
