@@ -130,9 +130,11 @@ Copy-Item -Path (Join-Path $RepoRoot 'android\overlay\*') -Destination $AppRoot 
 
 Write-Host '[3/6] Встроенный TorrServer, проверка SHA256' -ForegroundColor Cyan
 $engines = @(
-    @{ Abi='arm64-v8a'; Name='TorrServer-android-arm64'; Hash='93250bb1850e69663c6758398be515c2c429595cb4692c6eccb367f2236868d5' },
-    @{ Abi='armeabi-v7a'; Name='TorrServer-android-arm7'; Hash='e775001edf7bfb2adebfde0ba36780357c0951f12203adb367bd69b2b45522b6' }
+    @{ Abi='arm64-v8a'; Name='TorrServer-android-arm64'; Hash='93250bb1850e69663c6758398be515c2c429595cb4692c6eccb367f2236868d5' }
 )
+if ($Universal) {
+    $engines += @{ Abi='armeabi-v7a'; Name='TorrServer-android-arm7'; Hash='e775001edf7bfb2adebfde0ba367bd69b2b45522b6' }
+}
 foreach ($engine in $engines) {
     $dir = Join-Path $AppRoot ('app\src\main\jniLibs\' + $engine.Abi)
     New-Item -ItemType Directory -Force $dir | Out-Null
