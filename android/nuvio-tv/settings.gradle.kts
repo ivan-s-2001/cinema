@@ -27,3 +27,7 @@ rootProject.name = "My Application"
 include(":app")
 include(":baselineprofile")
 include(":ffmpeg-decoder-downmix")
+
+// Embedded CinemaHall catalogue and playback API (regular Gradle module, not a Git submodule).
+include(":cinema-provider")
+project(":cinema-provider").projectDir = file("../provider")
