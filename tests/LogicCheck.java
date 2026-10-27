@@ -17,6 +17,8 @@ public final class LogicCheck {
         if(!Logic.episodeKey("Title.S02E10.1080p.mkv").equals("S2E10")||!Logic.episodeLabel("random.mkv",2).equals("Часть 3"))throw new AssertionError("Episode identity");
         if(Logic.sourceScore("1080p","ru","",20,"4K")<=Logic.sourceScore("4K","fr","дубляж",200,"4K"))throw new AssertionError("Foreign audio must not outrank Russian audio");
         if(Logic.sourceScore("4K","ru","",20,"4K")<=Logic.sourceScore("1080p","ru","",20,"4K"))throw new AssertionError("Respect quality preference");
+        if(!Logic.voiceKey("  ДУБЛЯЖ  ").equals(Logic.voiceKey("Дублированный"))||!Logic.voiceKey("Кубик в Кубе").equals(Logic.voiceKey("кубик-в-кубе")))throw new AssertionError("Equivalent voice spellings not deduplicated");
+        if(Logic.voiceKey("Студия A").equals(Logic.voiceKey("Студия B"))||Logic.qualityRank("4K")>=Logic.qualityRank("1080p"))throw new AssertionError("Distinct voices or quality order lost");
         System.out.println("Logic checks passed");
     }
 }

@@ -27,6 +27,13 @@ jobs:
         with:
           node-version: '24'
       - run: node --test tests/test_catalog_client.mjs
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: |
+          javac -d /tmp/cinemahall-tests android/core/app/src/main/java/app/cinemahall/tv/Logic.java tests/LogicCheck.java
+          java -cp /tmp/cinemahall-tests app.cinemahall.tv.LogicCheck
 
   snapshot:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'

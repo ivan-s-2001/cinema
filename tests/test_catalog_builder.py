@@ -2,7 +2,7 @@
 import unittest
 from unittest.mock import patch
 
-from scripts.build_catalog import build, details, enrich, merge_catalog, normalize, split_snapshot
+from scripts.build_catalog import build, details, enrich, merge_catalog, normalize, split_snapshot, zona_availability
 
 
 def record(kind="movie", imdb="tt0137523", kp=361, tmdb=550, name="Бойцовский клуб"):
@@ -26,6 +26,17 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(row["images"]["poster"], "https://image.tmdb.org/t/p/original/portrait.jpg")
         self.assertIn("Fight Club", row["aliases"])
         self.assertEqual(row["voiceoverLabels"], ["Дублированный", "Субтитры"])
+        self.assertEqual(row["playableSources"], [])
+        self.assertEqual(row["sourceAvailability"]["zona"], "unchecked")
+
+    @patch("scripts.build_catalog.fetch")
+    def test_zona_hints_never_claim_verified_streams(self, fetch):
+        fetch.return_value = {"response": {"docs": [{"kinopoisk_id": 361,
+            "resolution": "3840x2160", "translate_info": "Дубляж"}]}}
+        row = normalize(record())
+        zona_availability([row], limit=1)
+        self.assertEqual(row["sourceAvailability"]["zona"], "listed")
+        self.assertEqual(row["sourceAvailability"]["reportedResolutions"], ["3840x2160"])
         self.assertEqual(row["playableSources"], [])
 
     def test_cover_is_not_a_verified_widescreen_banner(self):
@@ -98,7 +109,7 @@ class CatalogTests(unittest.TestCase):
                 return {"data": [record()]}
             return {"data": [record()], "meta": {"hasNext": False}}
         fetch.side_effect = canned
-        result = build("dummy-key", pages=5, enrichment=0)
+        result = build("dummy-key", pages=5, enrichment=0, availability=0)
         self.assertEqual(result["count"], 1)
         self.assertEqual(result["quality"]["movies"], 1)
         self.assertEqual(result["filters"]["genres"][0]["name"], "драма")

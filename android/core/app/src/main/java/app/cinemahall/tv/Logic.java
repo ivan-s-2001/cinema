@@ -1,6 +1,7 @@
 package app.cinemahall.tv;
 
 import java.net.URI;
+import java.text.Normalizer;
 import java.util.Locale;
 import java.util.regex.*;
 
@@ -83,5 +84,18 @@ public final class Logic {
         int language=russian?1000:inferred?900:lang.trim().isEmpty()?600:0;
         int resolution=quality.equals(target)?300:quality.equals("2K")?240:quality.equals("1080p")?200:quality.equals("720p")?120:quality.equals("4K")?100:quality.equals("576p")?90:quality.equals("480p")?80:30;
         return language+resolution+(int)Math.min(80,Math.log1p(Math.max(0,seeds))*15);
+    }
+    /** A studio remains distinct; only spelling/punctuation and unequivocal aliases collapse. */
+    public static String voiceKey(String label){
+        String key=Normalizer.normalize(label==null?"":label,Normalizer.Form.NFKC)
+            .toLowerCase(Locale.ROOT).replace('ё','е').replaceAll("[^\\p{L}\\p{N}]+"," ").trim().replaceAll(" +"," ");
+        if(key.equals("дубляж"))return "дублированный";
+        if(key.equals("original")||key.equals("оригинальный"))return "оригинал";
+        return key.isEmpty()?"не указано":key;
+    }
+    public static int qualityRank(String value){
+        String[] levels={"4K","2K","1080p","720p","576p","480p","360p","240p","Не указано"};
+        for(int i=0;i<levels.length;i++)if(levels[i].equals(value))return i;
+        return levels.length;
     }
 }

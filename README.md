@@ -4,6 +4,8 @@ CinemaHall is being rebuilt for **Android TV and Android phones** using one upst
 
 > **Development status:** the pinned upstream Streambert source and the existing Zona/TorrServer adapter are in this branch. Streambert is an **Electron desktop app**, so this branch is **not yet an Android APK**. The Electron IPC bridge, playback layer and D-pad/touch navigation must be ported and tested before replacing `main`. Do not deploy this branch as an update to the current app.
 
+See [the measured architecture audit](docs/ARCHITECTURE_AUDIT.md) for the API matrix, real catalogue statistics, Electron/Android blockers and the remaining rollout sequence.
+
 ## Sources and responsibilities
 
 | Component | Responsibility |
@@ -30,11 +32,15 @@ Metadata sources are queried independently, then matched by stable identifiers i
 
 Quality/voice grouping must use **actual playable options**: Auto, 4K, 2K, 1080p, 720p, 576p, 480p, 360p and below if available. Within each resolution, identical dubbing tracks are deduplicated across sources. The user's selection on a title page and in the player must represent the same option. Failures should fall back to another eligible source without displaying torrents or technical URLs.
 
+The reusable native `Sources.grouped()` now groups verified Zona candidates into quality tabs and normalized voice choices, keeping alternative sources for fallback. `Logic.voiceKey()` merges unambiguous spelling variants but does not collapse different dubbing studios. The Android UI still needs to consume these internal groups; descriptive KinoAPI voiceover names alone never make a tab playable.
+
 `android/core/.../KinoApi.java` enriches Zona titles through the precise Kinopoisk ID and only reads the key from the Android app-private setting `cinemahall_settings/kinoapi_key`. The future Settings screen needs to supply this value at runtime; no secret is currently stored in the repository. KinoAPI's voiceover labels **must not** be presented as playable tracks until a separate playback source confirms the track.
 
 ### Shared TV/mobile catalogue snapshot
 
 The metadata builder uses **KinoAPI** for popular movies, TV, anime, latest releases, browse filters and the release calendar. It matches duplicates across TMDB/Kinopoisk/IMDb/anime IDs and preserves all known Russian/English/original aliases. Conflicting identifiers are recorded rather than overwritten, and alternate anime season IDs are preserved. It distinguishes a verified wide backdrop from an image with unknown proportions, and keeps studio/voiceover labels separate from verified playback options. Selected detail cards include KinoAPI actors, recommendations, similar titles, TV seasons, episode/anime mappings, upcoming TV episodes and available skip markers. Only a bounded number of missing-art entries are enriched through **Cinemeta**, **TVmaze** (series), **AniList** (anime) and optional **TMDB** (`append_to_response=images,external_ids,videos`, with full-resolution candidates). Provider failure never blocks the entire catalogue.
+
+For up to 200 popular Kinopoisk IDs, the builder also asks the public Zona index for *reported* resolution and voiceover labels. Its `sourceAvailability.zona` is either `unchecked` or `listed`; it deliberately never claims a torrent is verified playable. The native player must validate a real stream with TorrServer before showing a selectable track. If Zona fails, metadata generation continues and source status stays `unchecked`.
 
 During the migration, every push to `rewrite/streambert-android` builds a catalogue snapshot, and later **Actions → Catalogue index → Run workflow** can build one manually. It reads the existing `KINOAPI_KEY` GitHub Actions secret, optionally `TMDB_READ_TOKEN`, and uploads `cinemahall-catalog` as multiple JSON files for both Android clients:
 

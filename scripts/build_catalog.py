@@ -20,6 +20,7 @@ TMDB = "https://api.themoviedb.org/3"
 ANILIST = "https://graphql.anilist.co"
 CINEMETA = "https://v3-cinemeta.strem.io"
 TVMAZE = "https://api.tvmaze.com"
+ZONA = "https://zsolr3.zonasearch.com/solr/torrent/select"
 ID_FIELDS = ("tmdb", "kinopoisk", "imdb", "shikimori", "myAnimeList", "anilist")
 SEASON_IDS = ("shikimori", "myAnimeList", "anilist")
 MAX_RESPONSE = 6 * 1024 * 1024
@@ -142,6 +143,8 @@ def normalize(raw):
         },
         "voiceoverLabels": distinct(raw.get("voiceovers") or []),
         "playableSources": [], "sources": ["kinoapi"],
+        "sourceAvailability": {"zona": "unchecked", "candidateCount": 0,
+                               "reportedResolutions": [], "reportedVoiceovers": []},
         "identityWarnings": [], "seasonIds": {},
         "updatedAt": raw.get("updatedAt") or "",
     }
@@ -173,6 +176,11 @@ def merge_rows(old, new):
     for field, values in new["seasonIds"].items():
         old["seasonIds"][field] = distinct(old["seasonIds"].get(field, []) + values)
     old["ratings"].update({k: v for k, v in new["ratings"].items() if v is not None})
+    if new["sourceAvailability"]["zona"] == "listed":
+        old["sourceAvailability"]["zona"] = "listed"
+        old["sourceAvailability"]["candidateCount"] += new["sourceAvailability"]["candidateCount"]
+        for field in ("reportedResolutions", "reportedVoiceovers"):
+            old["sourceAvailability"][field] = distinct(old["sourceAvailability"][field] + new["sourceAvailability"][field])[:30]
     for language, trailer in new["trailers"].items():
         if trailer and not old["trailers"].get(language):
             old["trailers"][language] = trailer
@@ -344,7 +352,34 @@ def details(row, key, season_limit=3):
         row["details"] = bundle
 
 
-def build(key, pages, enrichment, tmdb_key="", detail_count=0, season_limit=3):
+def zona_availability(rows, limit=200):
+    """Optional provider hints, never a promise that a stream will actually play."""
+    selected = [r for r in rows if r["ids"].get("kinopoisk", "").isdigit()][:limit]
+    by_id = {r["ids"]["kinopoisk"]: r for r in selected}
+    for offset in range(0, len(selected), 20):
+        ids = [r["ids"]["kinopoisk"] for r in selected[offset:offset + 20]]
+        params = urllib.parse.urlencode({
+            "wt": "json", "q": "kinopoisk_id:(" + " OR ".join(ids) + ") AND playable:true AND trailer:false",
+            "rows": 500, "sort": "seeds desc",
+            "fl": "kinopoisk_id,resolution,translate_info,languages_parser,seeds",
+        })
+        response = fetch(f"{ZONA}?{params}", optional=True) or {}
+        for doc in ((response.get("response") or {}).get("docs") or []):
+            item = by_id.get(str(doc.get("kinopoisk_id", "")))
+            if not item:
+                continue
+            hint = item["sourceAvailability"]
+            hint["zona"] = "listed"  # not proven stream/playback
+            hint["candidateCount"] += 1
+            resolution = doc.get("resolution", "") or ""
+            voice = (doc.get("translate_info", "") or "").strip()
+            if resolution:
+                hint["reportedResolutions"] = distinct(hint["reportedResolutions"] + [resolution])[:30]
+            if voice:
+                hint["reportedVoiceovers"] = distinct(hint["reportedVoiceovers"] + [voice])[:30]
+
+
+def build(key, pages, enrichment, tmdb_key="", detail_count=0, season_limit=3, availability=200):
     _requests.clear()
     _failed.clear()
     batches = []
@@ -362,11 +397,16 @@ def build(key, pages, enrichment, tmdb_key="", detail_count=0, season_limit=3):
     batches.append(calendar[:100])
     rows = merge_catalog(batches)
     # Enrich the most visible cards and those without usable art; bound requests.
-    candidates = sorted(rows, key=lambda r: (r["images"]["backdropVerified"],
-                                               bool(r["images"]["poster"]),
-                                               not bool(r["ids"].get("myAnimeList"))))
+    candidates = sorted((r for r in rows if r["ids"].get("myAnimeList") or
+                         r["ids"].get("imdb", "").startswith("tt") or
+                         (tmdb_key and r["ids"].get("tmdb"))),
+                        key=lambda r: (r["images"]["backdropVerified"],
+                                       bool(r["images"]["poster"]),
+                                       not bool(r["ids"].get("myAnimeList"))))
     for row in candidates[:enrichment]:
         enrich(row, tmdb_key)
+    if availability:
+        zona_availability(rows, availability)
     # Balance film and TV detail cards instead of starving TV behind movie pages.
     movies = [r for r in rows if r["type"] == "movie"]
     shows = [r for r in rows if r["type"] == "tv"]
@@ -385,6 +425,7 @@ def build(key, pages, enrichment, tmdb_key="", detail_count=0, season_limit=3):
         "withDetails": sum("details" in r for r in rows),
         "identityWarnings": sum(bool(r["identityWarnings"]) for r in rows),
         "enrichedBy": dict(Counter(source for r in rows for source in r["sources"])),
+        "zonaListed": sum(r["sourceAvailability"]["zona"] == "listed" for r in rows),
         "requests": dict(_requests), "optionalFailures": dict(_failed),
     }
     return {"version": 2, "generatedAt": datetime.now(timezone.utc).isoformat(),
@@ -444,11 +485,12 @@ def main():
     parser.add_argument("--season-limit", type=int, default=3, help="Maximum seasons with full episode metadata per detailed show")
     parser.add_argument("--output", default="catalog/index.json")
     parser.add_argument("--shard-size", type=int, default=250)
+    parser.add_argument("--availability", type=int, default=200, help="Top KinoPoisk IDs to probe in Zona (0 disables)")
     args = parser.parse_args()
-    if not 1 <= args.pages <= 50 or not 0 <= args.enrich <= 500 or not 0 <= args.details <= 100 or not 0 <= args.season_limit <= 20:
-        parser.error("pages 1..50, enrich 0..500, details 0..100, season-limit 0..20")
+    if not 1 <= args.pages <= 50 or not 0 <= args.enrich <= 500 or not 0 <= args.details <= 100 or not 0 <= args.season_limit <= 20 or not 0 <= args.availability <= 1000:
+        parser.error("pages 1..50, enrich 0..500, details 0..100, season-limit 0..20, availability 0..1000")
     result = build(os.environ.get("KINOAPI_KEY", ""), args.pages, args.enrich,
-                   os.environ.get("TMDB_READ_TOKEN", ""), args.details, args.season_limit)
+                   os.environ.get("TMDB_READ_TOKEN", ""), args.details, args.season_limit, args.availability)
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     shards = split_snapshot(result, args.shard_size)

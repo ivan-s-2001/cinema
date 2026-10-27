@@ -36,7 +36,27 @@ final class Sources {
     }
     static ArrayList<Candidate> ordered(List<Candidate> all,String quality,String translation,String autoTarget){
         ArrayList<Candidate> result=new ArrayList<>();
-        for(Candidate c:all)if((quality.isEmpty()||quality.equals(c.quality))&&(translation.isEmpty()||translation.equals(c.translation)))result.add(c);
+        for(Candidate c:all)if((quality.isEmpty()||quality.equals(c.quality))&&(translation.isEmpty()||Logic.voiceKey(translation).equals(Logic.voiceKey(c.translation))))result.add(c);
         result.sort((a,b)->Integer.compare(b.score(autoTarget),a.score(autoTarget)));return result;
+    }
+    /** One quality tab -> unique voice choices -> ordered source fallbacks. No torrent URLs in UI options. */
+    static LinkedHashMap<String,LinkedHashMap<String,ArrayList<Candidate>>> grouped(List<Candidate> all,String target){
+        TreeMap<String,LinkedHashMap<String,ArrayList<Candidate>>> levels=new TreeMap<>((a,b)->{
+            int order=Integer.compare(Logic.qualityRank(a),Logic.qualityRank(b));
+            return order!=0?order:a.compareTo(b);
+        });
+        for(Candidate c:all){
+            String voice=Logic.voiceKey(c.translation);
+            ArrayList<Candidate> options=levels.computeIfAbsent(c.quality,q->new LinkedHashMap<>()).computeIfAbsent(voice,v->new ArrayList<>());
+            boolean duplicate=false;
+            for(Candidate previous:options)if(previous.hash.equals(c.hash)){duplicate=true;break;}
+            if(!duplicate)options.add(c);
+        }
+        LinkedHashMap<String,LinkedHashMap<String,ArrayList<Candidate>>> result=new LinkedHashMap<>();
+        for(Map.Entry<String,LinkedHashMap<String,ArrayList<Candidate>>> e:levels.entrySet()){
+            e.getValue().values().forEach(options->options.sort((a,b)->Integer.compare(b.score(target),a.score(target))));
+            result.put(e.getKey(),e.getValue());
+        }
+        return result;
     }
 }
