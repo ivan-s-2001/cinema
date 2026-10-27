@@ -2,6 +2,9 @@ package app.cinemahall.tv;
 
 import java.net.URI;
 import java.text.Normalizer;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.regex.*;
 
@@ -43,6 +46,35 @@ public final class Logic {
         if(width>=700||height>=450)return "480p";
         if(width>=600||height>=330)return "360p";
         return "240p";
+    }
+    /** Tracker titles report quality; it is only a hint until a video stream is inspected. */
+    public static String qualityFromTitle(String title) {
+        String value=title==null?"":title.toLowerCase(Locale.ROOT);
+        if(Pattern.compile("(?<!\\d)(2160p?|4k|uhd)(?!\\d)").matcher(value).find())return "4K";
+        if(Pattern.compile("(?<!\\d)(1440p?|2k)(?!\\d)").matcher(value).find())return "2K";
+        for(String p:new String[]{"1080","720","576","480","360","240"})
+            if(Pattern.compile("(?<!\\d)"+p+"p?(?!\\d)").matcher(value).find())return p+"p";
+        return "Не указано";
+    }
+    public static String infoHash(String link) {
+        Matcher match=Pattern.compile("(?i)(?:[?&])xt=urn:btih:([a-f0-9]{40}|[a-z2-7]{32})(?:&|$)").matcher(link==null?"":link);
+        return match.find()?match.group(1).toLowerCase(Locale.ROOT):"";
+    }
+    /** Two language variants plus one broad fallback; bound network calls on Android TV. */
+    public static List<String> torrentQueries(List<String> aliases,int year,String episode) {
+        LinkedHashSet<String> names=new LinkedHashSet<>();
+        if(aliases!=null)for(String raw:aliases){
+            String name=raw==null?"":raw.trim().replaceAll("\\s+"," ");
+            if(name.length()>=3&&name.length()<=100)names.add(name);
+            if(names.size()==2)break;
+        }
+        LinkedHashSet<String> queries=new LinkedHashSet<>();
+        String key=catalogEpisode(episode==null?"":episode);
+        for(String name:names){
+            queries.add(name+(key.isEmpty()?(year>=1880&&year<=2100?" "+year:""):" "+key));
+        }
+        if(!names.isEmpty())queries.add(names.iterator().next());
+        return new ArrayList<>(queries);
     }
     public static long seekTarget(long current,long duration,long delta) {
         long target=Math.max(0,current+delta);return duration>0?Math.min(duration,target):target;

@@ -45,7 +45,9 @@ public final class TorrentService extends Service {
             JSONObject sets = Net.action("/settings", "get");
             sets.put("CacheSize", 96 * 1024 * 1024).put("PreloadCache", 25).put("ReaderReadAHead", 75)
                 .put("ConnectionsLimit", 25).put("UseDisk", false).put("EnableDLNA", false)
-                .put("EnableBonjour", false).put("EnableRutorSearch", false).put("EnableTorznabSearch", false);
+                .put("EnableBonjour", false);
+            // Preserve user-configured Torznab/RuTor search. RuTor is disabled by default:
+            // its downloaded in-memory index is expensive on low-RAM Android TV devices.
             Net.json(Net.ENGINE + "/settings", new JSONObject().put("action", "set").put("sets", sets));
             ready = true;
             int exit = process.waitFor();
