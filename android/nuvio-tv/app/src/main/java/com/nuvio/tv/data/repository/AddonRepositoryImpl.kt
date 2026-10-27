@@ -297,12 +297,22 @@ class AddonRepositoryImpl(
     // Always register CinemaHall's embedded API; installed third-party add-ons
     // are intentionally excluded from home, search and playback discovery.
     override fun getInstalledAddons(): Flow<List<Addon>> = flow {
-        val result = fetchAddon("http://127.0.0.1:18991")
-        emit(
+        // The embedded ContentProvider starts before the UI, but HTTP initialization
+        // may overlap the first Home/Search collection. Retry without calling
+        // third-party manifests; report an empty list only after bounded attempts.
+        val endpoint = "http://127.0.0.1:18991"
+        var installed: Addon? = null
+        for (attempt in 0 until 5) {
+            val result = fetchAddon(endpoint)
             if (result is NetworkResult.Success &&
                 CinemaHallSourcePolicy.isOwnCatalog(result.data.baseUrl, result.data.id)
-            ) listOf(result.data.copy(enabled = true)) else emptyList()
-        )
+            ) {
+                installed = result.data.copy(enabled = true)
+                break
+            }
+            if (attempt < 4) delay(400L * (attempt + 1))
+        }
+        emit(installed?.let(::listOf) ?: emptyList())
     }
 
     override suspend fun fetchAddon(baseUrl: String): NetworkResult<Addon> {
