@@ -107,11 +107,14 @@ async function store(db, raw, force = false) {
   const locked = new Set(Array.isArray(curator.fields) ? curator.fields : []);
   const field = (name, value) => locked.has(name) && previous ? previous[name] : value;
   const oldImages = old.images || {};
+  const artFromSpecializedSource = Array.isArray(old.sources) && old.sources.some(source => ['tmdb', 'anilist', 'cinemeta'].includes(source));
+  const poster = artFromSpecializedSource && oldImages.poster ? oldImages.poster : row.poster || previous?.poster || oldImages.poster || '';
+  const backdrop = oldImages.backdropVerified && oldImages.backdrop && artFromSpecializedSource
+    ? oldImages.backdrop : row.backdrop || previous?.backdrop || oldImages.backdrop || '';
   const payload = {
     ...old, ...row, ratings: { ...(old.ratings || {}), ...(row.ratings || {}) },
     sources: distinct([...(Array.isArray(old.sources) ? old.sources : []), ...row.sources]),
-    images: { ...oldImages, poster: row.poster || previous?.poster || oldImages.poster || '',
-      backdrop: row.backdrop || previous?.backdrop || oldImages.backdrop || '',
+    images: { ...oldImages, poster, backdrop,
       backdropVerified: Boolean(row.backdrop || oldImages.backdropVerified) },
     curator
   };
