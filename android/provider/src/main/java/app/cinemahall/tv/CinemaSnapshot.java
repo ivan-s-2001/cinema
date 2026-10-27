@@ -10,6 +10,7 @@ import java.util.*;
 final class CinemaSnapshot {
     private final Context context;
     private JSONArray lookup;
+    private final Map<String,JSONObject> byId=new HashMap<>();
     private boolean checked;
     private final LinkedHashMap<String,JSONArray> shards=new LinkedHashMap<String,JSONArray>(4,.75f,true){@Override protected boolean removeEldestEntry(Map.Entry<String,JSONArray> e){return size()>2;}};
     CinemaSnapshot(Context context){this.context=context;}
@@ -21,12 +22,11 @@ final class CinemaSnapshot {
             byte[] buffer=new byte[8192];int n;while((n=in.read(buffer))!=-1){if(out.size()+n>8*1024*1024)throw new IOException("Snapshot too large");out.write(buffer,0,n);}return out.toString("UTF-8");
         }
     }
-    private JSONArray search() throws Exception {if(lookup==null)lookup=new JSONArray(read("search.json"));return lookup;}
+    private JSONArray search() throws Exception {if(lookup==null){lookup=new JSONArray(read("search.json"));for(int i=0;i<lookup.length();i++){JSONObject entry=lookup.getJSONObject(i);byId.put(entry.getString("id"),entry);}}return lookup;}
     private JSONArray shard(String path) throws Exception {JSONArray data=shards.get(path);if(data==null){data=new JSONArray(read(path));shards.put(path,data);}return data;}
     private JSONObject raw(String id) throws Exception {
         init();if(index==null||!id.startsWith("ch:snapshot:"))return null;
-        String wanted=id.substring(12);JSONArray values=search();JSONObject entry=null;
-        for(int i=0;i<values.length();i++){JSONObject x=values.getJSONObject(i);if(wanted.equals(x.optString("id"))){entry=x;break;}}
+        String wanted=id.substring(12);search();JSONObject entry=byId.get(wanted);
         if(entry==null)return null;
         JSONArray cards=shard(entry.getString("shard"));
         for(int i=0;i<cards.length();i++){JSONObject row=cards.getJSONObject(i);if(wanted.equals(stableId(row)))return row;}
@@ -59,12 +59,23 @@ final class CinemaSnapshot {
     }
     private static double rating(JSONObject scores){if(scores==null)return 0;for(String key:new String[]{"kinopoisk","imdb","tmdb"}){Object v=scores.opt(key);if(v instanceof Number)return ((Number)v).doubleValue();if(v instanceof JSONObject){double value=((JSONObject)v).optDouble("value",0);if(value>0)return value;}}return 0;}
     private static String words(String value){return value.toLowerCase(Locale.ROOT).replace('ё','е').replaceAll("[^\\p{L}\\p{N}]+"," ").trim();}
-    private JSONObject compact(JSONObject entry) throws JSONException {return new JSONObject().put("id","ch:snapshot:"+entry.getString("id")).put("type",entry.optString("type").equals("tv")?"series":"movie").put("name",entry.optString("title")).put("poster",entry.optString("poster")).put("releaseInfo",entry.optString("year"));}
+    private JSONObject compact(JSONObject entry) throws Exception {
+        JSONObject result=new JSONObject().put("id","ch:snapshot:"+entry.getString("id")).put("type",entry.optString("type").equals("tv")?"series":"movie").put("name",entry.optString("title")).put("poster",entry.optString("poster")).put("releaseInfo",entry.optString("year"));
+        JSONObject row=raw("ch:snapshot:"+entry.getString("id"));JSONObject images=row==null?null:row.optJSONObject("images");
+        if(images!=null&&images.optBoolean("backdropVerified"))result.put("background",images.optString("backdrop"));
+        return result;
+    }
     synchronized JSONObject detail(String id) throws Exception {
         JSONObject row=raw(id);if(row==null)return null;JSONObject images=row.optJSONObject("images");
         JSONObject result=new JSONObject().put("id",id).put("type",row.optString("type").equals("tv")?"series":"movie").put("name",row.optString("title"))
             .put("poster",images==null?"":images.optString("poster")).put("description",row.optString("description")).put("releaseInfo",row.optString("year")).put("genres",row.optJSONArray("genres"));
         if(images!=null&&images.optBoolean("backdropVerified"))result.put("background",images.optString("backdrop"));
+        if(images!=null&&!images.optString("logo").isEmpty())result.put("logo",images.optString("logo"));
+        if(row.optInt("runtimeMinutes")>0)result.put("runtime",row.getInt("runtimeMinutes")+" мин");
+        JSONObject scores=row.optJSONObject("ratings");if(scores!=null){
+            Object imdb=scores.opt("imdb");double value=imdb instanceof Number?((Number)imdb).doubleValue():imdb instanceof JSONObject?((JSONObject)imdb).optDouble("value",((JSONObject)imdb).optDouble("rating",0)):0;
+            if(value>0&&value<=10)result.put("imdbRating",String.format(Locale.ROOT,"%.1f",value));
+        }
         JSONObject details=row.optJSONObject("details");JSONArray seasons=details==null?null:details.optJSONArray("seasons"),videos=new JSONArray();
         if(seasons!=null)for(int s=0;s<seasons.length();s++){
             JSONObject season=seasons.getJSONObject(s);int sn=season.optInt("number");JSONArray episodes=season.optJSONArray("episodes");if(episodes==null)continue;
