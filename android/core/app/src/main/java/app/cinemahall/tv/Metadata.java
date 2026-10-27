@@ -12,6 +12,15 @@ final class Metadata {
     static JSONArray array(String url) throws Exception {
         return new JSONArray(new String(Net.request(url,null,8*1024*1024),StandardCharsets.UTF_8));
     }
+    /** For first paint: use cached artwork only, never block the detail screen on remote APIs. */
+    static JSONObject cachedArtwork(Context context, JSONObject film) {
+        SharedPreferences cache=context.getSharedPreferences("metadata_v2",0);
+        String identity=film.optString("id");
+        if(identity.isEmpty())identity=film.optString("imdb");
+        if(identity.isEmpty())identity=film.optString("name_original")+":"+film.optString("name_rus")+":"+film.optInt("year");
+        try { return new JSONObject(cache.getString(identity+":art","{}")); }
+        catch(JSONException invalid) { return new JSONObject(); }
+    }
     static JSONObject load(Context context,JSONObject film,boolean details){
         SharedPreferences cache=context.getSharedPreferences("metadata_v2",0);
         String identity=film.optString("id");
@@ -80,7 +89,7 @@ final class Metadata {
             }
             if(result.optString("background").equals(result.optString("poster")))result.remove("background");
             // A short negative cache prevents repeated requests for unmatched titles.
-            result.put("fetched",System.currentTimeMillis()-(result.has("imdb")||result.has("tvmaze")?0:82800000L));
+            result.put("fetched",System.currentTimeMillis()-(result.has("imdb")||result.has("tvmaze")?0:64800000L));
             cache.edit().putString(key,result.toString()).apply();
         }catch(Exception ignored){}
         return result;
