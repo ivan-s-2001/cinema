@@ -2,7 +2,7 @@ import mariadb from 'mariadb';
 
 const source = process.argv[2] || 'tvmaze';
 const limit = Math.min(100,Math.max(1,Number(process.argv[3]||20)));
-if(!['tvmaze','anilist'].includes(source))throw Error('Usage: node sync-free.mjs tvmaze|anilist [limit 1..100]');
+if(source!=='tvmaze')throw Error('CinemaHall imports series only: node sync-free.mjs tvmaze [limit 1..100]');
 const pool=mariadb.createPool({host:'127.0.0.1',user:process.env.DB_USER||'cinemahall',password:process.env.DB_PASSWORD,database:process.env.DB_NAME||'cinemahall',connectionLimit:1,connectTimeout:5000});
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function fetchJson(url,options={}){
@@ -32,6 +32,7 @@ try{
    const shows=await fetchJson('https://api.tvmaze.com/shows?page='+page);
    if(!Array.isArray(shows))throw Error('Invalid TVmaze response');
    for(const show of shows.slice(0,limit-added)){
+    if((show.genres||[]).some(g=>/аниме|\\banime\\b/i.test(g)))continue;
     const row={id:'ch:tvmaze:'+show.id,kind:'series',title:show.name,
       year:(show.premiered||'').slice(0,4),description:show.summary,
       poster:show.image?.original||show.image?.medium,backdrop:'',
@@ -42,20 +43,6 @@ try{
    }
    if(added>=limit||shows.length===0)break;
    await sleep(1200);
-  }
- }else{
-  const graphql=`query ($page:Int,$perPage:Int) { Page(page:$page,perPage:$perPage) { media(type:ANIME,sort:POPULARITY_DESC) { id title { english romaji native } description seasonYear format coverImage { extraLarge large } bannerImage genres averageScore siteUrl } } }`;
-  for(let page=1;added<limit;page++){
-   const payload=await fetchJson('https://graphql.anilist.co',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:graphql,variables:{page,perPage:Math.min(20,limit-added)}})});
-   const media=payload.data?.Page?.media;
-   if(!Array.isArray(media)||media.length===0)break;
-   for(const item of media){
-    if(await save({id:'ch:anilist:'+item.id,kind:item.format==='MOVIE'?'movie':'series',
-     title:item.title?.english||item.title?.romaji||item.title?.native,
-     year:item.seasonYear,description:item.description,poster:item.coverImage?.extraLarge||item.coverImage?.large,
-     backdrop:item.bannerImage,payload:{provider:'anilist',externalId:item.id,genres:item.genres,score:item.averageScore,sourceUrl:item.siteUrl}}))added++;
-   }
-   await sleep(2500);
   }
  }
  console.log(JSON.stringify({source,imported:added,limit}));
