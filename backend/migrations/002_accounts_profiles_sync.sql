@@ -51,12 +51,13 @@ CREATE TABLE IF NOT EXISTS sync_items (
 
 CREATE TABLE IF NOT EXISTS sync_mutations (
  account_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ profile_index TINYINT UNSIGNED NOT NULL,
  mutation_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
  event_id BIGINT UNSIGNED NULL,
  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
  PRIMARY KEY (account_id,mutation_id),
  INDEX sync_mutations_created (created_at),
- FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+ FOREIGN KEY (account_id,profile_index) REFERENCES profiles(account_id,profile_index) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS sync_events (
