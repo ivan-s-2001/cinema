@@ -1,5 +1,6 @@
 import http from 'node:http';
 import mariadb from 'mariadb';
+import { handleAccountRequest } from './accounts.mjs';
 
 const pool=mariadb.createPool({
   host:'127.0.0.1', port:3306,
@@ -35,8 +36,9 @@ async function query(sql,params=[]){
 const allowedKind=new Set(['movie','series']);
 const server=http.createServer(async(req,res)=>{
  try{
-  if(req.method!=='GET'){reply(res,405,{error:'Method not allowed'});return;}
   const url=new URL(req.url,'http://localhost');
+  if(await handleAccountRequest(req,res,url,pool))return;
+  if(req.method!=='GET'){reply(res,405,{error:'Method not allowed'});return;}
   const route=url.pathname;
   const cacheKey=route==='/api/v1/home'||route==='/api/v1/search'?url.pathname+url.search:null;
   if(cacheKey){
