@@ -688,6 +688,67 @@ async function handleRpc(req, res, name, account, pool) {
     send(res, 200, await pullSyncItems(pool, account, profileIndex, 'library', limit, offset));
     return true;
   }
+  if (name === 'sync_push_collections' || name === 'sync_pull_collections' ||
+      name === 'sync_push_profile_settings_blob' || name === 'sync_pull_profile_settings_blob' ||
+      name === 'sync_push_home_catalog_settings' || name === 'sync_pull_home_catalog_settings') {
+    const definitions = {
+      sync_push_collections: ['collections', 'p_collections_json', 'collections_json'],
+      sync_pull_collections: ['collections', null, 'collections_json'],
+      sync_push_profile_settings_blob: ['profile_settings', 'p_settings_json', 'settings_json'],
+      sync_pull_profile_settings_blob: ['profile_settings', null, 'settings_json'],
+      sync_push_home_catalog_settings: ['home_catalog_settings', 'p_settings_json', 'settings_json'],
+      sync_pull_home_catalog_settings: ['home_catalog_settings', null, 'settings_json']
+    };
+    const [blobType, inputName, outputName] = definitions[name];
+    const platform = typeof body.p_platform === 'string' ? body.p_platform.slice(0,40) : 'tv';
+    if (inputName) {
+      const payload = body[inputName] ?? (blobType === 'collections' ? [] : {});
+      await pool.query(
+        'INSERT INTO account_blobs (account_id,profile_index,blob_type,platform,payload) VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE payload=VALUES(payload),updated_at=UTC_TIMESTAMP()',
+        [account.id,profileIndex,blobType,platform,JSON.stringify(payload)]
+      );
+      send(res, 200, null);
+    } else {
+      const rows = await pool.query(
+        'SELECT profile_index AS profile_id,payload,updated_at FROM account_blobs WHERE account_id=? AND profile_index=? AND blob_type=? AND platform=? LIMIT 1',
+        [account.id,profileIndex,blobType,platform]
+      );
+      send(res, 200, rows.map(row => ({ profile_id: row.profile_id, [outputName]: decodeJson(row.payload), updated_at: row.updated_at })));
+    }
+    return true;
+  }
+  if (name === 'sync_push_addons' || name === 'sync_push_plugins') {
+    const entityType = name === 'sync_push_addons' ? 'addon' : 'plugin';
+    const field = name === 'sync_push_addons' ? 'p_addons' : 'p_plugins';
+    const entries = Array.isArray(body[field]) ? body[field].slice(0,200) : [];
+    await syncBatch(pool, account, profileIndex, async connection => {
+      for (const entry of entries) {
+        const key = typeof entry.url === 'string' ? entry.url.trim().slice(0,255) : '';
+        if (key) await writeSyncItem(connection,account.id,profileIndex,entityType,key,'upsert',entry,origin);
+      }
+    });
+    send(res, 200, null);
+    return true;
+  }
+  if (name === 'get_sync_owner') {
+    send(res, 200, account.id);
+    return true;
+  }
+  if (name === 'sync_seed_provider_credentials' || name === 'sync_push_provider_credentials') {
+    // Credentials remain local until encrypted-at-rest storage is configured.
+    send(res, 200, null);
+    return true;
+  }
+  if (name === 'sync_pull_provider_credentials') {
+    send(res, 200, []);
+    return true;
+  }
+  if (name === 'get_avatar_catalog' || name === 'get_member_profile_avatar_catalog' ||
+      name === 'get_member_profile_background_catalog' || name === 'get_my_member_access' ||
+      name === 'get_my_membership_overview') {
+    send(res, 200, []);
+    return true;
+  }
 
   send(res, 404, { code: 'PGRST202', message: 'Function not found' });
   return true;
