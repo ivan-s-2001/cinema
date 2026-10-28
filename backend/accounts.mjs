@@ -393,33 +393,25 @@ function libraryKey(item) {
   return [item.content_type || '', item.content_id || ''].join('|').toLowerCase();
 }
 
-function stableMutationId(accountId, profileIndex, entityType, itemKey, operation, payload) {
-  const hex = createHash('sha256')
-    .update([accountId, profileIndex, entityType, itemKey, operation, JSON.stringify(payload)].join('|'))
-    .digest('hex')
-    .slice(0, 32)
-    .split('');
-  hex[12] = '5';
-  hex[16] = 'a';
-  const value = hex.join('');
-  return value.slice(0, 8) + '-' + value.slice(8, 12) + '-' + value.slice(12, 16) + '-' + value.slice(16, 20) + '-' + value.slice(20);
-}
-
 async function writeSyncItem(connection, accountId, profileIndex, entityType, itemKey, operation, payload, originClientId = null) {
-  const mutationId = stableMutationId(accountId, profileIndex, entityType, itemKey, operation, payload);
-  const mutation = await connection.query(
-    'INSERT IGNORE INTO sync_mutations (account_id,profile_index,mutation_id) VALUES (?,?,?)',
+  const current = await connection.query(
+    'SELECT payload,is_deleted FROM sync_items WHERE account_id=? AND profile_index=? AND entity_type=? AND item_key=?',
+    [accountId, profileIndex, entityType, itemKey]
+  );
+  const currentPayload = decodeJson(current[0]?.payload);
+  if (operation === 'delete' && current[0]?.is_deleted) return null;
+  if (operation === 'upsert' && current[0] && !current[0].is_deleted &&
+      JSON.stringify(currentPayload) === JSON.stringify(payload)) return null;
+
+  const mutationId = randomUUID();
+  await connection.query(
+    'INSERT INTO sync_mutations (account_id,profile_index,mutation_id) VALUES (?,?,?)',
     [accountId, profileIndex, mutationId]
   );
-  if (mutation.affectedRows === 0) return null;
 
   let eventPayload = payload;
   if (operation === 'delete') {
-    const previous = await connection.query(
-      'SELECT payload FROM sync_items WHERE account_id=? AND profile_index=? AND entity_type=? AND item_key=?',
-      [accountId, profileIndex, entityType, itemKey]
-    );
-    eventPayload = decodeJson(previous[0]?.payload) ?? null;
+    eventPayload = currentPayload ?? null;
     await connection.query(
       'INSERT INTO sync_items (account_id,profile_index,entity_type,item_key,payload,is_deleted) VALUES (?,?,?,?,?,TRUE) ON DUPLICATE KEY UPDATE is_deleted=TRUE,updated_at=UTC_TIMESTAMP()',
       [accountId, profileIndex, entityType, itemKey, null]
