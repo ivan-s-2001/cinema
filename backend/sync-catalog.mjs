@@ -29,7 +29,7 @@ function normalize(raw) {
   const genres = Array.isArray(raw.genres) ? raw.genres : [];
   const category = [raw.category,raw.subtype,raw.genre,raw.typeName].filter(v=>typeof v==='string').join(' ');
   if (genres.some(g => /аниме|\banime\b/i.test(typeof g==='string'?g:(g?.name||''))) ||
-      /аниме|\banime\b/i.test(category) || ids.myAnimeList || ids.shikimori || ids.anilist) return null;
+      /аниме|\banime\b/i.test(category) || ids.shikimori || ids.anilist) return null;
   const chosen = ['tmdb', 'kinopoisk', 'imdb', 'myAnimeList', 'shikimori'].find(k => ids[k]);
   if (!chosen) return null;
   const title = raw.title || {}, images = raw.images || {}, release = raw.release || {};
