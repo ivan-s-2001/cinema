@@ -16,7 +16,7 @@ final class CinemaRemoteSources {
     private static boolean enabled;
     private static final long CONFIG_TTL=10*60_000L;
     private CinemaRemoteSources() {}
-    private static JSONObject fetch(String path) throws Exception {
+    static JSONObject fetch(String path) throws Exception {
         HttpURLConnection connection=(HttpURLConnection)new URL(BASE+path).openConnection();
         connection.setInstanceFollowRedirects(false);
         connection.setConnectTimeout(3000);connection.setReadTimeout(6000);

@@ -14,6 +14,7 @@ final class CinemaCatalog {
     private final Context context;
     private final String base,playToken=UUID.randomUUID().toString();
     private final CinemaSnapshot snapshot;
+    private final CinemaRemoteCatalog remote=new CinemaRemoteCatalog();
     private final Map<String,JSONObject> docs=Collections.synchronizedMap(new LinkedHashMap<String,JSONObject>(128,.75f,true){@Override protected boolean removeEldestEntry(Map.Entry<String,JSONObject> eldest){return size()>120;}});
     private static final class ShelfCacheEntry {
         final String json;
@@ -73,10 +74,12 @@ final class CinemaCatalog {
             Map<String,String> args=new HashMap<>();if(parts.length==4)for(String value:parts[3].replaceFirst("\\.json$","").split("&")){String[] pair=value.split("=",2);if(pair.length==2)args.put(pair[0],URLDecoder.decode(pair[1],"UTF-8"));}
             int skip=0;try{skip=Integer.parseInt(args.getOrDefault("skip","0"));}catch(NumberFormatException invalid){throw new Exception("Invalid page");}
             if(skip<0||skip>100000)throw new Exception("Invalid page");String search=args.getOrDefault("search","");if(search.length()>160)throw new Exception("Query too long");
-            JSONObject data=snapshot.catalog(parts[1],id,search,skip);return new Reply((data!=null?data:catalog(parts[1],id,search,skip)).toString());
+            JSONObject data=remote.catalog(parts[1],id,search,skip);
+            if(data==null)data=snapshot.catalog(parts[1],id,search,skip);return new Reply((data!=null?data:catalog(parts[1],id,search,skip)).toString());
         }
         if(parts[0].equals("meta")){
-            JSONObject bundled=snapshot.detail(id);
+            JSONObject bundled=remote.detail(id);
+            if(bundled==null)bundled=snapshot.detail(id);
             if(bundled!=null&&parts[1].equals("series")){
                 JSONObject source=snapshot.document(id);
                 if(source!=null)try{
@@ -118,7 +121,7 @@ final class CinemaCatalog {
         if(parts[0].equals("subtitles"))return new Reply("{\"subtitles\":[]}");
         if(parts[0].equals("stream")){
             String[] identity=identity(id);String titleId=identity[0],episode=identity[1];
-            JSONObject film=snapshot.document(titleId);if(film==null)film=document(titleId);
+            JSONObject film=remote.document(titleId);if(film==null)film=snapshot.document(titleId);if(film==null)film=document(titleId);
             // The optional Torznab endpoint lives in our own embedded engine.
             engine();ArrayList<String> names=new ArrayList<>();for(String field:new String[]{"name_rus","name_original","name_eng"})names.add(film.optString(field));
             List<Sources.Candidate> candidates=CinemaRemoteSources.load(titleId,episode);
@@ -266,7 +269,7 @@ final class CinemaCatalog {
     private synchronized Reply play(String[] parts) throws Exception {
         if(parts.length!=7||!parts[1].equals(playToken)||!parts[6].equals("video.mkv"))throw new Exception("Invalid playback token");
         String[] parsed=identity(parts[2]);if(!parsed[1].isEmpty()||(!parts[3].isEmpty()&&!parts[3].matches("S[0-9]{1,3}E[0-9]{1,4}")))throw new Exception("Invalid playback identity");
-        JSONObject film=snapshot.document(parts[2]);if(film==null)film=document(parts[2]);engine();
+        JSONObject film=remote.document(parts[2]);if(film==null)film=snapshot.document(parts[2]);if(film==null)film=document(parts[2]);engine();
         ArrayList<String> names=new ArrayList<>();for(String field:new String[]{"name_rus","name_original","name_eng"})names.add(film.optString(field));
         boolean automatic="auto".equals(parts[4])&&"auto".equals(parts[5]);
         List<Sources.Candidate> available=CinemaRemoteSources.load(parts[2],parts[3]);
