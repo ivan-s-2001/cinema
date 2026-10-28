@@ -483,10 +483,10 @@ async function syncDelta(pool, account, profileIndex, entityType, cursor, limit)
 async function pullSyncItems(pool, account, profileIndex, entityType, limit, offset, since = null) {
   const sql = since == null
     ? 'SELECT item_key,payload FROM sync_items WHERE account_id=? AND profile_index=? AND entity_type=? AND is_deleted=FALSE ORDER BY updated_at DESC,item_key LIMIT ? OFFSET ?'
-    : 'SELECT item_key,payload FROM sync_items WHERE account_id=? AND profile_index=? AND entity_type=? AND is_deleted=FALSE AND updated_at>? ORDER BY updated_at DESC,item_key LIMIT ?';
+    : "SELECT item_key,payload FROM sync_items WHERE account_id=? AND profile_index=? AND entity_type=? AND is_deleted=FALSE AND CAST(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.last_watched')) AS UNSIGNED)>? ORDER BY updated_at DESC,item_key LIMIT ?";
   const values = since == null
     ? [account.id, profileIndex, entityType, limit, offset]
-    : [account.id, profileIndex, entityType, new Date(Number(since)), limit];
+    : [account.id, profileIndex, entityType, Math.max(0, Number(since)), limit];
   const rows = await pool.query(sql, values);
   return rows.map(row => {
     const payload = decodeJson(row.payload) || {};
@@ -727,6 +727,35 @@ async function handleRpc(req, res, name, account, pool) {
         if (key) await writeSyncItem(connection,account.id,profileIndex,entityType,key,'upsert',entry,origin);
       }
     });
+    send(res, 200, null);
+    return true;
+  }
+  if (name === 'get_sync_overview') {
+    const rows = await pool.query(
+      'SELECT p.profile_index,p.name,p.avatar_color, ' +
+      'SUM(s.entity_type=\'addon\' AND s.is_deleted=FALSE) AS addons, ' +
+      'SUM(s.entity_type=\'plugin\' AND s.is_deleted=FALSE) AS plugins, ' +
+      'SUM(s.entity_type=\'library\' AND s.is_deleted=FALSE) AS library_items, ' +
+      'SUM(s.entity_type=\'progress\' AND s.is_deleted=FALSE) AS watch_progress, ' +
+      'SUM(s.entity_type=\'watched\' AND s.is_deleted=FALSE) AS watched_items ' +
+      'FROM profiles p LEFT JOIN sync_items s ON s.account_id=p.account_id AND s.profile_index=p.profile_index ' +
+      'WHERE p.account_id=? GROUP BY p.profile_index,p.name,p.avatar_color ORDER BY p.profile_index',
+      [account.id]
+    );
+    const byProfile = field => Object.fromEntries(rows.map(row => [String(row.profile_index), Number(row[field] || 0)]));
+    const profiles = Object.fromEntries(rows.map(row => [String(row.profile_index), { name: row.name, color: row.avatar_color }]));
+    send(res, 200, {
+      addons: byProfile('addons'),
+      plugins: byProfile('plugins'),
+      library_items: byProfile('library_items'),
+      watch_progress: byProfile('watch_progress'),
+      watched_items: byProfile('watched_items'),
+      profiles
+    });
+    return true;
+  }
+  if (name === 'register_current_device') {
+    // Device inventory is not needed for profile-scoped sync yet.
     send(res, 200, null);
     return true;
   }
