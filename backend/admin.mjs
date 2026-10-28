@@ -160,7 +160,8 @@ export async function handleAdmin(req, res, pool) {
   if (!path.startsWith('/api/admin/')) return false;
   try {
     if (path === '/api/admin/login' && req.method === 'POST') {
-      const ip = typeof req.headers['x-real-ip'] === 'string' && /^[0-9a-f:.]{2,45}$/i.test(req.headers['x-real-ip'])\n        ? req.headers['x-real-ip'] : (req.socket.remoteAddress || 'unknown');
+      const ip = typeof req.headers['x-real-ip'] === 'string' && /^[0-9a-f:.]{2,45}$/i.test(req.headers['x-real-ip'])
+        ? req.headers['x-real-ip'] : (req.socket.remoteAddress || 'unknown');
       const current = Date.now();
       const recent = (attempts.get(ip) || []).filter(t => current - t < 60000);
       if (recent.length >= 5) { json(res, 429, { error: 'Повторите через минуту' }); return true; }
