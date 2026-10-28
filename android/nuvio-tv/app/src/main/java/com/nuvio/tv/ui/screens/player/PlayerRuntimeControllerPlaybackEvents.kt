@@ -1453,8 +1453,9 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
         is PlayerEvent.OnSelectAudioTrack -> {
             if (CinemaPlaybackPolicy.isProvider(currentStreamUrl)) {
                 val chosen = _uiState.value.audioTracks.getOrNull(event.index)
-                // A different embedded voice must not auto-continue using the old studio.
-                if (chosen != null && cinemaAudioKey(chosen) != cinemaSelectedVoice(currentStreamBingeGroup)) currentStreamBingeGroup = null
+                // Continue a labelled voice by identity, never by its index or language.
+                // Unnamed tracks require a fresh choice for the next episode.
+                if (chosen != null) currentStreamBingeGroup = cinemaContinuationGroupForAudio(currentStreamBingeGroup, chosen)
                 cinemaAudioSelectionKey = "$currentStreamUrl|$currentStreamBingeGroup"
             }
             logSwitchTrace(

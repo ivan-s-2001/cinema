@@ -30,3 +30,13 @@ internal fun cinemaMatchingAudioIndex(tracks: List<TrackInfo>, voice: String?): 
     if (voice.isNullOrBlank() || voice in listOf("не указано", "ru", "rus", "русский", "russian")) return null
     return tracks.filter { cinemaAudioKey(it) == voice }.singleOrNull()?.index
 }
+
+internal fun cinemaContinuationGroupForAudio(group: String?, track: TrackInfo): String? {
+    val selected = group?.takeIf { it.startsWith("cinemahall:") } ?: return null
+    val quality = selected.removePrefix("cinemahall:").substringBefore(':')
+        .takeIf { it.isNotBlank() && it != "auto" } ?: return null
+    val voice = cinemaAudioKey(track)
+    if (voice in listOf("не указано", "ru", "rus", "русский", "russian", "en", "eng", "английский", "english", "und") ||
+        voice.matches(Regex("(?:аудио(?:дорожка)?|audio(?: track)?|озвучка) ?\\d*"))) return null
+    return "cinemahall:$quality:$voice" + if (selected.contains(":tech:")) ":tech:" + selected.substringAfter(":tech:") else ""
+}

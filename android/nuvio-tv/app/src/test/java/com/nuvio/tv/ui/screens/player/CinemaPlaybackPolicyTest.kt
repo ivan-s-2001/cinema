@@ -16,6 +16,10 @@ class CinemaPlaybackPolicyTest {
         assertNull(cinemaMatchingAudioIndex(tracks, "rus"))
         assertNull(cinemaMatchingAudioIndex(tracks + tracks[1].copy(index = 3), "lostfilm"))
         assertNull(cinemaMatchingAudioIndex(tracks, "lostfilm jaskier"))
+        assertEquals("cinemahall:1080p:jaskier:tech:HDR", cinemaContinuationGroupForAudio("cinemahall:1080p:lostfilm:tech:HDR", tracks[2]))
+        assertNull(cinemaContinuationGroupForAudio("cinemahall:1080p:lostfilm", tracks[0]))
+        assertNull(cinemaContinuationGroupForAudio("cinemahall:1080p:lostfilm", TrackInfo(3, "Аудиодорожка 2", "rus")))
+        assertNull(cinemaContinuationGroupForAudio(null, tracks[1]))
     }
     @Test fun onlyOurLoopbackProviderUsesTheSourceTimeout() {
         assertTrue(CinemaPlaybackPolicy.isProvider("http://127.0.0.1:18991/play/token/title/ep/q/voice/video.mkv"))
