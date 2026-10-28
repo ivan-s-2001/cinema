@@ -53,3 +53,19 @@ Selected-season endpoints hydrate and persist that season's episode stills on de
 Logo selection explicitly prefers Russian, then English, then unknown-language artwork. English/unknown logos include `logoCaption` with the stored Russian title; TV renders it centered directly underneath at 9sp. Generated Russian wordmarks do not repeat the caption. Existing provider logo selections are refreshed once for this selection version, then every seven days. Original English artwork is preferred over a generated wordmark when available; provider coverage is not assumed universal.
 
 TV release: 0.7.4-tv, versionCode 1076. Actual playback and D-pad behavior on the user's physical television remain device smoke checks.
+
+## Verified TV 0.7.4 deployment
+
+Code release: `f5dd057e56b30e37281808c4bb45ae4e3a17bc6a`. API CI, Android TV compile/selected regressions, provider contract and optimized APK build passed. APK: [CinemaHall-TV 0.7.4-tv](https://github.com/ivan-s-2001/cinema/actions/runs/40715195202/artifacts/12829466490). These checks do not replace a physical-TV playback/focus smoke check.
+
+Exit an existing live journal view with Ctrl+C, then run as root on the CinemaHall host:
+
+```bash
+cd /opt/cinemahall-source
+git -c safe.directory="$PWD" fetch origin work/cinemahome-api-requirements
+git -c safe.directory="$PWD" show f5dd057e56b30e37281808c4bb45ae4e3a17bc6a:backend/ops/update-api.sh > /root/cinemahall-update.sh
+bash -n /root/cinemahall-update.sh && systemd-run --unit=cinemahall-api-tv074 --collect /bin/bash /root/cinemahall-update.sh f5dd057e56b30e37281808c4bb45ae4e3a17bc6a
+journalctl -u cinemahall-api-tv074 -f -n 40
+```
+
+Wait for `API_UPDATE_OK`, then install the APK. This updates the existing database/service through the established deployment flow. The later documentation commit does not change release code. [Zona/open-source research](zona-streaming-research.md) distinguishes the current implementation from the proposed persistent file/track index and combined playback choices.
