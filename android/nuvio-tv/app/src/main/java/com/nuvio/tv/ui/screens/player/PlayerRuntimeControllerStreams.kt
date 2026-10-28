@@ -1457,7 +1457,13 @@ internal fun PlayerRuntimeController.switchToEpisodeStream(
     forcedTargetVideo: Video? = null,
     isAutoPlay: Boolean = false
 ) {
-    pendingSourceSwitchPositionMs = null
+    val selectedEpisodeId = forcedTargetVideo?.id ?: _uiState.value.episodeStreamsForVideoId
+    if (selectedEpisodeId != null && selectedEpisodeId == currentVideoId) {
+        _uiState.update { it.copy(showEpisodesPanel = false, showEpisodeStreams = false, isLoadingEpisodeStreams = false) }
+        switchToSourceStream(stream)
+        return
+    }
+    if (pendingSourceSwitchPositionMs != null) clearPendingInitialResumePosition()
     if (openExternalStreamInBrowser(stream = stream, fromEpisodePanel = true)) {
         return
     }
