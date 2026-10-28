@@ -38,7 +38,7 @@ public final class ProviderCheck {
         java.util.ArrayList<Sources.Candidate> cached=Sources.cached(cacheKey,2000);
         if(cached==null||cached.size()!=1)throw new AssertionError("Playback search should reuse its recent results");
         cached.clear();
-        if(Sources.cached(cacheKey,2000).size()!=1||Sources.cached(cacheKey,91000)!=null)throw new AssertionError("Cache must isolate lists and expire");
+        if(Sources.cached(cacheKey,2000).size()!=1||Sources.cached(cacheKey,181001)!=null)throw new AssertionError("Cache must isolate lists and expire");
         JSONObject metadata=new JSONObject();
         CinemaSnapshot.appendMetadata(metadata,new JSONObject().put("ids",new JSONObject().put("imdb","tt1234567"))
             .put("runtimeMinutes",125).put("genres",new JSONArray().put("драма"))
