@@ -10,12 +10,22 @@ const pool=mariadb.createPool({
   idleTimeout:30, bigIntAsNumber:true
 });
 const host='127.0.0.1',port=8091;
-function reply(res,status,data){
-  const body=JSON.stringify(data);
+const responseCache=new Map();
+const responseCacheTtl=10_000;
+const responseCacheLimit=64;
+function send(res,status,body){
   res.writeHead(status,{'content-type':'application/json; charset=utf-8',
     'cache-control':status===200?'private, max-age=15':'no-store',
     'x-content-type-options':'nosniff','content-length':Buffer.byteLength(body)});
   res.end(body);
+}
+function reply(res,status,data){
+  const body=JSON.stringify(data);
+  if(status===200&&res.cacheKey){
+    responseCache.set(res.cacheKey,{expiresAt:Date.now()+responseCacheTtl,body});
+    if(responseCache.size>responseCacheLimit)responseCache.delete(responseCache.keys().next().value);
+  }
+  send(res,status,body);
 }
 async function query(sql,params=[]){
  const conn=await pool.getConnection();
@@ -28,6 +38,13 @@ const server=http.createServer(async(req,res)=>{
   if(req.method!=='GET'){reply(res,405,{error:'Method not allowed'});return;}
   const url=new URL(req.url,'http://localhost');
   const route=url.pathname;
+  const cacheKey=route==='/api/v1/home'||route==='/api/v1/search'?url.pathname+url.search:null;
+  if(cacheKey){
+    const cached=responseCache.get(cacheKey);
+    if(cached&&cached.expiresAt>Date.now()){send(res,200,cached.body);return;}
+    if(cached)responseCache.delete(cacheKey);
+    res.cacheKey=cacheKey;
+  }
   if(route==='/health'){
     await query('SELECT 1 AS ok');
     reply(res,200,{status:'ok',service:'cinemahall-api',database:'connected'});
