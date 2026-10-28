@@ -26,6 +26,9 @@ class CinemaQualityTest {
     @Test fun `play starts automatically and source choices are optional`() {
         assertFalse(cinemaRequiresInitialSelection(false))
         assertTrue(cinemaRequiresInitialSelection(true))
+        assertTrue(cinemaShouldReuseBingeGroup("ch:snapshot:tv:tmdb:1622:5:3", false, false))
+        assertFalse(cinemaShouldReuseBingeGroup("tt12345", false, true))
+        assertTrue(cinemaShouldReuseBingeGroup("tt12345", true, true))
         assertEquals(listOf("CinemaHall · 1080p"), cinemaSelectableStreams(listOf(stream("Авто"), stream("1080p"))).map { it.name })
     }
 
