@@ -87,6 +87,7 @@ final class CinemaRemoteCatalog {
         JSONObject result=new JSONObject().put("id",row.getString("id")).put("type",row.getString("type"))
             .put("name",row.optString("title")).put("poster",row.optString("poster"))
             .put("releaseInfo",row.isNull("year")?"Год не указан":row.optString("year"));
+        if(!row.isNull("logo"))result.put("logo",row.optString("logo"));
         if(!row.isNull("backdrop"))result.put("background",row.optString("backdrop"));
         if(!row.isNull("description"))result.put("description",row.optString("description"));
         if(row.optJSONArray("genres")!=null)result.put("genres",row.getJSONArray("genres"));

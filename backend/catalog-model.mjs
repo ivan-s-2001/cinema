@@ -1,4 +1,5 @@
 import {proxyTmdb} from './image-proxy.mjs';
+import {titleArtUrl} from './title-art.mjs';
 // Public metadata DTOs. Never expose provider payloads or curator data.
 export function object(value) {
   if (typeof value === 'string') { try { value = JSON.parse(value); } catch { return {}; } }
@@ -16,7 +17,7 @@ export function imageFor(value, role) {
   if(!valid)return null;
   const url=new URL(valid);
   if(url.hostname==='image.tmdb.org' && /^\/t\/p\/(original|w[0-9]+)\//.test(url.pathname)) {
-    const size=role==='poster'?'w342':role==='person'?'w185':'w1280';
+    const size=role==='poster'?'w342':role==='person'?'w185':role==='logo'?'w500':'w1280';
     url.pathname=url.pathname.replace(/^\/t\/p\/(original|w[0-9]+)\//,'/t/p/'+size+'/');
   }
   return url.hostname==='image.tmdb.org'?proxyTmdb(url):url.href;
@@ -50,6 +51,7 @@ export function titleCard(row, now) {
   return { id: row.id, type: row.kind, title: text(row.title) || 'Без названия',
     description:text(row.description)?.slice(0,400)||null,genres:labels(p.genres).slice(0,8),runtimeMinutes:integer(p.runtimeMinutes,1,100000),
     originalTitle: text(p.originalTitle), year: integer(row.year, 1888, 2100),
+    logo:imageFor(object(p.images).logo,'logo')||titleArtUrl(row.id),
     poster: imageFor(row.poster,'poster'), backdrop: imageFor(row.backdrop,'backdrop'), ratings: ratings(p.ratings),
     ageRating: typeof p.ageRating === 'number' || typeof p.ageRating === 'string' ? p.ageRating : null,
     releaseState: releaseState(p, row.year, now), availability: {status:row.source_count>0&&new Date(row.source_expires_at)>new Date()?'available':row.source_checked_at?'unavailable':'unknown',checkedAt:date(row.source_checked_at),expiresAt:date(row.source_expires_at)},
@@ -74,7 +76,7 @@ export function titleDetail(row) {
     cast: (list(p.cast).length?list(p.cast):list(details.cast)).map(credit).filter(c => c.name).slice(0,100),
     directors: (list(p.directors).length?list(p.directors):list(details.directors)).map(credit).filter(c => c.name).slice(0,50),
     writers: (list(p.writers).length?list(p.writers):list(details.writers)).map(credit).filter(c => c.name).slice(0,50),
-    logo: imageFor(object(p.images).logo,'poster'), metadataState: row.description && image(row.poster) ? 'ready' : 'partial' };
+    logo:imageFor(object(p.images).logo,'logo')||titleArtUrl(row.id), metadataState: row.description && image(row.poster) ? 'ready' : 'partial' };
 }
 export const seasonId = (titleId, season) => `${titleId}:s${season}`;
 export const episodeId = (titleId, season, number) => `${titleId}:${season}:${number}`;

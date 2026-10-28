@@ -1279,24 +1279,8 @@ internal fun PlayerRuntimeController.scheduleHideSubtitleDelayOverlay() {
 
 internal fun PlayerRuntimeController.schedulePauseOverlay() {
     pauseOverlayJob?.cancel()
-
-    if (!_uiState.value.pauseOverlayEnabled || !hasRenderedFirstFrame || !userPausedManually) {
-        _uiState.update { it.copy(showPauseOverlay = false) }
-        return
-    }
-
+    pauseOverlayJob = null
     _uiState.update { it.copy(showPauseOverlay = false) }
-    pauseOverlayJob = scope.launch {
-        delay(pauseOverlayDelayMs)
-        val s = _uiState.value
-        val anyPanelOpen = s.showSubtitleOverlay || s.showSubtitleStylePanel ||
-            s.showSpeedDialog || s.showMoreDialog || s.showEpisodesPanel ||
-            s.showSourcesPanel || s.showChaptersPanel || s.showAudioOverlay || s.showStreamInfoOverlay ||
-            s.showSubtitleTimingDialog || s.showSubtitleDelayOverlay || s.showPartyPanel
-        if (!s.isPlaying && s.pauseOverlayEnabled && s.error == null && !anyPanelOpen) {
-            _uiState.update { it.copy(showPauseOverlay = true, showControls = false) }
-        }
-    }
 }
 
 internal fun PlayerRuntimeController.cancelPauseOverlay() {
@@ -1320,6 +1304,7 @@ fun PlayerRuntimeController.hideControls() {
 }
 
 fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
+    if (!cinemaPlayerActionAllowed(event)) return
     if (event != PlayerEvent.OnParentalGuideHide) {
         onUserInteraction()
     }

@@ -1,9 +1,9 @@
 import {createImageTransport} from './image-transport.mjs';
 import {createImageDiskCache,imageMime} from './image-disk-cache.mjs';
 const origin='https://cinemahome.duckdns.org';
-const route=/^\/api\/v2\/images\/tmdb\/(w185|w342|w1280)\/([A-Za-z0-9_-]{1,160}\.(?:jpg|jpeg|png|webp))$/;
+const route=/^\/api\/v2\/images\/tmdb\/(w185|w342|w500|w1280)\/([A-Za-z0-9_-]{1,160}\.(?:jpg|jpeg|png|webp))$/;
 export function proxyTmdb(url){
-  const match=/^\/t\/p\/(w185|w342|w1280)\/([A-Za-z0-9_-]{1,160}\.(?:jpg|jpeg|png|webp))$/.exec(url.pathname);
+  const match=/^\/t\/p\/(w185|w342|w500|w1280)\/([A-Za-z0-9_-]{1,160}\.(?:jpg|jpeg|png|webp))$/.exec(url.pathname);
   return match?origin+'/api/v2/images/tmdb/'+match[1]+'/'+match[2]:url.href;
 }
 export function createImageProxy({fetcher=createImageTransport(),clock=Date.now,budget=16*1024*1024,diskCache=createImageDiskCache()}={}){

@@ -5,7 +5,7 @@ import {readFile,writeFile,rename,mkdir} from 'node:fs/promises';
 import {dirname} from 'node:path';
 
 const hosts=new Set(['image.tmdb.org','tmdb-image-prod.b-cdn.net']);
-const imagePath=/^\/t\/p\/(w185|w342|w1280)\/[A-Za-z0-9_-]{1,160}\.(jpg|jpeg|png|webp)$/;
+const imagePath=/^\/t\/p\/(w185|w342|w500|w1280)\/[A-Za-z0-9_-]{1,160}\.(jpg|jpeg|png|webp)$/;
 export function publicImageIPv4(address){
   if(typeof address!=='string'||isIP(address)!==4)return false;
   const [a,b,c]=address.split('.').map(Number);

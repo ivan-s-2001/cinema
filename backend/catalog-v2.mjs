@@ -1,3 +1,4 @@
+import {titleArt} from './title-art.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { createSourceDiscovery } from './source-discovery.mjs';
 import { titleCard, titleDetail, episode, seasonId } from './catalog-model.mjs';
@@ -138,6 +139,13 @@ export function createCatalogV2(pool,{sourceDiscovery=createSourceDiscovery({ena
       const saved=cache.get(cacheKey);
       if(saved&&saved.until>Date.now()){sendBytes(200,saved.bytes);return true;}
       const path=url.pathname.slice(prefix.length);
+      const logo=/^\/titles\/([A-Za-z0-9:_-]+)\/logo\.svg$/.exec(path);
+      if(logo){
+        const row=await find(logo[1]);if(!row){fail(404,'not_found','Title not found');return true;}
+        const art=titleArt(row.title),notModified=req.headers?.['if-none-match']===art.etag;
+        res.writeHead(notModified?304:200,{'content-type':'image/svg+xml; charset=utf-8','cache-control':'public, max-age=86400','etag':art.etag,'x-content-type-options':'nosniff','content-security-policy':"default-src 'none'; style-src 'none'; sandbox",...(!notModified?{'content-length':Buffer.byteLength(art.body)}:{})});
+        res.end(notModified||req.method==='HEAD'?undefined:art.body);return true;
+      }
       if(path==='/config') {
         send(200,{apiVersion:2,capabilities:{home:true,search:true,discover:true,seasons:true,episodes:true,playbackStrategy:'local',serverPlaybackOptions:false,sourceDiscovery:sourceDiscovery.enabled,profileSync:false},limits:{pageSize:60},rows:rows.map(rowSpec)});return true;
       }

@@ -152,6 +152,12 @@
             "integer",
             "null"
           ]
+        },
+        "logo": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -1325,6 +1331,12 @@
         "watchOrderPosition": {
           "type": "integer",
           "minimum": 1
+        },
+        "logo": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [

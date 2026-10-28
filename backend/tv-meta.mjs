@@ -43,5 +43,5 @@ export function tvMetadata(row, episodeRows=[]) {
 
 export function tvPreview(row){
   const card=titleCard(row);
-  return {id:card.id,type:card.type,name:card.title,poster:card.poster||'',background:card.backdrop||'',description:card.description||'',releaseInfo:card.year?String(card.year):'',genres:card.genres,cinemaRatings:card.ratings.map(r=>({...r,label:ratingLabels[r.source]||r.source}))};
+  return {id:card.id,type:card.type,name:card.title,logo:card.logo,poster:card.poster||'',background:card.backdrop||'',description:card.description||'',releaseInfo:card.year?String(card.year):'',genres:card.genres,cinemaRatings:card.ratings.map(r=>({...r,label:ratingLabels[r.source]||r.source}))};
 }

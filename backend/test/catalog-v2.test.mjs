@@ -155,6 +155,14 @@ test('MariaDB catalogue integration',{skip:!process.env.CATALOG_TEST_PORT},async
       assert.deepEqual(home.rows.find(r=>r.id==='scifi').items.map(i=>i.id),['ch:movie:scifi']);
       assert.deepEqual(home.rows.find(r=>r.id==='top').items.map(i=>i.id),['ch:snapshot:movie:tmdb:550','ch:movie:animation','ch:movie:scifi']);
     });
+    await t.test('title image fallback has SVG content type, conditional caching and hidden-title protection',async()=>{
+      const url=base+'/titles/ch:snapshot:movie:tmdb:550/logo.svg';
+      const response=await fetch(url);assert.equal(response.status,200);assert.ok(response.headers.get('content-type').startsWith('image/svg+xml'));
+      const svg=await response.text();assert.ok(svg.includes('<svg'));assert.ok(svg.includes('Бойцовский'));
+      const same=await fetch(url,{headers:{'If-None-Match':response.headers.get('etag')}});assert.equal(same.status,304);assert.equal(await same.text(),'');
+      const head=await fetch(url,{method:'HEAD'});assert.equal(head.status,200);assert.equal(await head.text(),'');
+      await get('/titles/ch:movie:hidden/logo.svg','Error',404);
+    });
     await t.test('navigator facets come from watchable records and filters search the entire catalogue',async()=>{
       await pool.query("UPDATE titles SET payload=JSON_SET(payload,'$.countries',JSON_ARRAY('США'),'$.runtimeMinutes',85) WHERE id='ch:movie:animation'");
       await pool.query("UPDATE titles SET payload=JSON_SET(payload,'$.countries',JSON_ARRAY('HIDDEN COUNTRY')) WHERE id='ch:movie:hidden'");

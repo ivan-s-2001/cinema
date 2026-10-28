@@ -342,14 +342,14 @@ internal fun PlayerRuntimeController.observeSubtitleSettings() {
                     subtitleStyle = settings.subtitleStyle,
                     loadingOverlayEnabled = settings.loadingOverlayEnabled,
                     showPlayerLoadingStatus = settings.showPlayerLoadingStatus,
-                    playbackIssueReportsEnabled = settings.playbackIssueReportsEnabled,
+                    playbackIssueReportsEnabled = false,
                     showLoadingOverlay = shouldShowOverlay,
                     loadingIssueReportVisible = if (settings.playbackIssueReportsEnabled) {
                         state.loadingIssueReportVisible
                     } else {
                         false
                     },
-                    pauseOverlayEnabled = settings.pauseOverlayEnabled,
+                    pauseOverlayEnabled = false,
                     osdClockEnabled = settings.osdClockEnabled,
                     internalPlayerEngine = resolvedInternalPlayerEngine,
                     frameRateMatchingMode = settings.frameRateMatchingMode,
@@ -987,8 +987,8 @@ internal fun PlayerRuntimeController.observePlayerStatsHud() {
             .collect { (buttonAvailable, isHudEnabled) ->
                 _uiState.update {
                     it.copy(
-                        playerStatsHudButtonAvailable = buttonAvailable,
-                        playerStatsHudEnabled = isHudEnabled
+                        playerStatsHudButtonAvailable = false,
+                        playerStatsHudEnabled = false
                     )
                 }
             }
