@@ -7,9 +7,9 @@ async function request(handler,path='/api/v2/images/tmdb/w342/poster.jpg',method
   let status,headers,body;const handled=await handler({method},{writeHead(s,h){status=s;headers=h;},end(b){body=b;}},new URL('http://localhost'+path));return {handled,status,headers,body};
 }
 test('image proxy fetches only fixed TMDB paths, shares downloads and supports cached HEAD',async()=>{
-  let calls=0;const handler=createImageProxy({fetcher:async(url,options)=>{calls++;assert.equal(url,'https://image.tmdb.org/t/p/w342/poster.jpg');assert.equal(options.redirect,'error');await new Promise(resolve=>setTimeout(resolve,5));return response();}});
+  let calls=0,confirmed=0;const handler=createImageProxy({fetcher:async(url,options)=>{calls++;assert.equal(url,'https://image.tmdb.org/t/p/w342/poster.jpg');assert.equal(options.redirect,'error');await new Promise(resolve=>setTimeout(resolve,5));const value=response();value.confirm=async()=>{confirmed++;};return value;}});
   for(const result of await Promise.all(Array.from({length:10},()=>request(handler)))){assert.equal(result.status,200);assert.deepEqual(result.body,jpeg);assert.equal(result.headers['content-type'],'image/jpeg');}
-  assert.equal(calls,1);assert.equal((await request(handler,undefined,'HEAD')).body,undefined);assert.equal(calls,1);
+  assert.equal(calls,1);assert.equal(confirmed,1);assert.equal((await request(handler,undefined,'HEAD')).body,undefined);assert.equal(calls,1);
   for(const path of ['/api/v2/images/tmdb/original/poster.jpg','/api/v2/images/tmdb/w342/%2Fetc%2Fpasswd','/api/v2/images/tmdb/w342/poster.jpg?url=https://localhost'])assert.equal((await request(handler,path)).status,404);
   assert.equal((await request(handler,undefined,'POST')).status,405);assert.equal(calls,1);
 });
@@ -21,8 +21,8 @@ test('image cache has a byte budget and cold downloads have bounded concurrency'
   assert.ok(results.every(result=>result.status===200));assert.equal(peak,2);
 });
 test('proxy rejects HTML masquerading as images and retries failed responses',async()=>{
-  let calls=0;const handler=createImageProxy({fetcher:async()=>{calls++;return new Response('<html>error</html>',{headers:{'content-type':'image/jpeg'}});}});
-  assert.equal((await request(handler)).status,503);assert.equal((await request(handler)).status,503);assert.equal(calls,4);
+  let calls=0,confirmed=0;const handler=createImageProxy({fetcher:async()=>{calls++;const value=new Response('<html>error</html>',{headers:{'content-type':'image/jpeg'}});value.confirm=async()=>{confirmed++;};return value;}});
+  assert.equal((await request(handler)).status,503);assert.equal((await request(handler)).status,503);assert.equal(calls,4);assert.equal(confirmed,0);
 });
 test('TLS hostname failure uses the other fixed HTTPS origin and remembers the working one',async()=>{
   const calls=[];
@@ -39,4 +39,10 @@ test('TLS hostname failure uses the other fixed HTTPS origin and remembers the w
     'https://tmdb-image-prod.b-cdn.net/t/p/w342/poster.jpg',
     'https://tmdb-image-prod.b-cdn.net/t/p/w342/another.jpg'
   ]);
+});
+test('a persisted working CDN is preferred over probing a failed primary domain again',async()=>{
+  const calls=[];const fetcher=async url=>{calls.push(url);return response();};
+  fetcher.preferredHost=async()=> 'https://tmdb-image-prod.b-cdn.net';
+  assert.equal((await request(createImageProxy({fetcher}))).status,200);
+  assert.deepEqual(calls,['https://tmdb-image-prod.b-cdn.net/t/p/w342/poster.jpg']);
 });

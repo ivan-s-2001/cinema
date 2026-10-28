@@ -20,11 +20,16 @@ export function createImageProxy({fetcher=createImageTransport(),clock=Date.now,
     if(pending.has(path))return pending.get(path);
     const work=slot(async()=>{
       let body,type,lastError,missing=false;
+      const verifiedHost=await fetcher.preferredHost?.();
+      if(hosts.includes(verifiedHost))preferred=verifiedHost;
+      const deadline=AbortSignal.timeout(10000);
       for(const host of [preferred,...hosts.filter(host=>host!==preferred)]){
+        if(deadline.aborted)break;
         if((unavailable.get(host)||0)>clock())continue;
+        let response;
         try{
           // Standard TLS verification is deliberately kept on both fixed hosts.
-          const response=await fetcher(host+'/t/p/'+match[1]+'/'+match[2],{redirect:'error',signal:AbortSignal.timeout(6000)});
+          response=await fetcher(host+'/t/p/'+match[1]+'/'+match[2],{redirect:'error',signal:deadline});
           if(!response.ok){await response.body?.cancel();if(response.status===404){missing=true;continue;}throw Error('Image provider HTTP '+response.status);}
           if(Number(response.headers.get('content-length')||0)>2*1024*1024){await response.body?.cancel();throw Error('Image too large');}
           const chunks=[];let length=0;
@@ -34,8 +39,10 @@ export function createImageProxy({fetcher=createImageTransport(),clock=Date.now,
           const png=candidate.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
           const webp=candidate.subarray(0,4).toString()==='RIFF'&&candidate.subarray(8,12).toString()==='WEBP';
           if(!(mime==='image/jpeg'&&jpeg||mime==='image/png'&&png||mime==='image/webp'&&webp))throw Error('Invalid image');
+          await response.confirm?.();
           body=candidate;type=mime;preferred=host;unavailable.delete(host);break;
         }catch(error){
+          await response?.rejectRoute?.();
           lastError=error;
           const code=error.cause?.code||error.code;
           if(code||['TimeoutError','AbortError'].includes(error.name)){
