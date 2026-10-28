@@ -1,6 +1,6 @@
 // Read-only discovery API. Works with existing titles.payload JSON; no schema migration.
 const kinds=new Set(['movie','series']);
-const sortColumns={recent:'updated_at DESC',year:'year DESC',title:'title ASC',rating:'updated_at DESC'};
+const sortColumns={recent:'updated_at DESC',year:'year DESC',title:'title ASC'};
 const text=v=>typeof v==='string'?v:'';
 const array=v=>Array.isArray(v)?v:[];
 const obj=v=>{if(v&&typeof v==='object')return v;try{return JSON.parse(v||'{}')}catch{return {}}};
