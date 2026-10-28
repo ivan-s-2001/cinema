@@ -823,7 +823,7 @@ export async function handleAccountRequest(req, res, url, pool) {
         'SELECT payload FROM sync_items WHERE account_id=? AND profile_index=? AND entity_type=? AND is_deleted=FALSE ORDER BY updated_at,item_key',
         [account.id, profileIndex, entityType]
       );
-      send(res, 200, rows.map(row => decodeJson(row.payload) || {}));
+      send(res, 200, rows.map(row => ({ ...(decodeJson(row.payload) || {}), user_id: account.id, profile_id: profileIndex })));
       return true;
     }
     if (route.startsWith('/rest/v1/rpc/')) {
