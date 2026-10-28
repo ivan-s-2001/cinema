@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS profiles (
 CREATE TABLE IF NOT EXISTS sync_items (
  account_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
  profile_index TINYINT UNSIGNED NOT NULL,
- entity_type ENUM('progress','watched','library') NOT NULL,
+ entity_type ENUM('progress','watched','library','addon','plugin') NOT NULL,
  item_key VARCHAR(255) NOT NULL,
  payload JSON NULL,
  is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
@@ -73,5 +73,16 @@ CREATE TABLE IF NOT EXISTS sync_events (
  UNIQUE (account_id,mutation_id),
  INDEX sync_events_cursor (account_id,profile_index,event_id),
  INDEX sync_events_kind_cursor (account_id,profile_index,entity_type,event_id),
+ FOREIGN KEY (account_id,profile_index) REFERENCES profiles(account_id,profile_index) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS account_blobs (
+ account_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ profile_index TINYINT UNSIGNED NOT NULL,
+ blob_type ENUM('collections','profile_settings','home_catalog_settings') NOT NULL,
+ platform VARCHAR(40) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'tv',
+ payload JSON NOT NULL,
+ updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY (account_id,profile_index,blob_type,platform),
  FOREIGN KEY (account_id,profile_index) REFERENCES profiles(account_id,profile_index) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
