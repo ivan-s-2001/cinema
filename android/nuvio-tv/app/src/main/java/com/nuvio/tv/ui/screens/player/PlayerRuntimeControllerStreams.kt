@@ -947,7 +947,7 @@ internal fun PlayerRuntimeController.switchToSourceStream(
     }
 
     val sourcePosition = cinemaSourceSwitchPosition(currentPlaybackPositionMs(), hasRenderedFirstFrame,
-        pendingSourceSwitchPositionMs ?: _uiState.value.pendingSeekPosition, _uiState.value.currentPosition)
+        pendingSourceSwitchPositionMs ?: _uiState.value.pendingSeekPosition, playbackTimeline.value.currentPosition)
 
     // Stop any active torrent before switching to HTTP stream
     stopTorrentStream()
@@ -965,7 +965,8 @@ internal fun PlayerRuntimeController.switchToSourceStream(
     releasePlayer(flushPlaybackState = false)
     pendingResumeProgress = null
     pendingSourceSwitchPositionMs = sourcePosition
-    _uiState.update { it.copy(pendingSeekPosition = sourcePosition, currentPosition = sourcePosition) }
+    _uiState.update { it.copy(pendingSeekPosition = sourcePosition) }
+    updatePlaybackTimeline(currentPosition = sourcePosition)
 
 
     applySelectedStreamState(
@@ -1103,7 +1104,7 @@ private fun PlayerRuntimeController.switchToTorrentSourceStream(
 ) {
     val infoHash = stream.getEffectiveInfoHash() ?: return
     val sourcePosition = cinemaSourceSwitchPosition(currentPlaybackPositionMs(), hasRenderedFirstFrame,
-        pendingSourceSwitchPositionMs ?: _uiState.value.pendingSeekPosition, _uiState.value.currentPosition)
+        pendingSourceSwitchPositionMs ?: _uiState.value.pendingSeekPosition, playbackTimeline.value.currentPosition)
 
     sourceStreamsScope?.cancel()
     sourceStreamsScope = null
@@ -1116,7 +1117,8 @@ private fun PlayerRuntimeController.switchToTorrentSourceStream(
     releasePlayer(flushPlaybackState = false)
     pendingResumeProgress = null
     pendingSourceSwitchPositionMs = sourcePosition
-    _uiState.update { it.copy(pendingSeekPosition = sourcePosition, currentPosition = sourcePosition) }
+    _uiState.update { it.copy(pendingSeekPosition = sourcePosition) }
+    updatePlaybackTimeline(currentPosition = sourcePosition)
 
     hasRetriedCurrentStreamAfter416 = false
     errorRetryCount = 0
@@ -1459,6 +1461,9 @@ internal fun PlayerRuntimeController.switchToEpisodeStream(
 ) {
     val selectedEpisodeId = forcedTargetVideo?.id ?: _uiState.value.episodeStreamsForVideoId
     if (selectedEpisodeId != null && selectedEpisodeId == currentVideoId) {
+        episodeStreamsScope?.cancel()
+        episodeStreamsScope = null
+        episodeStreamsJob = null
         _uiState.update { it.copy(showEpisodesPanel = false, showEpisodeStreams = false, isLoadingEpisodeStreams = false) }
         switchToSourceStream(stream)
         return

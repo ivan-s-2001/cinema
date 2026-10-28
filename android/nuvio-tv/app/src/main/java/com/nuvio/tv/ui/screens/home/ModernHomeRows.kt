@@ -410,6 +410,7 @@ private fun ModernCatalogRowItem(
             when (payload) {
                 is ModernPayload.Catalog -> {
                     if (!payload.itemId.startsWith("__placeholder_")) {
+                        HeroBackdropState.prepareForDetail(payload.itemId, item.metaPreview?.backdropUrl ?: item.heroPreview.backdrop, item.heroPreview.poster)
                         onNavigateToDetail(
                             payload.itemId,
                             payload.itemType,

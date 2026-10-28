@@ -242,7 +242,7 @@ private fun PlaybackNavHost(
 
             HomeScreen(
                 onNavigateToDetail = { itemId, itemType, addonBaseUrl ->
-                    val heroBackdrop = HeroBackdropState.consumeAndClear()
+                    val heroBackdrop = HeroBackdropState.consumeAndClear(itemId)
                     navController.navigate(
                         Screen.Detail.createRoute(
                             itemId = itemId,
@@ -1172,7 +1172,7 @@ private fun PlaybackNavHost(
             SearchScreen(
                 viewModel = searchViewModel,
                 onNavigateToDetail = { itemId, itemType, addonBaseUrl ->
-                    val heroBackdrop = HeroBackdropState.consumeAndClear()
+                    val heroBackdrop = HeroBackdropState.consumeAndClear(itemId)
                     navController.navigate(
                         Screen.Detail.createRoute(
                             itemId = itemId,
@@ -1195,7 +1195,7 @@ private fun PlaybackNavHost(
             DiscoverScreen(
                 showBuiltInHeader = !hideBuiltInHeaders,
                 onNavigateToDetail = { itemId, itemType, addonBaseUrl ->
-                    val heroBackdrop = HeroBackdropState.consumeAndClear()
+                    val heroBackdrop = HeroBackdropState.consumeAndClear(itemId)
                     navController.navigate(
                         Screen.Detail.createRoute(
                             itemId = itemId,
@@ -1365,7 +1365,7 @@ private fun PlaybackNavHost(
         ) {
             com.nuvio.tv.ui.screens.collection.FolderDetailScreen(
                 onNavigateToDetail = { itemId, itemType, addonBaseUrl ->
-                    val heroBackdrop = HeroBackdropState.consumeAndClear()
+                    val heroBackdrop = HeroBackdropState.consumeAndClear(itemId)
                     navController.navigate(Screen.Detail.createRoute(itemId, itemType, addonBaseUrl, heroBackdropUrl = heroBackdrop))
                 },
                 onBack = { navController.popBackStack() }

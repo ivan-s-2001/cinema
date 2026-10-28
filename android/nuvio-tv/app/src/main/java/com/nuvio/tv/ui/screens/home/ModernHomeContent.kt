@@ -188,6 +188,7 @@ fun ModernHomeContent(
                     items = uiState.heroItems.asStable(),
                     showImdbRatings = uiState.homeImdbRatingsVisibility.showRatings,
                     onItemClick = { item ->
+                        HeroBackdropState.prepareForDetail(item.id, item.backdropUrl, item.poster)
                         onNavigateToDetail(item.id, item.apiType, "")
                     },
                     onItemFocus = { item -> onItemFocus(item) }
@@ -1292,6 +1293,10 @@ fun ModernHomeContent(
                 optionsItem.value = null
             },
             onDetails = {
+                when (val selected = selectedOptionsItem) {
+                    is ContinueWatchingItem.InProgress -> HeroBackdropState.prepareForDetail(selected.contentId(), selected.progress.backdrop, selected.progress.poster)
+                    is ContinueWatchingItem.NextUp -> HeroBackdropState.prepareForDetail(selected.contentId(), selected.info.backdrop, selected.info.poster)
+                }
                 onNavigateToDetail(selectedOptionsItem.contentId(), selectedOptionsItem.contentType(), "")
                 optionsItem.value = null
             },

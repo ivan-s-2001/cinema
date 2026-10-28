@@ -81,3 +81,6 @@ TV version: 0.7.5-tv, versionCode 1077. Server file/track indexing remains the s
 
 
 Source/voice/quality switches within the current episode capture the live absolute position before releasing either player. This transfer takes precedence over stored resume progress and completion thresholds, including near the credits. ExoPlayer and MPV start the replacement at that position; a shorter replacement duration bounds the target at its end. A second switch during preparation retains the pending position. Switching episodes clears the source-transfer position and uses that episode's own progress. Files with different edits or introductions still use absolute time; content-based alignment between different cuts is not claimed.
+
+
+Detail loading artwork is now taken from the clicked card, hero item or continue-watching entry immediately before navigation. It no longer borrows the last displayed home hero while focus/enrichment is still catching up. A missing backdrop clears the transition seed; a portrait equal to the poster is not used as a wide background. The last actually displayed home backdrop is retained independently for home return transitions. A regression covers fast clicking another title and missing/portrait-only artwork.
