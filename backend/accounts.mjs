@@ -536,8 +536,51 @@ async function handleRpc(req, res, name, account, pool) {
     return true;
   }
   if (name === 'sync_pull_profile_locks') {
-    const rows = await pool.query('SELECT profile_index FROM profiles WHERE account_id=? ORDER BY profile_index', [account.id]);
-    send(res, 200, rows.map(row => ({ profile_index: row.profile_index, pin_enabled: false, pin_locked_until: null })));
+    const rows = await pool.query('SELECT profile_index,profile_pin_hash,profile_pin_locked_until FROM profiles WHERE account_id=? ORDER BY profile_index', [account.id]);
+    send(res, 200, rows.map(row => ({
+      profile_index: row.profile_index,
+      pin_enabled: Boolean(row.profile_pin_hash),
+      pin_locked_until: row.profile_pin_locked_until
+    })));
+    return true;
+  }
+  if (name === 'set_profile_pin' || name === 'clear_profile_pin' || name === 'verify_profile_pin') {
+    const pin = typeof body.p_pin === 'string' ? body.p_pin : '';
+    const rows = await pool.query('SELECT profile_pin_hash,profile_pin_failed_attempts,profile_pin_locked_until FROM profiles WHERE account_id=? AND profile_index=?', [account.id,profileIndex]);
+    const row = rows[0];
+    if (name === 'set_profile_pin') {
+      if (!/^\\d{4,8}$/.test(pin)) throw Object.assign(new Error('PIN must contain 4 to 8 digits'), { status: 400 });
+      if (row.profile_pin_hash) {
+        if (!body.p_current_pin) throw Object.assign(new Error('Current PIN is required'), { status: 400 });
+        if (!(await passwordMatches(String(body.p_current_pin),row.profile_pin_hash))) throw Object.assign(new Error('Current PIN is incorrect'), { status: 403 });
+      }
+      await pool.query('UPDATE profiles SET profile_pin_hash=?,profile_pin_failed_attempts=0,profile_pin_locked_until=NULL WHERE account_id=? AND profile_index=?', [await passwordHash(pin),account.id,profileIndex]);
+      send(res, 200, null);
+      return true;
+    }
+    if (name === 'clear_profile_pin') {
+      if (row.profile_pin_hash && !body.p_current_pin) throw Object.assign(new Error('Current PIN is required'), { status: 400 });
+      if (row.profile_pin_hash && !(await passwordMatches(String(body.p_current_pin),row.profile_pin_hash))) throw Object.assign(new Error('Current PIN is incorrect'), { status: 403 });
+      await pool.query('UPDATE profiles SET profile_pin_hash=NULL,profile_pin_failed_attempts=0,profile_pin_locked_until=NULL WHERE account_id=? AND profile_index=?', [account.id,profileIndex]);
+      send(res, 200, null);
+      return true;
+    }
+    if (!row.profile_pin_hash) {
+      send(res, 200, [{ unlocked: false, retry_after_seconds: 0 }]);
+      return true;
+    }
+    if (row.profile_pin_locked_until && new Date(row.profile_pin_locked_until).getTime() > Date.now()) {
+      const retry = Math.ceil((new Date(row.profile_pin_locked_until).getTime()-Date.now())/1000);
+      send(res, 200, [{ unlocked: false, retry_after_seconds: retry }]);
+      return true;
+    }
+    if (await passwordMatches(pin,row.profile_pin_hash)) {
+      await pool.query('UPDATE profiles SET profile_pin_failed_attempts=0,profile_pin_locked_until=NULL WHERE account_id=? AND profile_index=?', [account.id,profileIndex]);
+      send(res, 200, [{ unlocked: true, retry_after_seconds: 0 }]);
+      return true;
+    }
+    await pool.query('UPDATE profiles SET profile_pin_failed_attempts=profile_pin_failed_attempts+1,profile_pin_locked_until=IF(profile_pin_failed_attempts+1>=5,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 30 SECOND),NULL) WHERE account_id=? AND profile_index=?', [account.id,profileIndex]);
+    send(res, 200, [{ unlocked: false, retry_after_seconds: 0 }]);
     return true;
   }
 
