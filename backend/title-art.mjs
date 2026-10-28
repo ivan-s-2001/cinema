@@ -8,14 +8,14 @@ export function titleArt(title){
  const words=label.split(/\s+/),lines=[];
  for(const word of words){if(!lines.length||[...lines.at(-1)+' '+word].length>25)lines.push(word);else lines[lines.length-1]+=' '+word;}
  if(!lines.length)lines.push('CinemaHall');
- const longest=Math.max(...lines.map(s=>[...s].length)),font=Math.min(116,Math.max(12,Math.floor(1180/(longest*.68))));
- const step=Math.ceil(font*1.18),height=step*lines.length+48;
- const body=`<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="${height}" viewBox="0 0 1280 ${height}" role="img"><title>${escape(label)}</title><defs><linearGradient id="ink" x2="0" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#d9dfe8"/></linearGradient></defs><g font-family="sans-serif" font-weight="900" font-size="${font}" letter-spacing="0.5" fill="url(#ink)">${lines.map((line,i)=>`<text x="12" y="${24+font+i*step}">${escape(line)}</text>`).join('')}</g></svg>`;
+ const longest=Math.max(...lines.map(s=>[...s].length)),font=Math.min(116,Math.max(12,Math.floor(1180/(longest*1.05))));
+ const step=Math.ceil(font*1.18),height=step*lines.length+48,width=Math.min(1280,Math.ceil(longest*font)+48);
+ const body=`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img"><title>${escape(label)}</title><defs><linearGradient id="ink" x2="0" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#d9dfe8"/></linearGradient></defs><g font-family="sans-serif" font-weight="900" font-size="${font}" letter-spacing="0.5" fill="url(#ink)">${lines.map((line,i)=>`<text x="12" y="${24+font+i*step}">${escape(line)}</text>`).join('')}</g></svg>`;
  return {body,etag:'"'+createHash('sha256').update(body).digest('hex').slice(0,32)+'"'};
 }
 
 export function providerLogo(images={}){
- const path=value=>typeof value==='string'?value:typeof value==='object'&&value?(value.url||value.file_path||value.path||null):null;
+ const path=value=>{const candidate=typeof value==='string'?value:typeof value==='object'&&value?(value.url||value.file_path||value.path):null;return typeof candidate==='string'&&candidate.length<=2048?candidate:null;};
  const primary=path(images.logo);if(primary)return primary;
  const logos=Array.isArray(images.logos)?images.logos:[];
  const rank=value=>({ru:0,en:1}[value?.iso_639_1||value?.language]??2);

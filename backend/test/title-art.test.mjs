@@ -21,3 +21,8 @@ test('logo alternatives prefer Russian artwork and keep a stable fallback langua
  assert.equal(providerLogo({logos:[{language:'en',url:'en.png'},{iso_639_1:'ru',file_path:'/ru.png'}]}),'/ru.png');
  assert.equal(providerLogo({logo:'primary.png',logos:['other.png']}),'primary.png');
 });
+
+test('short title images crop their transparent canvas and malformed provider descriptors are ignored',()=>{
+ const art=titleArt('Дюна').body;const width=Number(/width="(\d+)"/.exec(art)[1]);assert.ok(width<800);
+ assert.equal(providerLogo({logo:{url:42},logos:[{language:'ru',url:'correct.png'}]}),'correct.png');
+});
