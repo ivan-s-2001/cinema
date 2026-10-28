@@ -96,7 +96,7 @@ async function requireAccount(req, pool) {
     throw error;
   }
   const rows = await pool.query(
-    'SELECT a.id, a.email FROM account_sessions s JOIN accounts a ON a.id=s.account_id WHERE s.token_hash=? AND s.expires_at > UTC_TIMESTAMP()',
+    'SELECT a.id, a.email FROM account_sessions s JOIN accounts a ON a.id=s.account_id WHERE s.token_hash=? AND s.expires_at > UTC_TIMESTAMP() AND a.disabled=0',
     [tokenHash(token)]
   );
   if (!rows.length) {
@@ -109,9 +109,10 @@ async function requireAccount(req, pool) {
 
 async function issueSession(account, pool) {
   const token = randomBytes(32).toString('base64url');
+  await pool.query('DELETE FROM account_sessions WHERE expires_at <= UTC_TIMESTAMP()');
   await pool.query(
-    'INSERT INTO account_sessions (token_hash,account_id,expires_at) VALUES (?,?,DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? DAY))',
-    [tokenHash(token), account.id, SESSION_DAYS]
+    'INSERT INTO account_sessions (token_hash,account_id,expires_at) VALUES (?,?,DATE_ADD(UTC_TIMESTAMP(), INTERVAL 30 DAY))',
+    [tokenHash(token), account.id]
   );
   return { token, expiresIn: SESSION_DAYS * 86400, account: { id: account.id, email: account.email } };
 }
@@ -180,7 +181,7 @@ async function signIn(req, res, pool) {
     return;
   }
   const rows = await pool.query('SELECT id,email,password_hash FROM accounts WHERE email=? AND disabled=0 LIMIT 1', [email]);
-  const valid = rows.length ? await passwordMatches(password, rows[0].password_hash) : false;
+  const valid = rows.length ? await passwordMatches(password, rows[0].password_hash) : (await scrypt(password, Buffer.alloc(16), 64, { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }), false);
   if (!valid) {
     send(res, 401, { error: 'Invalid email or password' });
     return;
@@ -333,7 +334,7 @@ export async function handleAccountRequest(req, res, url, pool) {
         send(res, 201, { profile });
         return true;
       }
-      if (route === '/api/v1/profiles/:sync') {
+      if (/^\/api\/v1\/profiles\/[1-6]\/sync$/.test(route)) {
         return await syncProfile(req, res, url, account, pool);
       }
       const profileMatch = /^\/api\/v1\/profiles\/([1-6])$/.exec(route);
