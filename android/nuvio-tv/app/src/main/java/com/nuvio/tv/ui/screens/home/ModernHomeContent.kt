@@ -1292,12 +1292,13 @@ fun ModernHomeContent(
                 )
                 optionsItem.value = null
             },
-            onDetails = {
-                when (val selected = selectedOptionsItem) {
+            onDetails = details@{
+                val selection = selectedOptionsItem ?: return@details
+                when (val selected = selection) {
                     is ContinueWatchingItem.InProgress -> HeroBackdropState.prepareForDetail(selected.contentId(), selected.progress.backdrop, selected.progress.poster)
                     is ContinueWatchingItem.NextUp -> HeroBackdropState.prepareForDetail(selected.contentId(), selected.info.backdrop, selected.info.poster)
                 }
-                onNavigateToDetail(selectedOptionsItem.contentId(), selectedOptionsItem.contentType(), "")
+                onNavigateToDetail(selection.contentId(), selection.contentType(), "")
                 optionsItem.value = null
             },
             onStartFromBeginning = {
