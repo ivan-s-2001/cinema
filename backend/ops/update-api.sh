@@ -66,10 +66,16 @@ probe(){
   curl --fail-with-body --silent --show-error --max-time 60 "$base/api/v2/home" > "$backup/$label-home.json"
   local image
   image=$("$node_bin" -e 'const fs=require("fs");const h=JSON.parse(fs.readFileSync(process.argv[1]));const image=h.rows.flatMap(r=>r.items).map(i=>i.poster).find(v=>v&&v.includes("/api/v2/images/tmdb/"));if(!image)throw Error("No server-hosted posters returned");console.log(new URL(image).pathname)' "$backup/$label-home.json")
+  echo "$label: checking catalogue filters"
+  curl --fail-with-body --silent --show-error --max-time 30 "$base/api/v2/facets" > "$backup/$label-facets.json"
+  "$node_bin" -e 'const fs=require("fs");const f=JSON.parse(fs.readFileSync(process.argv[1]));if(!Array.isArray(f.genres)||!f.genres.length||!Array.isArray(f.countries)||!Array.isArray(f.years)||!f.years.length)throw Error("Catalogue filters unavailable");console.log("Filters: "+f.genres.length+" genres, "+f.countries.length+" countries, "+f.years.length+" years")' "$backup/$label-facets.json"
   echo "$label: checking real poster bytes"
   curl --fail-with-body --silent --show-error --max-time 30 "$base$image" > "$backup/$label-poster.jpg"
   echo "$label: checking episode selection and actor filmography"
   curl --fail-with-body --silent --show-error --max-time 90 "$base/api/v2/titles/ch:snapshot:tv:tmdb:1668/tv-meta" > "$backup/$label-tv-meta.json"
+  local artwork
+  artwork=$("$node_bin" -e 'const fs=require("fs");const m=JSON.parse(fs.readFileSync(process.argv[1])).meta;const v=m.videos?.find(v=>v.season>0&&v.episode>0&&v.thumbnail);if(!v)throw Error("Episode artwork missing");const u=new URL(v.thumbnail);if(u.origin!=="https://cinemahome.duckdns.org"||!u.pathname.startsWith("/api/v2/images/tmdb/"))throw Error("Unexpected episode artwork origin");console.log(u.pathname)' "$backup/$label-tv-meta.json")
+  curl --fail-with-body --silent --show-error --max-time 30 "$base$artwork" > "$backup/$label-episode.jpg"
   local person
   person=$("$node_bin" -e 'const fs=require("fs");const m=JSON.parse(fs.readFileSync(process.argv[1])).meta;if(!m.videos?.some(v=>v.season>0&&v.episode>0))throw Error("No selectable series episodes");const p=m.app_extras?.cast?.find(p=>/^person:[a-f0-9]{32}$/.test(p.personId));if(!p)throw Error("No navigable actors returned");console.log(p.personId)' "$backup/$label-tv-meta.json")
   curl --fail-with-body --silent --show-error --max-time 30 "$base/api/v2/people/$person/filmography?limit=2" > "$backup/$label-filmography.json"

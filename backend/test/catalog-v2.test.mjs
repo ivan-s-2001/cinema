@@ -181,6 +181,20 @@ test('MariaDB catalogue integration',{skip:!process.env.CATALOG_TEST_PORT},async
       const firstArtwork=await pool.query('SELECT still,title FROM episodes WHERE title_id=? AND season_number=1 AND episode_number=1',[series.id]);
       assert.ok(firstArtwork[0].still.includes('/episode.jpg'));assert.equal(firstArtwork[0].title,'Episode name');
       await library.idle();
+      await pool.query("UPDATE episodes SET payload=JSON_SET(COALESCE(payload,JSON_OBJECT()),'$.seasonAirAt','2030-01-01') WHERE title_id=? AND season_number=1 AND episode_number=1",[series.id]);
+      const incomplete=createMetadataLibrary(pool,{provider:{enabled:true,async get(path){
+        if(path.includes('credits'))return {data:[]};
+        if(path.endsWith('/seasons'))return {data:[{season_number:1,episode_count:3},{season_number:2,episode_count:2}]};
+        return {data:[{episode_number:1}]};
+      }}});
+      const refreshed=(await pool.query('SELECT * FROM titles WHERE id=?',[series.id]))[0];
+      const payload=typeof refreshed.payload==='string'?JSON.parse(refreshed.payload):refreshed.payload;
+      delete payload.episodesDetailsCheckedAt;delete payload.episodesArtworkCheckedAt;
+      await incomplete.ensure({...refreshed,payload});await incomplete.idle();await incomplete.close();
+      const preserved=(await pool.query('SELECT title,still,payload FROM episodes WHERE title_id=? AND season_number=1 AND episode_number=1',[series.id]))[0];
+      assert.equal(preserved.title,'Episode name');assert.ok(preserved.still.includes('/episode.jpg'));
+      const details=typeof preserved.payload==='string'?JSON.parse(preserved.payload):preserved.payload;
+      assert.equal(details.description,'Episode story');assert.equal(details.seasonAirAt,'2030-01-01');
       const person=(await pool.query('SELECT * FROM people'))[0];assert.ok(person.id.startsWith('person:'));assert.equal(person.name,'Актёр');
       const cast=await pool.query('SELECT title_id FROM title_cast WHERE person_id=?',[person.id]);assert.equal(cast.length,2);
       const inventory=await pool.query('SELECT season_number,episode_number FROM episodes WHERE title_id=? AND season_number>0 ORDER BY season_number,episode_number',['ch:series:hydration']);

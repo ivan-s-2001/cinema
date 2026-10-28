@@ -20,6 +20,12 @@ class CinemaDiscoveryTest {
         assertFalse(params.containsKey("type"))
         assertFalse(params.containsKey("catalog"))
     }
+    @Test fun searchLeavesTheSelectedShelfAndQueriesAllTitles() {
+        val path = cinemaDiscoverPath("Матрица", "", "", "", "", "popular", null, "comedy")
+        assertTrue(path.startsWith("/discover?"))
+        assertFalse(path.contains("comedy"))
+        assertTrue(cinemaDiscoverPath("", "", "", "", "", "popular", null, "comedy").startsWith("/rows/comedy/items?"))
+    }
     @Test fun emptyFiltersDoNotRestrictTheCatalogue() {
         assertEquals("/discover?limit=30&sort=popular", cinemaDiscoverPath("", "", "", "", "", "popular", null))
     }

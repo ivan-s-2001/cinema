@@ -44,15 +44,17 @@ private suspend fun catalogueJson(path: String): JSONObject = withContext(Dispat
     } finally { connection.disconnect() }
 }
 
-internal fun cinemaDiscoverPath(query: String, type: String, genre: String, year: String, country: String, sort: String, cursor: String?): String {
-    val args = linkedMapOf("limit" to "30", "sort" to sort)
+internal fun cinemaDiscoverPath(query: String, type: String, genre: String, year: String, country: String, sort: String, cursor: String?, shelf: String? = null): String {
+    val scopedShelf = shelf?.takeIf { it.matches(Regex("[a-z_]+")) && query.trim().length < 2 }
+    val args = linkedMapOf("limit" to "30")
+    if (scopedShelf == null || sort != "popular") args["sort"] = sort
     if (query.trim().length >= 2) args["q"] = query.trim()
     if (type.isNotEmpty()) args["type"] = type
     if (genre.isNotEmpty()) args["genre"] = genre
     if (country.isNotEmpty()) args["country"] = country
     if (year.isNotEmpty()) { args["yearFrom"] = year; args["yearTo"] = year }
     if (cursor != null) args["cursor"] = cursor
-    return "/discover?" + args.entries.joinToString("&") { it.key + "=" + URLEncoder.encode(it.value, "UTF-8") }
+    return (scopedShelf?.let { "/rows/$it/items?" } ?: "/discover?") + args.entries.joinToString("&") { it.key + "=" + URLEncoder.encode(it.value, "UTF-8") }
 }
 private fun JSONObject.options(key: String): List<String> = optJSONArray(key)?.let { values -> (0 until values.length()).map { values.getString(it) } }.orEmpty()
 private data class DiscoveryFilm(val id: String, val type: String, val title: String, val poster: String, val subtitle: String)
@@ -66,6 +68,8 @@ fun CinemaDiscoverScreen(onNavigateToDetail: (String, String, String) -> Unit) {
     var year by rememberSaveable { mutableStateOf("") }
     var country by rememberSaveable { mutableStateOf("") }
     var sort by rememberSaveable { mutableStateOf("popular") }
+    var shelf by rememberSaveable { mutableStateOf("") }
+    var shelves by remember { mutableStateOf(emptyList<Triple<String, String, String>>()) }
     var dialog by remember { mutableStateOf<String?>(null) }
     var facets by remember { mutableStateOf(JSONObject()) }
     var facetError by remember { mutableStateOf(false) }
@@ -76,8 +80,15 @@ fun CinemaDiscoverScreen(onNavigateToDetail: (String, String, String) -> Unit) {
     var retry by remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
-    val filterKey = cinemaDiscoverPath(query, type, genre, year, country, sort, null)
+    val filterKey = cinemaDiscoverPath(query, type, genre, year, country, sort, null, shelf)
     val grid = rememberLazyGridState()
+    LaunchedEffect(Unit) {
+        try {
+            val rows = catalogueJson("/config").getJSONArray("rows")
+            shelves = (0 until rows.length()).map { rows.getJSONObject(it) }.map { Triple(it.getString("id"), it.getString("name"), it.getString("type")) }
+        } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
+        catch (_: Exception) { /* Global browsing remains available while shelves are offline. */ }
+    }
     LaunchedEffect(type, facetRetry) {
         facetError = false
         try { facets = catalogueJson("/facets" + if (type.isEmpty()) "" else "?type=$type") }
@@ -90,7 +101,7 @@ fun CinemaDiscoverScreen(onNavigateToDetail: (String, String, String) -> Unit) {
         if (cursor == null) { films = emptyList(); grid.scrollToItem(0) }
         try {
             delay(350)
-            val response = catalogueJson(cinemaDiscoverPath(query, type, genre, year, country, sort, cursor))
+            val response = catalogueJson(cinemaDiscoverPath(query, type, genre, year, country, sort, cursor, shelf))
             val rows = response.getJSONArray("items")
             val result = (0 until rows.length()).map { index ->
                 val row = rows.getJSONObject(index)
@@ -110,16 +121,17 @@ fun CinemaDiscoverScreen(onNavigateToDetail: (String, String, String) -> Unit) {
         Text("Каталог", style = MaterialTheme.typography.headlineMedium, color = NuvioTheme.colors.TextPrimary)
         Box(Modifier.fillMaxWidth().border(1.dp, NuvioTheme.colors.TextSecondary, RoundedCornerShape(8.dp)).padding(14.dp)) {
             if (query.isEmpty()) Text("Поиск по всей базе фильмов и сериалов", color = NuvioTheme.colors.TextSecondary)
-            BasicTextField(value = query, onValueChange = { query = it.take(120); changed() }, singleLine = true,
+            BasicTextField(value = query, onValueChange = { query = it.take(120); if (query.isNotEmpty()) shelf = ""; changed() }, singleLine = true,
                 textStyle = TextStyle(color = NuvioTheme.colors.TextPrimary, fontSize = 18.sp), cursorBrush = SolidColor(NuvioTheme.colors.TextPrimary), modifier = Modifier.fillMaxWidth())
         }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(4.dp)) {
             item { Button(onClick = { dialog = "type" }) { Text(if (type == "movie") "Фильмы" else if (type == "series") "Сериалы" else "Все типы") } }
+            if (shelves.isNotEmpty()) item { Button(onClick = { dialog = "shelf" }) { Text(shelves.find { it.first == shelf }?.second ?: "Подборки") } }
             item { Button(onClick = { dialog = "genre" }) { Text(genre.ifEmpty { "Все жанры" }) } }
             item { Button(onClick = { dialog = "year" }) { Text(year.ifEmpty { "Все годы" }) } }
             item { Button(onClick = { dialog = "country" }) { Text(country.ifEmpty { "Все страны" }) } }
             item { Button(onClick = { dialog = "sort" }) { Text(when (sort) { "year" -> "Сначала новые"; "rating" -> "По оценке"; "title" -> "По названию"; else -> "По популярности" }) } }
-            item { Button(onClick = { type = ""; genre = ""; year = ""; country = ""; sort = "popular"; query = ""; changed() }) { Text("Сбросить") } }
+            item { Button(onClick = { type = ""; genre = ""; year = ""; country = ""; sort = "popular"; query = ""; shelf = ""; changed() }) { Text("Сбросить") } }
         }
         if (facetError) Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Не удалось загрузить варианты фильтров", color = NuvioTheme.colors.TextSecondary)
@@ -148,18 +160,19 @@ fun CinemaDiscoverScreen(onNavigateToDetail: (String, String, String) -> Unit) {
     dialog?.let { field ->
         val choices = when (field) {
             "type" -> listOf("" to "Все типы", "movie" to "Фильмы", "series" to "Сериалы")
+            "shelf" -> listOf("" to "Вся база") + shelves.filter { type.isEmpty() || it.third == type }.map { it.first to it.second }
             "sort" -> listOf("popular" to "По популярности", "rating" to "По оценке", "year" to "Сначала новые", "title" to "По названию")
             else -> listOf("" to "Все") + facets.options(when (field) { "genre" -> "genres"; "country" -> "countries"; else -> "years" }).map { it to it }
         }
         Dialog(onDismissRequest = { dialog = null }) {
             var needle by remember(field) { mutableStateOf("") }
             Column(Modifier.width(520.dp).heightIn(max = 470.dp).background(NuvioTheme.colors.Background, RoundedCornerShape(12.dp)).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(when (field) { "type" -> "Тип"; "genre" -> "Жанр"; "country" -> "Страна"; "year" -> "Год"; else -> "Сортировка" }, color = NuvioTheme.colors.TextPrimary, style = MaterialTheme.typography.headlineSmall)
+                Text(when (field) { "type" -> "Тип"; "genre" -> "Жанр"; "country" -> "Страна"; "year" -> "Год"; "shelf" -> "Подборки"; else -> "Сортировка" }, color = NuvioTheme.colors.TextPrimary, style = MaterialTheme.typography.headlineSmall)
                 if (choices.size > 15) BasicTextField(value = needle, onValueChange = { needle = it }, textStyle = TextStyle(color = NuvioTheme.colors.TextPrimary, fontSize = 18.sp), modifier = Modifier.fillMaxWidth().border(1.dp, NuvioTheme.colors.TextSecondary).padding(12.dp))
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(choices.filter { it.second.contains(needle, ignoreCase = true) }) { (value, label) ->
                         Button(onClick = {
-                            when (field) { "type" -> { type = value; genre = ""; country = ""; year = "" }; "genre" -> genre = value; "country" -> country = value; "year" -> year = value; "sort" -> sort = value }
+                            when (field) { "type" -> { type = value; genre = ""; country = ""; year = ""; shelf = "" }; "genre" -> genre = value; "country" -> country = value; "year" -> year = value; "sort" -> sort = value; "shelf" -> { shelf = value; query = ""; genre = ""; country = ""; year = ""; sort = "popular" } }
                             changed(); dialog = null
                         }, modifier = Modifier.fillMaxWidth()) { Text(label) }
                     }

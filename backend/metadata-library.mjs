@@ -51,8 +51,8 @@ export function createMetadataLibrary(pool,{provider=createMetadataProvider(),cl
       const path=text(raw.still_path)||text(raw.still)||text(raw.thumbnail)||text(raw.image?.original)||text(raw.image?.medium);
       const still=imageFor(path?.startsWith('/')?'https://image.tmdb.org/t/p/w1280'+path:path,'backdrop');
       await pool.query(`INSERT INTO episodes(title_id,season_number,episode_number,title,air_date,still,payload)VALUES(?,?,?,?,?,?,?)
-        ON DUPLICATE KEY UPDATE title=COALESCE(NULLIF(VALUES(title),''),title),air_date=COALESCE(VALUES(air_date),air_date),still=COALESCE(VALUES(still),still),payload=VALUES(payload)`,
-        [row.id,season.number,number,text(raw.name_ru)||text(raw.name_en)||text(raw.name)||'Серия '+number,air,still,JSON.stringify({description:text(raw.overview_ru)||text(raw.overview_en)||text(raw.overview)})]);
+        ON DUPLICATE KEY UPDATE title=COALESCE(NULLIF(VALUES(title),''),title),air_date=COALESCE(VALUES(air_date),air_date),still=COALESCE(VALUES(still),still),payload=JSON_MERGE_PATCH(COALESCE(payload,JSON_OBJECT()),VALUES(payload))`,
+        [row.id,season.number,number,text(raw.name_ru)||text(raw.name_en)||text(raw.name),air,still,JSON.stringify({...((text(raw.overview_ru)||text(raw.overview_en)||text(raw.overview))?{description:text(raw.overview_ru)||text(raw.overview_en)||text(raw.overview)}:{})})]);
     }
   }
   async function episodes(row,payload,tmdb){
@@ -81,9 +81,11 @@ export function createMetadataLibrary(pool,{provider=createMetadataProvider(),cl
     }
     // Warm one season before returning the first page; names and screenshots
     // no longer depend on a background task finishing after the TV cached it.
+    let warmedSeason=null;
     if(seasons.length&&!payload.episodesArtworkCheckedAt){
       try{
         await seasonDetails(row,tmdb,seasons[0]);
+        warmedSeason=seasons[0].number;
         await pool.query("UPDATE titles SET payload=JSON_SET(COALESCE(payload,JSON_OBJECT()),'$.episodesArtworkCheckedAt',?) WHERE id=?",[new Date(clock()).toISOString(),row.id]);
       }catch(error){console.warn('Episode artwork warmup',row.id,error.message);}
     }
@@ -93,7 +95,7 @@ export function createMetadataLibrary(pool,{provider=createMetadataProvider(),cl
       queued++;detailPending.add(row.id);
       background=background.catch(()=>{}).then(async()=>{
         let complete=true;
-        for(const season of seasons){if(closed){complete=false;break;}try{await seasonDetails(row,tmdb,season);}catch(error){complete=false;console.warn('Episode detail refresh',row.id,season.number,error.message);}}
+        for(const season of seasons){if(season.number===warmedSeason)continue;if(closed){complete=false;break;}try{await seasonDetails(row,tmdb,season);}catch(error){complete=false;console.warn('Episode detail refresh',row.id,season.number,error.message);}}
         if(complete)await pool.query("UPDATE titles SET payload=JSON_SET(COALESCE(payload,JSON_OBJECT()),'$.episodesDetailsCheckedAt',?) WHERE id=?",[new Date(clock()).toISOString(),row.id]);
       }).finally(()=>{queued--;detailPending.delete(row.id);});
     }
