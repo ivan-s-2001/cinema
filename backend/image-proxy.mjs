@@ -1,10 +1,11 @@
+import {createImageTransport} from './image-transport.mjs';
 const origin='https://cinemahome.duckdns.org';
 const route=/^\/api\/v2\/images\/tmdb\/(w185|w342|w1280)\/([A-Za-z0-9_-]{1,160}\.(?:jpg|jpeg|png|webp))$/;
 export function proxyTmdb(url){
   const match=/^\/t\/p\/(w185|w342|w1280)\/([A-Za-z0-9_-]{1,160}\.(?:jpg|jpeg|png|webp))$/.exec(url.pathname);
   return match?origin+'/api/v2/images/tmdb/'+match[1]+'/'+match[2]:url.href;
 }
-export function createImageProxy({fetcher=fetch,clock=Date.now,budget=16*1024*1024}={}){
+export function createImageProxy({fetcher=createImageTransport(),clock=Date.now,budget=16*1024*1024}={}){
   const cache=new Map(),pending=new Map(),queue=[];let bytes=0,active=0;
   const hosts=['https://image.tmdb.org','https://tmdb-image-prod.b-cdn.net'];
   const unavailable=new Map();let preferred=hosts[0];
@@ -36,9 +37,10 @@ export function createImageProxy({fetcher=fetch,clock=Date.now,budget=16*1024*10
           body=candidate;type=mime;preferred=host;unavailable.delete(host);break;
         }catch(error){
           lastError=error;
-          if(error.cause?.code||['TimeoutError','AbortError'].includes(error.name)){
-            unavailable.set(host,clock()+300000);
-            console.warn('Image upstream temporarily skipped',new URL(host).hostname,error.cause?.code||error.name);
+          const code=error.cause?.code||error.code;
+          if(code||['TimeoutError','AbortError'].includes(error.name)){
+            unavailable.set(host,clock()+(code==='ERR_TLS_CERT_ALTNAME_INVALID'?300000:15000));
+            console.warn('Image upstream temporarily skipped',new URL(host).hostname,code||error.name);
           }
         }
       }
