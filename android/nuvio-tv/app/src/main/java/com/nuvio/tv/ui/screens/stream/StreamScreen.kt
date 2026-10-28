@@ -990,32 +990,38 @@ internal fun CinemaHallQualityVoicePicker(
     streams: List<Stream>,
     onStreamSelected: (Stream) -> Unit,
     firstTabFocusRequester: FocusRequester? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    playingQuality: String? = null,
+    embeddedVoices: List<CinemaVoiceChoice> = emptyList(),
+    onVoiceSelected: (Int) -> Unit = {}
 ) {
     val initialFocus = firstTabFocusRequester ?: remember { FocusRequester() }
-    LaunchedEffect(streams.isNotEmpty()) {
-        if (streams.isNotEmpty() && firstTabFocusRequester == null) {
+    val order = remember { listOf("4K", "2K", "1080p", "720p", "576p", "480p", "360p", "240p") }
+    val groups = remember(streams, playingQuality, embeddedVoices.isNotEmpty()) {
+        val grouped = cinemaSelectableStreams(streams).groupBy { it.name.orEmpty().removePrefix("CinemaHall · ").trim().ifEmpty { "Не указано" } }.toMutableMap()
+        if (!playingQuality.isNullOrBlank() && embeddedVoices.isNotEmpty()) grouped.putIfAbsent(playingQuality, emptyList())
+        grouped
+            .toList()
+            .sortedWith(compareBy({ order.indexOf(it.first).let { rank -> if (rank < 0) 99 else rank } }, { it.first }))
+    }
+    LaunchedEffect(groups.isNotEmpty()) {
+        if (groups.isNotEmpty() && firstTabFocusRequester == null) {
             androidx.compose.runtime.withFrameNanos { }
             runCatching { initialFocus.requestFocus() }
         }
     }
-    val order = remember { listOf("4K", "2K", "1080p", "720p", "576p", "480p", "360p", "240p") }
-    val groups = remember(streams) {
-        cinemaSelectableStreams(streams).groupBy { it.name.orEmpty().removePrefix("CinemaHall · ").trim().ifEmpty { "Не указано" } }
-            .toList()
-            .sortedWith(compareBy({ order.indexOf(it.first).let { rank -> if (rank < 0) 99 else rank } }, { it.first }))
-    }
-    var quality by remember { mutableStateOf(groups.firstOrNull()?.first.orEmpty()) }
+    var quality by remember { mutableStateOf(playingQuality ?: groups.firstOrNull()?.first.orEmpty()) }
     LaunchedEffect(groups) { if (groups.none { it.first == quality }) quality = groups.firstOrNull()?.first.orEmpty() }
-    val voiceCount = remember(groups) { groups.filter { it.first != "Авто" }.sumOf { cinemaVoiceChoices(it.second).size } }
+    val localVoices = if (quality == playingQuality) embeddedVoices else emptyList()
     val voices = groups.firstOrNull { it.first == quality }?.second.orEmpty()
         .let(::cinemaVoiceChoices)
+        .filterNot { stream -> localVoices.any { it.key == app.cinemahall.tv.Logic.voiceKey(stream.title.orEmpty()) } }
     Column(
         modifier = modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.lg)
     ) {
         Text(
-            text = "Качество · найдено вариантов озвучки: $voiceCount",
+            text = "Качество",
             style = MaterialTheme.typography.titleMedium,
             color = NuvioTheme.colors.TextPrimary
         )
@@ -1053,6 +1059,18 @@ internal fun CinemaHallQualityVoicePicker(
             verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
             modifier = Modifier.weight(1f)
         ) {
+            items(localVoices, key = { "voice:${it.index}" }) { voice ->
+                Card(
+                    onClick = { onVoiceSelected(voice.index) },
+                    colors = CardDefaults.colors(containerColor = NuvioTheme.colors.BackgroundCard, focusedContainerColor = NuvioTheme.colors.Secondary),
+                    border = CardDefaults.border(focusedBorder = Border(border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs), shape = RoundedCornerShape(NuvioTheme.radii.sm))),
+                    shape = CardDefaults.shape(shape = RoundedCornerShape(NuvioTheme.radii.sm))
+                ) {
+                    Text(text = voice.label + if (voice.selected) " · выбрано" else "",
+                        style = MaterialTheme.typography.bodyLarge, color = NuvioTheme.colors.TextPrimary,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp))
+                }
+            }
             itemsIndexed(voices, key = { _, stream -> cinemaVoiceChoiceKey(stream) }) { _, stream ->
                 Card(
                     onClick = { onStreamSelected(stream) },

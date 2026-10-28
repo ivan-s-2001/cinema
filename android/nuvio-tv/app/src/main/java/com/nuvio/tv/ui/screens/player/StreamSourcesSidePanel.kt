@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.screens.stream.CinemaHallQualityVoicePicker
+import com.nuvio.tv.ui.screens.stream.CinemaVoiceChoice
 import com.nuvio.tv.ui.theme.NuvioTheme
 
 @Composable
@@ -26,14 +27,26 @@ internal fun StreamSourcesSidePanel(
     onReload: () -> Unit,
     onAddonFilterSelected: (String?) -> Unit,
     onStreamSelected: (Stream) -> Unit,
+    onVoiceSelected: (Int) -> Unit = {},
     onExpandStreams: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val streams = remember(uiState.sourceAllStreams) {
         uiState.sourceAllStreams.filter { it.addonName == "CinemaHall" }
     }
-    LaunchedEffect(streams.isNotEmpty()) {
-        if (streams.isNotEmpty()) {
+    val voices = if (CinemaPlaybackPolicy.isProvider(uiState.currentStreamUrl)) uiState.audioTracks.map { track ->
+        val raw = cinemaAudioLabel(track)
+        val label = when (raw.lowercase()) {
+            "ru", "rus", "russian" -> "Русский"
+            "en", "eng", "english" -> "Английский"
+            else -> raw.replace(Regex("(?i)^аудио(?:дорожка)?\\s*"), "Озвучка ")
+        }.ifBlank { "Озвучка ${track.index + 1}" }
+        val duplicate = uiState.audioTracks.count { cinemaAudioLabel(it) == raw } > 1
+        CinemaVoiceChoice(track.index, cinemaAudioKey(track), label + if (duplicate) " · вариант ${track.index + 1}" else "", track.isSelected)
+    } else emptyList()
+    val playingQuality = uiState.currentStreamName?.removePrefix("CinemaHall · ")?.trim()?.takeIf { it.isNotBlank() && it != "Авто" }
+    LaunchedEffect(streams.isNotEmpty() || voices.isNotEmpty()) {
+        if (streams.isNotEmpty() || voices.isNotEmpty()) {
             withFrameNanos { }
             runCatching { streamsFocusRequester.requestFocus() }
         }
@@ -50,7 +63,7 @@ internal fun StreamSourcesSidePanel(
             }
             Spacer(Modifier.height(NuvioTheme.spacing.lg))
             when {
-                streams.isNotEmpty() -> CinemaHallQualityVoicePicker(streams, onStreamSelected, streamsFocusRequester, Modifier.weight(1f))
+                streams.isNotEmpty() || voices.isNotEmpty() -> CinemaHallQualityVoicePicker(streams, onStreamSelected, streamsFocusRequester, Modifier.weight(1f), playingQuality, voices, onVoiceSelected)
                 uiState.isLoadingSourceStreams -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { LoadingIndicator() }
                 else -> {
                     Text(uiState.sourceStreamsError ?: "Варианты воспроизведения не найдены",

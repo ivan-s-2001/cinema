@@ -16,3 +16,17 @@ internal fun cinemaSourceSwitchPosition(live: Long?, rendered: Boolean, pending:
 
 internal fun cinemaSourceSwitchTarget(position: Long, duration: Long): Long =
     position.coerceAtLeast(0L).let { if (duration > 0L) it.coerceAtMost((duration - 1L).coerceAtLeast(0L)) else it }
+
+internal fun cinemaSelectedVoice(group: String?): String? = group
+    ?.takeIf { it.startsWith("cinemahall:") }
+    ?.removePrefix("cinemahall:")?.substringAfter(':', "")?.substringBefore(":tech:")
+    ?.takeIf { it.isNotBlank() && it != "auto" }
+
+// Both engines append their codec description in parentheses. Studio matching
+// uses the original label, never the language alone or the audio-list position.
+internal fun cinemaAudioLabel(track: TrackInfo): String = track.name.substringBeforeLast(" (", track.name).trim()
+internal fun cinemaAudioKey(track: TrackInfo): String = app.cinemahall.tv.Logic.voiceKey(cinemaAudioLabel(track))
+internal fun cinemaMatchingAudioIndex(tracks: List<TrackInfo>, voice: String?): Int? {
+    if (voice.isNullOrBlank() || voice in listOf("не указано", "ru", "rus", "русский", "russian")) return null
+    return tracks.filter { cinemaAudioKey(it) == voice }.singleOrNull()?.index
+}

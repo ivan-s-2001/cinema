@@ -85,3 +85,39 @@ test('failed continuation preserves the playable candidates already found',async
  }});
  const first=await api.load('361');await api.idle();assert.equal(first.candidates.length,1);assert.equal(first.complete,true);
 });
+
+test('exact episode hits are returned before independent season packs and keep both voices',async()=>{
+ let release;const gate=new Promise(resolve=>release=resolve);const queries=[];
+ const api=createSourceDiscovery({enabled:true,fetcher:async url=>{
+  const query=url.searchParams.get('q');queries.push(query);
+  if(query.includes('episodes:'))return response([{torrent_download_link:link,translate_info:'LostFilm',episodes_map_auto:{S01E02:'one.mkv'}}]);
+  await gate;
+  return response([
+   {torrent_download_link:link,translate_info:'LostFilm',episodes_map_auto:{S01E02:'one.mkv'}},
+   {torrent_download_link:'magnet:?xt=urn:btih:1123456789abcdef0123456789abcdef01234567',translate_info:'Jaskier',episodes_map_auto:{S01E02:'two.mkv'}},
+   {torrent_download_link:'magnet:?xt=urn:btih:2123456789abcdef0123456789abcdef01234567',translate_info:'Other',episodes_map_auto:{S02E02:'wrong.mkv'}}
+  ]);
+ }});
+ const first=await api.load('361','S1E2');assert.equal(first.complete,false);assert.equal(first.candidates.length,1);
+ release();await api.idle();
+ assert.equal(first.complete,true);assert.deepEqual(first.candidates.map(c=>c.translate_info),['LostFilm','Jaskier']);assert.equal(queries.length,2);
+});
+
+test('overload is bounded and a completed request frees discovery capacity',async()=>{
+ let release;const gate=new Promise(resolve=>release=resolve);let active=0,peak=0;
+ const api=createSourceDiscovery({enabled:true,fetcher:async()=>{
+  active++;peak=Math.max(peak,active);await gate;active--;return response([]);
+ }});
+ const pending=Array.from({length:16},(_,i)=>api.load(String(i+1)));
+ await assert.rejects(()=>api.load('999'),{status:503});
+ release();await Promise.all(pending);assert.ok(peak<=2);
+ await api.load('999');
+});
+
+test('chunked source responses stop at the byte budget before buffering the rest',async()=>{
+ let chunks=0;
+ const api=createSourceDiscovery({enabled:true,fetcher:async()=>({ok:true,headers:{get:()=>null},body:(async function*(){
+  for(let i=0;i<10;i++){chunks++;yield Buffer.alloc(1024*1024);}
+ })()})});
+ await assert.rejects(()=>api.load('361'),/too large/);assert.equal(chunks,5);
+});

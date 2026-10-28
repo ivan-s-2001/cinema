@@ -2,6 +2,8 @@ package com.nuvio.tv.ui.screens.stream
 
 import com.nuvio.tv.domain.model.Stream
 
+internal data class CinemaVoiceChoice(val index: Int, val key: String, val label: String, val selected: Boolean)
+
 /** Stable identity preserves focus when progressive discovery inserts or renames a voice. */
 internal fun cinemaVoiceChoiceKey(stream: Stream): String =
     (stream.behaviorHints?.bingeGroup?.takeIf { it.isNotBlank() } ?: stream.title.orEmpty().trim().lowercase()) +

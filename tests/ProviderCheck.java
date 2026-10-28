@@ -73,6 +73,11 @@ public final class ProviderCheck {
         KinoApi.enrich(artResult,new JSONObject().put("images",art),false);
         if(artResult.has("background"))throw new AssertionError("Poster cannot become background");
         if(!Logic.voiceKey("Lost Film многоголосый").equals(Logic.voiceKey("LostFilm"))||Logic.voiceKey("LostFilm / NovaFilm").equals(Logic.voiceKey("LostFilm")))throw new AssertionError("Normalize one studio without merging multiple studios");
+        if(Logic.voiceKey("LostFilm / Jaskier").equals(Logic.voiceKey("LostFilm")))throw new AssertionError("Unknown second studio must not disappear");
+        Sources.Candidate dv=new Sources.Candidate(new JSONObject().put("resolution","2160p").put("translate_info","LostFilm").put("name","Film 2160p Dolby Vision"));
+        Sources.Candidate plain=new Sources.Candidate(new JSONObject().put("resolution","2160p").put("translate_info","LostFilm").put("name","Film 2160p"));
+        java.util.List<Sources.Candidate> variants=java.util.Arrays.asList(dv,plain);
+        if(Sources.grouped(variants,"4K").get("4K").size()!=2||Sources.ordered(variants,"4K","lostfilm","4K",Sources.technologyKey(dv)).size()!=1)throw new AssertionError("A selected DV variant must never silently fall back to a different technology");
         // Actual video bytes, rather than torrent metadata, establish that a source is ready.
         com.sun.net.httpserver.HttpServer http=com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1",0),0);
         http.createContext("/bytes",exchange->{
@@ -81,12 +86,19 @@ public final class ProviderCheck {
         });
         http.createContext("/empty",exchange->{exchange.sendResponseHeaders(200,-1);exchange.close();});
         http.createContext("/failure",exchange->{exchange.sendResponseHeaders(503,-1);exchange.close();});
+        http.createContext("/trickle",exchange->{
+            exchange.sendResponseHeaders(200,0);
+            try{for(int i=0;i<40;i++){exchange.getResponseBody().write(' ');exchange.getResponseBody().flush();Thread.sleep(30);}}catch(Exception ignored){}finally{exchange.close();}
+        });
         http.start();String base="http://127.0.0.1:"+http.getAddress().getPort();
         try {
             Net.verifyStreamBytes(base+"/bytes",1000);
             for(String path:new String[]{"/empty","/failure"}){
                 try{Net.verifyStreamBytes(base+path,1000);throw new AssertionError("Empty or failed video must not be ready");}catch(java.io.IOException expected){}
             }
+            long started=System.nanoTime();
+            try{Net.requestUntil(base+"/trickle",null,10000,"",started+java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(200));throw new AssertionError("A trickling response must not defeat the total deadline");}catch(java.io.IOException expected){}
+            if(java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-started)>1000)throw new AssertionError("Total network deadline exceeded");
         }finally{http.stop(0);}
         System.out.println("CinemaHall provider contract passed");
     }

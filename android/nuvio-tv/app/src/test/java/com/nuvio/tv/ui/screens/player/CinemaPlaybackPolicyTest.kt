@@ -3,6 +3,20 @@ package com.nuvio.tv.ui.screens.player
 import org.junit.Assert.*
 import org.junit.Test
 class CinemaPlaybackPolicyTest {
+    @Test fun studioSelectionRequiresOneMatchingContainerLabelAndNeverGuessesFromLanguage() {
+        val tracks = listOf(
+            TrackInfo(0, "Русский (AAC 2.0)", "rus"),
+            TrackInfo(1, "Lost Film (EAC3 5.1)", "rus"),
+            TrackInfo(2, "Jaskier (AAC 2.0)", "rus")
+        )
+        assertEquals("lostfilm", cinemaSelectedVoice("cinemahall:1080p:lostfilm:tech:Dolby Vision"))
+        assertEquals(1, cinemaMatchingAudioIndex(tracks, "lostfilm"))
+        assertEquals(2, cinemaMatchingAudioIndex(tracks, "jaskier"))
+        assertNull(cinemaMatchingAudioIndex(tracks, "дубляж"))
+        assertNull(cinemaMatchingAudioIndex(tracks, "rus"))
+        assertNull(cinemaMatchingAudioIndex(tracks + tracks[1].copy(index = 3), "lostfilm"))
+        assertNull(cinemaMatchingAudioIndex(tracks, "lostfilm jaskier"))
+    }
     @Test fun onlyOurLoopbackProviderUsesTheSourceTimeout() {
         assertTrue(CinemaPlaybackPolicy.isProvider("http://127.0.0.1:18991/play/token/title/ep/q/voice/video.mkv"))
         assertFalse(CinemaPlaybackPolicy.isProvider("https://example.org/play/file"))

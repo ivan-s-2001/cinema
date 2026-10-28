@@ -144,8 +144,21 @@ final class Sources {
         }
     }
     static ArrayList<Candidate> ordered(List<Candidate> all,String quality,String translation,String autoTarget){
+        return ordered(all,quality,translation,autoTarget,"");
+    }
+    static String technologyKey(Candidate candidate){
+        ArrayList<String> hints=new ArrayList<>(playbackTechnologyHints(candidate));
+        Collections.sort(hints);
+        return hints.isEmpty()?"unspecified":String.join("+",hints);
+    }
+    static List<String> playbackTechnologyHints(Candidate candidate){
+        ArrayList<String> result=new ArrayList<>();
+        for(String hint:candidate.technologyHints)if(Arrays.asList("Dolby Vision","HDR10+","HDR","HLG","Dolby Atmos").contains(hint))result.add(hint);
+        return result;
+    }
+    static ArrayList<Candidate> ordered(List<Candidate> all,String quality,String translation,String autoTarget,String technology){
         ArrayList<Candidate> result=new ArrayList<>();
-        for(Candidate c:all)if((quality.isEmpty()||quality.equals(c.quality))&&(translation.isEmpty()||Logic.voiceKey(translation).equals(Logic.voiceKey(c.translation))))result.add(c);
+        for(Candidate c:all)if((quality.isEmpty()||quality.equals(c.quality))&&(translation.isEmpty()||Logic.voiceKey(translation).equals(Logic.voiceKey(c.translation)))&&(technology.isEmpty()||technology.equals(technologyKey(c))))result.add(c);
         result.sort((a,b)->Integer.compare(b.score(autoTarget)+experienceScore(b),a.score(autoTarget)+experienceScore(a)));return result;
     }
     /** Automatic playback tries distinct quality/voice combinations before exhausting
@@ -175,7 +188,7 @@ final class Sources {
             return order!=0?order:a.compareTo(b);
         });
         for(Candidate c:all){
-            String voice=Logic.voiceKey(c.translation);
+            String voice=Logic.voiceKey(c.translation)+"|"+technologyKey(c);
             ArrayList<Candidate> options=levels.computeIfAbsent(c.quality,q->new LinkedHashMap<>()).computeIfAbsent(voice,v->new ArrayList<>());
             boolean duplicate=false;
             for(Candidate previous:options)if(!previous.hash.isEmpty()&&previous.hash.equals(c.hash)){duplicate=true;break;}

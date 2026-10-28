@@ -1451,6 +1451,12 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
             seekToChapter(chapter.startMs)
         }
         is PlayerEvent.OnSelectAudioTrack -> {
+            if (CinemaPlaybackPolicy.isProvider(currentStreamUrl)) {
+                val chosen = _uiState.value.audioTracks.getOrNull(event.index)
+                // A different embedded voice must not auto-continue using the old studio.
+                if (chosen != null && cinemaAudioKey(chosen) != cinemaSelectedVoice(currentStreamBingeGroup)) currentStreamBingeGroup = null
+                cinemaAudioSelectionKey = "$currentStreamUrl|$currentStreamBingeGroup"
+            }
             logSwitchTrace(
                 stage = "event-select-audio",
                 message = "index=${event.index}"
@@ -1464,6 +1470,7 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
             _uiState.update {
                 it.copy(
                     showAudioOverlay = false,
+                    showSourcesPanel = false,
                     showSubtitleDelayOverlay = false,
                     showSubtitleTimingDialog = false
                 )
