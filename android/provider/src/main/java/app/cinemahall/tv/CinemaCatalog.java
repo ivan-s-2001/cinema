@@ -121,7 +121,8 @@ final class CinemaCatalog {
             JSONObject film=snapshot.document(titleId);if(film==null)film=document(titleId);
             // The optional Torznab endpoint lives in our own embedded engine.
             engine();ArrayList<String> names=new ArrayList<>();for(String field:new String[]{"name_rus","name_original","name_eng"})names.add(film.optString(field));
-            List<Sources.Candidate> candidates=Sources.load(film.optString("id"),episode,names,film.optInt("year"));
+            List<Sources.Candidate> candidates=CinemaRemoteSources.load(titleId,episode);
+            if(candidates==null)candidates=Sources.load(film.optString("id"),episode,names,film.optInt("year"));
             JSONArray streams=new JSONArray();
             JSONArray qualities=new JSONArray();
             // A single ready-to-play option first; detailed quality/voice choices remain available.
@@ -268,7 +269,8 @@ final class CinemaCatalog {
         JSONObject film=snapshot.document(parts[2]);if(film==null)film=document(parts[2]);engine();
         ArrayList<String> names=new ArrayList<>();for(String field:new String[]{"name_rus","name_original","name_eng"})names.add(film.optString(field));
         boolean automatic="auto".equals(parts[4])&&"auto".equals(parts[5]);
-        List<Sources.Candidate> available=Sources.load(film.optString("id"),parts[3],names,film.optInt("year"));
+        List<Sources.Candidate> available=CinemaRemoteSources.load(parts[2],parts[3]);
+        if(available==null)available=Sources.load(film.optString("id"),parts[3],names,film.optInt("year"));
         List<Sources.Candidate> candidates=automatic
             ? Sources.automaticFallbacks(available,"1080p")
             : Sources.ordered(available,parts[4],parts[5],"1080p");

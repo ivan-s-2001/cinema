@@ -531,6 +531,9 @@
             },
             "profileSync": {
               "const": false
+            },
+            "sourceDiscovery": {
+              "type": "boolean"
             }
           },
           "required": [
@@ -541,7 +544,8 @@
             "episodes",
             "playbackStrategy",
             "serverPlaybackOptions",
-            "profileSync"
+            "profileSync",
+            "sourceDiscovery"
           ],
           "additionalProperties": false
         },
@@ -848,6 +852,79 @@
         "error"
       ],
       "additionalProperties": false
+    },
+    "SourceCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hash": {
+          "type": "string"
+        },
+        "torrent_download_link": {
+          "type": "string"
+        },
+        "resolution": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "translate_info": {
+          "type": "string"
+        },
+        "languages_parser": {
+          "type": "string"
+        },
+        "seeds": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "episodes_map_auto": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "hash",
+        "torrent_download_link",
+        "resolution",
+        "name",
+        "translate_info",
+        "languages_parser",
+        "seeds",
+        "episodes_map_auto"
+      ]
+    },
+    "SourceDiscovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "titleId": {
+          "type": "string"
+        },
+        "episode": {
+          "type": "string"
+        },
+        "engine": {
+          "const": "local"
+        },
+        "status": {
+          "const": "ready"
+        },
+        "candidates": {
+          "type": "array",
+          "maxItems": 60,
+          "items": {
+            "$ref": "#/$defs/SourceCandidate"
+          }
+        }
+      },
+      "required": [
+        "titleId",
+        "episode",
+        "engine",
+        "status",
+        "candidates"
+      ]
     }
   }
 }

@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { createSourceDiscovery } from './source-discovery.mjs';
 import { titleCard, titleDetail, episode, seasonId } from './catalog-model.mjs';
 
 const prefix = '/api/v2';
@@ -37,7 +38,7 @@ function filters(params) {
   if (yearFrom&&yearTo&&yearFrom>yearTo) throw new InputError('Invalid year range');
   return { type,sort,q,genre,country,yearFrom,yearTo,limit:number(params,'limit',24,1,60) };
 }
-export function createCatalogV2(pool) {
+export function createCatalogV2(pool,{sourceDiscovery=createSourceDiscovery({enabled:process.env.CINEMA_SOURCE_DISCOVERY==='1'})}={}) {
   // Only public metadata lives here. Bound both entry count and total serialized bytes.
   const cache=new Map();let cacheBytes=0;
   function remember(key,bytes) {
@@ -98,7 +99,7 @@ export function createCatalogV2(pool) {
       if(saved&&saved.until>Date.now()){sendBytes(200,saved.bytes);return true;}
       const path=url.pathname.slice(prefix.length);
       if(path==='/config') {
-        send(200,{apiVersion:2,capabilities:{home:true,search:true,discover:true,seasons:true,episodes:true,playbackStrategy:'local',serverPlaybackOptions:false,profileSync:false},limits:{pageSize:60},rows});return true;
+        send(200,{apiVersion:2,capabilities:{home:true,search:true,discover:true,seasons:true,episodes:true,playbackStrategy:'local',serverPlaybackOptions:false,sourceDiscovery:sourceDiscovery.enabled,profileSync:false},limits:{pageSize:60},rows});return true;
       }
       if(path==='/home') {
         const result=[];
@@ -111,10 +112,19 @@ export function createCatalogV2(pool) {
         if(path==='/search'&&(url.searchParams.get('q')||'').trim().length<2)throw new InputError('Search query must contain at least 2 characters');
         send(200,await browse(url.searchParams));return true;
       }
-      const title=/^\/titles\/([A-Za-z0-9:_-]+)(?:\/(seasons|playback-options))?$/.exec(path);
+      const title=/^\/titles\/([A-Za-z0-9:_-]+)(?:\/(seasons|playback-options|source-candidates))?$/.exec(path);
       if(title){
         const row=await find(title[1]);if(!row){fail(404,'not_found','Title not found');return true;}
         if(!title[2]){send(200,{title:titleDetail(row)});return true;}
+        if(title[2]==='source-candidates'){
+          if(!sourceDiscovery.enabled){fail(503,'source_discovery_disabled','Source discovery is not enabled');return true;}
+          const detail=titleDetail(row), kp=detail.externalIds.kinopoisk;
+          if(!kp){fail(404,'source_identity_missing','Kinopoisk identity is unavailable');return true;}
+          const ep=url.searchParams.get('episode')||'';
+          if([...url.searchParams.keys()].some(key=>key!=='episode')||(ep&&!/^S[0-9]{1,3}E[0-9]{1,4}$/.test(ep)))throw new InputError('Invalid episode');
+          const result=await sourceDiscovery.load(kp,ep);
+          send(200,{titleId:row.id,episode:ep,engine:'local',status:result.status,candidates:result.candidates});return true;
+        }
         if(title[2]==='playback-options'){
           const detail=titleDetail(row);
           send(200,{titleId:row.id,strategy:'local',matchIdentity:{type:row.kind,externalIds:detail.externalIds,names:[row.title,...detail.aliases].filter((v,i,a)=>a.indexOf(v)===i),year:row.year},availability:detail.availability});return true;

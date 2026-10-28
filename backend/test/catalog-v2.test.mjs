@@ -54,7 +54,7 @@ test('MariaDB catalogue integration',{skip:!process.env.CATALOG_TEST_PORT},async
     const migration=await readFile(new URL('../migrations/005_catalog_identity_refresh.sql',import.meta.url),'utf8');
     await pool.query(migration);await pool.query(migration);
     const titles=[
-      ['ch:snapshot:movie:tmdb:550','movie','Бойцовский клуб',1999,{titleEn:'Fight Club',originalTitle:'Fight Club',aliases:['Fight Club','Клуб бойцов'],ids:{tmdb:'550',imdb:'tt0137523'},status:'Released',genres:['Драма'],countries:['США'],curator:{note:'PRIVATE'},apiKey:'PRIVATE'}],
+      ['ch:snapshot:movie:tmdb:550','movie','Бойцовский клуб',1999,{titleEn:'Fight Club',originalTitle:'Fight Club',aliases:['Fight Club','Клуб бойцов'],ids:{tmdb:'550',kinopoisk:'361',imdb:'tt0137523'},status:'Released',genres:['Драма'],countries:['США'],curator:{note:'PRIVATE'},apiKey:'PRIVATE'}],
       ['ch:movie:percent','movie','100%_! тест',2000,{status:'Released',aliases:['Literal%_!']}],
       ['ch:movie:next','movie','Анонс',2043,{status:'Released',releaseDate:'2043-01-01'}],
       ['ch:movie:hidden','movie','Скрытый',2000,{status:'Released',publicationState:'hidden'}],
@@ -86,6 +86,10 @@ test('MariaDB catalogue integration',{skip:!process.env.CATALOG_TEST_PORT},async
       const detail=await get('/titles/ch:snapshot:movie:tmdb:550','Title');assert.equal(detail.title.id,'ch:snapshot:movie:tmdb:550');assert.ok(!JSON.stringify(detail).includes('PRIVATE'));
       const local=await get('/titles/ch:snapshot:movie:tmdb:550/playback-options','Playback');assert.equal(local.strategy,'local');assert.equal(local.matchIdentity.externalIds.tmdb,'550');
       await get('/titles/ch:movie:hidden','Error',404);
+      const discovered=createCatalogV2(pool,{sourceDiscovery:{enabled:true,load:async(id,ep)=>({status:'ready',candidates:[{hash:'',torrent_download_link:'magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567',resolution:'1080p',name:'',translate_info:'',languages_parser:'',seeds:1,episodes_map_auto:'{}'}]})}});
+      let status,body;await discovered({method:'GET'},{writeHead(s){status=s;},end(b){body=b;}},new URL('http://localhost/api/v2/titles/ch:snapshot:movie:tmdb:550/source-candidates?episode=S1E2'));
+      assert.equal(status,200);validate('SourceDiscovery',JSON.parse(body));
+      await get('/titles/ch:snapshot:movie:tmdb:550/source-candidates','Error',503);
     });
     await t.test('keyset pagination covers all records with no phantom page',async()=>{
       for(const sort of ['title','year']){
