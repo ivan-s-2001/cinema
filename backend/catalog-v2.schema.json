@@ -1048,6 +1048,9 @@
                   },
                   "released": {
                     "type": "string"
+                  },
+                  "overview": {
+                    "type": "string"
                   }
                 },
                 "required": [

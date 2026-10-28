@@ -132,7 +132,7 @@ export function createCatalogV2(pool,{sourceDiscovery=createSourceDiscovery({ena
         const row=await find(title[1]);if(!row){fail(404,'not_found','Title not found');return true;}
         if(!title[2]){send(200,{title:titleDetail(row)});return true;}
         if(title[2]==='tv-meta'){
-          const episodes=row.kind==='series'?await pool.query('SELECT title_id,season_number,episode_number,title,air_date,still FROM episodes WHERE title_id=? AND season_number>0 ORDER BY season_number,episode_number LIMIT 2001',[row.id]):[];
+          const episodes=row.kind==='series'?await pool.query('SELECT title_id,season_number,episode_number,title,air_date,still,payload FROM episodes WHERE title_id=? AND season_number>0 ORDER BY season_number,episode_number LIMIT 2001',[row.id]):[];
           if(episodes.length>2000){fail(503,'tv_metadata_too_large','Use paginated episode routes');return true;}
           const result=tvMetadata(row,episodes);
           if(Buffer.byteLength(JSON.stringify(result))>512*1024){fail(503,'tv_metadata_too_large','Use paginated episode routes');return true;}

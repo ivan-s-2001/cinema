@@ -21,6 +21,7 @@ export function tvMetadata(row, episodeRows=[]) {
   if(imdb)meta.imdbRating=imdb.value.toFixed(1);
   if(title.type==='series')meta.videos=episodeRows.filter(r=>r.season_number>0).map(row=>{
     const ep=episode(row),video={id:ep.id,season:ep.season,episode:ep.number,title:ep.title||'Серия '+ep.number};
+    if(ep.description)video.overview=ep.description;
     if(ep.still)video.thumbnail=ep.still;
     if(ep.airAt)video.released=instant(ep.airAt);
     return video;
