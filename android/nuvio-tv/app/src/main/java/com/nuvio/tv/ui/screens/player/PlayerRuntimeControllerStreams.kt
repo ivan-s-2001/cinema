@@ -15,7 +15,7 @@ import com.nuvio.tv.domain.model.AddonStreams
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.model.StreamDebridCacheState
 import com.nuvio.tv.domain.model.Video
-import com.nuvio.tv.ui.screens.stream.cinemaContinuationStream
+import com.nuvio.tv.ui.screens.stream.cinemaPreferredAutoPlayStream
 import com.nuvio.tv.domain.model.enabledAddons
 import com.nuvio.tv.ui.components.SourceChipItem
 import com.nuvio.tv.ui.components.SourceChipStatus
@@ -1995,7 +1995,7 @@ internal fun PlayerRuntimeController.playNextEpisode(userInitiated: Boolean = fa
             fun trySelectStream(data: List<AddonStreams>): Stream? {
                 val orderedStreams = StreamAutoPlaySelector.orderAddonStreams(data, installedAddonOrder, preferredServerNames)
                 val allStreams = orderedStreams.flatMap { it.streams }
-                if (cinemaEpisode) return cinemaContinuationStream(allStreams, currentStreamBingeGroup)
+                if (cinemaEpisode) return cinemaPreferredAutoPlayStream(allStreams, currentStreamBingeGroup)
                 return StreamAutoPlaySelector.selectAutoPlayStream(
                     streams = allStreams,
                     mode = effectiveMode,
