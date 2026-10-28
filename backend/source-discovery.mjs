@@ -36,7 +36,7 @@ function parseCandidate(row,episode='') {
   const link=boundedText(row.torrent_download_link,2048);
   if (!validSource(link)) return null;
   const resolution=boundedText(row.resolution,32);
-  const name=boundedText(row.name || row.title || row.torrent_name,200);
+  let name=boundedText(row.name || row.title || row.torrent_name,200);
   const voice=normalizeVoice(row.translate_info);
   const languages=boundedText(row.languages_parser,160);
   const magnetHash=/^magnet:\?xt=urn:btih:([a-fA-F0-9]{40})/i.exec(link)?.[1] || '';
@@ -47,6 +47,15 @@ function parseCandidate(row,episode='') {
   const known=Object.keys(mapping).filter(key=>episodeKey(key));
   const matching=episode?known.find(key=>episodeKey(key)===episodeKey(episode)):null;
   if(episode&&known.length&&!matching)return null;
+  // Zona commonly supplies filenames instead of a release title. Only the
+  // mapped episode or one unambiguous video file may supply technology hints.
+  if(!name){
+    let names=row.filenames;
+    if(typeof names==='string'&&names.length<=128*1024){try{names=JSON.parse(names);}catch{names=[];}}
+    const videos=Array.isArray(names)?names.filter(v=>typeof v==='string'&&/\.(mkv|mp4|avi|m4v|ts|m2ts|webm)$/i.test(v)&&!/(?:^|[\/._ -])sample(?:[\/._ -]|$)/i.test(v)):[];
+    const path=matching&&typeof mapping[matching]==='string'?mapping[matching]:videos.length===1?videos[0]:'';
+    name=boundedText(path.split(/[\\/]/).at(-1),200);
+  }
   // Only the requested file mapping is needed by the TV, not all seven seasons.
   const compact=matching?{[episodeKey(episode)]:String(mapping[matching]).slice(0,1024)}:episode?{}:mapping;
   const encoded=JSON.stringify(compact);
@@ -114,7 +123,7 @@ export function createSourceDiscovery({ fetcher=fetch, enabled=false, clock=Date
       const match=episode?new RegExp('^S(\\d+)E(\\d+)$').exec(episode):null;
       const padded=match?'S'+match[1].padStart(2,'0')+'E'+match[2].padStart(2,'0'):'';
       const fetchDocs=async(q,start=0)=>{
-        const u=new URL(CATALOG);u.search=new URLSearchParams({wt:'json',q,sort:'seeds desc',start:String(start),rows:'100',fl:'hash,torrent_download_link,resolution,name,translate_info,languages_parser,seeds,episodes_map_auto'});
+        const u=new URL(CATALOG);u.search=new URLSearchParams({wt:'json',q,sort:'seeds desc',start:String(start),rows:'100',fl:'hash,torrent_download_link,resolution,name,filenames,translate_info,languages_parser,seeds,episodes_map_auto'});
         const data=await document(u),docs=Array.isArray(data?.response?.docs)?data.response.docs:[];return {docs,total:Number(data?.response?.numFound??docs.length)};
       };
       const candidates=[],seen=new Set();

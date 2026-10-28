@@ -121,3 +121,14 @@ test('chunked source responses stop at the byte budget before buffering the rest
  })()})});
  await assert.rejects(()=>api.load('361'),/too large/);assert.equal(chunks,5);
 });
+
+test('Zona filenames supply hints only for one video or the exact mapped episode',async()=>{
+ const api=createSourceDiscovery({enabled:true,fetcher:async()=>response([
+  {torrent_download_link:link,filenames:JSON.stringify(['Show.S01E02.HDR.mkv','Show.S01E01.DV.mkv']),episodes_map_auto:{S01E02:'Show.S01E02.HDR.mkv'}},
+  {torrent_download_link:'magnet:?xt=urn:btih:1123456789abcdef0123456789abcdef01234567',filenames:JSON.stringify(['Movie.2160p.DV.mkv','Sample.mkv'])},
+  {torrent_download_link:'magnet:?xt=urn:btih:2123456789abcdef0123456789abcdef01234567',filenames:JSON.stringify(['one.HDR.mkv','two.DV.mkv'])}
+ ])});
+ const result=await api.load('361','S1E2');await api.idle();
+ assert.deepEqual(result.candidates.map(c=>c.name),['Show.S01E02.HDR.mkv','Movie.2160p.DV.mkv','']);
+ assert.ok(!JSON.stringify(result.candidates).includes('filenames'));
+});
