@@ -529,8 +529,10 @@ class StreamScreenViewModel @Inject constructor(
             val installedAddonOrder = installedAddons.map { it.displayName }
             val directDebridSourceNames = emptyList<String>()
             val directDebridAvailable = false
-            val persistedBingeGroup = if (playerSettings.streamAutoPlayPreferBingeGroupForNextEpisode &&
-                playerSettings.streamAutoPlayReuseBingeGroup) {
+            val persistedBingeGroup = if (cinemaShouldReuseBingeGroup(
+                videoId, playerSettings.streamAutoPlayPreferBingeGroupForNextEpisode,
+                playerSettings.streamAutoPlayReuseBingeGroup
+            )) {
                 contentId?.let { bingeGroupCacheDataStore.get(it) }
             } else null
             val persistedFilename = if (persistedBingeGroup != null) {
