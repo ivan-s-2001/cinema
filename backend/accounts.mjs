@@ -40,6 +40,22 @@ async function readJson(req) {
   }
 }
 
+function requireApiKey(req) {
+  const expected = process.env.CINEMA_PUBLISHABLE_KEY || '';
+  if (!expected) return;
+  const supplied = req.headers.apikey || '';
+  const left = Buffer.from(supplied);
+  const right = Buffer.from(expected);
+  if (left.length !== right.length || !timingSafeEqual(left, right)) {
+    throw Object.assign(new Error('Invalid API key'), { status: 401 });
+  }
+}
+
+function sendNoContent(res) {
+  res.writeHead(204, { 'cache-control': 'no-store', 'content-length': '0' });
+  res.end();
+}
+
 function rateLimitKey(req, action) {
   const address = req.headers['x-real-ip'] || req.socket.remoteAddress || 'unknown';
   return action + ':' + address;
@@ -362,9 +378,44 @@ async function syncProfile(req, res, url, account, pool) {
   return true;
 }
 
+async function handleRpc(req, res, name, account, pool) {
+  send(res, 404, { code: 'PGRST202', message: 'Function not found' });
+  return true;
+}
+
 export async function handleAccountRequest(req, res, url, pool) {
   const route = url.pathname;
   try {
+    if (route === '/auth/v1/signup' && req.method === 'POST') {
+      requireApiKey(req);
+      await createAccount(req, res, pool);
+      return true;
+    }
+    if (route === '/auth/v1/token' && req.method === 'POST') {
+      requireApiKey(req);
+      if (url.searchParams.get('grant_type') === 'password') await signIn(req, res, pool);
+      else if (url.searchParams.get('grant_type') === 'refresh_token') await refreshSession(req, res, pool);
+      else send(res, 400, { message: 'Unsupported grant type', error: 'unsupported_grant_type' });
+      return true;
+    }
+    if (route === '/auth/v1/user' && req.method === 'GET') {
+      requireApiKey(req);
+      const account = await requireAccount(req, pool);
+      send(res, 200, authUser(account));
+      return true;
+    }
+    if (route === '/auth/v1/logout' && req.method === 'POST') {
+      requireApiKey(req);
+      const account = await requireAccount(req, pool);
+      await pool.query('DELETE FROM account_sessions WHERE session_id=? AND account_id=?', [account.session_id, account.id]);
+      sendNoContent(res);
+      return true;
+    }
+    if (route.startsWith('/rest/v1/rpc/')) {
+      requireApiKey(req);
+      const account = await requireAccount(req, pool);
+      return await handleRpc(req, res, route.slice('/rest/v1/rpc/'.length), account, pool);
+    }
     if (route === '/api/v1/auth/register' && req.method === 'POST') {
       await createAccount(req, res, pool);
       return true;
@@ -375,7 +426,7 @@ export async function handleAccountRequest(req, res, url, pool) {
     }
     if (route === '/api/v1/auth/logout' && req.method === 'POST') {
       const token = bearer(req);
-      if (token) await pool.query('DELETE FROM account_sessions WHERE token_hash=?', [tokenHash(token)]);
+      if (token) { const claims = jwtVerify(token); await pool.query('DELETE FROM account_sessions WHERE session_id=? AND account_id=?', [claims.session_id, claims.sub]); }
       send(res, 200, { ok: true });
       return true;
     }
@@ -458,7 +509,9 @@ export async function handleAccountRequest(req, res, url, pool) {
       return true;
     }
   } catch (error) {
-    send(res, error.status || 503, { error: error.status ? error.message : 'Service temporarily unavailable' });
+    const status = error.status || 503;
+    const body = route.startsWith('/rest/v1/rpc/') ? { code: String(status), message: error.status ? error.message : 'Service temporarily unavailable' } : { error: error.status ? error.message : 'Service temporarily unavailable' };
+    send(res, status, body);
     if (!error.status) console.error('Account API failure', error?.code || error?.name || 'Error');
     return true;
   }
