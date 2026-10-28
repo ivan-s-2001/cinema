@@ -90,6 +90,13 @@ final class CinemaRemoteCatalog {
         if(cached!=null&&loaded!=null&&System.currentTimeMillis()-loaded<5*60_000L)return copy(cached);
         if(!active())return cached==null?null:copy(cached);
         try{
+            JSONObject ready=CinemaRemoteSources.fetch("/titles/"+id+"/tv-meta");
+            JSONObject row=ready.getJSONObject("title"),meta=ready.getJSONObject("meta");
+            if(!id.equals(row.optString("id"))||!id.equals(meta.optString("id")))throw new Exception("Metadata identity mismatch");
+            rawDetails.put(id,row);details.put(id,meta);detailLoaded.put(id,System.currentTimeMillis());
+            return copy(meta);
+        }catch(Exception olderServer){ /* Older v2 servers expose paginated episode routes. */ }
+        try{
             JSONObject row=CinemaRemoteSources.fetch("/titles/"+id).getJSONObject("title");
             JSONObject result=compact(row).put("description",row.optString("description"));
             for(String field:new String[]{"genres","aliases"})if(row.optJSONArray(field)!=null)result.put(field,row.getJSONArray(field));

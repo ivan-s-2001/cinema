@@ -79,8 +79,9 @@ final class CinemaCatalog {
         }
         if(parts[0].equals("meta")){
             JSONObject bundled=remote.detail(id);
+            boolean serverMetadata=bundled!=null;
             if(bundled==null)bundled=snapshot.detail(id);
-            if(bundled!=null&&parts[1].equals("series")){
+            if(bundled!=null&&!serverMetadata&&parts[1].equals("series")){
                 JSONObject source=snapshot.document(id);
                 if(source!=null)try{
                     JSONArray videos=bundled.getJSONArray("videos");

@@ -925,6 +925,159 @@
         "status",
         "candidates"
       ]
+    },
+    "TvMetadata": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "$ref": "#/$defs/TitleDetail"
+        },
+        "meta": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "type": {
+              "enum": [
+                "movie",
+                "series"
+              ]
+            },
+            "name": {
+              "type": "string"
+            },
+            "poster": {
+              "type": "string"
+            },
+            "releaseInfo": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "background": {
+              "type": "string"
+            },
+            "runtime": {
+              "type": "string"
+            },
+            "released": {
+              "type": "string"
+            },
+            "imdb_id": {
+              "type": "string"
+            },
+            "imdbRating": {
+              "type": "string"
+            },
+            "genres": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "aliases": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "app_extras": {
+              "type": "object",
+              "properties": {
+                "certificationLocal": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "certificationLocal"
+              ],
+              "additionalProperties": false
+            },
+            "cinemaRatings": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "number"
+                  },
+                  "scale": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "required": [
+                  "source",
+                  "label",
+                  "value",
+                  "scale"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "videos": {
+              "type": "array",
+              "maxItems": 2000,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "season": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "episode": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "thumbnail": {
+                    "type": "string"
+                  },
+                  "released": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "season",
+                  "episode",
+                  "title"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "name",
+            "poster",
+            "releaseInfo",
+            "description",
+            "genres",
+            "aliases"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "title",
+        "meta"
+      ],
+      "additionalProperties": false
     }
   }
 }

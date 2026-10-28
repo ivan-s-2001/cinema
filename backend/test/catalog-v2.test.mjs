@@ -13,6 +13,7 @@ import { createCatalogV2 } from '../catalog-v2.mjs';
 import { titleCard, titleDetail, releaseState, imageFor } from '../catalog-model.mjs';
 import { canonicalId, saveExternalIds, recordRefresh, refreshDelayMs } from '../catalog-identity.mjs';
 import { handleSearch } from '../search.mjs';
+import { tvMetadata } from '../tv-meta.mjs';
 
 const contract=JSON.parse(await readFile(new URL('../catalog-v2.schema.json',import.meta.url),'utf8'));
 const ajv=new Ajv({strict:true,allowUnionTypes:true});ajv.addSchema(contract);
@@ -40,6 +41,23 @@ test('completed metadata gets a finite refresh interval',()=>{
   assert.equal(refreshDelayMs({status:'Ended',description:'Full',images:{poster:'https://example.org/p.jpg'}}),30*24*3600000);
   assert.equal(refreshDelayMs({type:'tv',status:'Returning Series',description:'Full',images:{poster:'https://example.org/p.jpg'}}),6*3600000);
   assert.equal(refreshDelayMs({status:'Ended'}),24*3600000);
+});
+test('server TV metadata preserves ratings, episode identity and timestamps without private payload',()=>{
+  const result=tvMetadata({id:'ch:series:test',kind:'series',title:'Show',year:2020,payload:{releaseDate:'2020-01-01T12:00:00.000Z',ratings:{imdb:8.3},apiKey:'PRIVATE'}},[
+    {title_id:'ch:series:test',season_number:0,episode_number:1,title:'Special'},
+    {title_id:'ch:series:test',season_number:1,episode_number:3,title:'Episode',air_date:'2020-01-01',still:'javascript:bad'}]);
+  validate('TvMetadata',result);
+  assert.equal(result.meta.released,'2020-01-01T12:00:00.000Z');
+  assert.equal(result.meta.imdbRating,'8.3');assert.equal(result.meta.cinemaRatings[0].label,'IMDb');
+  assert.deepEqual(result.meta.videos,[{id:'ch:series:test:1:3',season:1,episode:3,title:'Episode',released:'2020-01-01T00:00:00.000Z'}]);
+  assert.ok(!JSON.stringify(result).includes('PRIVATE'));
+});
+test('oversized TV episode lists fall back explicitly instead of returning incomplete metadata',async()=>{
+  const row={id:'ch:series:large',kind:'series',title:'Large',payload:{}};
+  const handle=createCatalogV2({query:async(sql)=>sql.includes('FROM titles')?[row]:Array(2001).fill({})});
+  let status,body;
+  await handle({method:'GET'},{writeHead(s){status=s;},end(b){body=b;}},new URL('https://example.org/api/v2/titles/ch:series:large/tv-meta'));
+  assert.equal(status,503);const value=JSON.parse(body);validate('Error',value);assert.equal(value.error.code,'tv_metadata_too_large');
 });
 
 test('MariaDB catalogue integration',{skip:!process.env.CATALOG_TEST_PORT},async t=>{
@@ -115,6 +133,11 @@ test('MariaDB catalogue integration',{skip:!process.env.CATALOG_TEST_PORT},async
       assert.equal(await get('/config',null,200,'HEAD'),'');
     });
     await t.test('season zero, gaps and next season use actual episodes',async()=>{
+      const ready=await get('/titles/ch:series:42/tv-meta');
+      validate('TvMetadata',ready);
+      assert.deepEqual(ready.meta.videos.map(v=>v.id),['ch:series:42:1:1','ch:series:42:1:3','ch:series:42:2:1']);
+      assert.equal(ready.meta.videos[0].released,'2020-01-01T00:00:00.000Z');
+      await get('/titles/ch:movie:hidden/tv-meta','Error',404);
       const seasons=await get('/titles/ch:series:42/seasons','Seasons');assert.deepEqual(seasons.items.map(s=>s.number),[0,1,2]);
       const first=await get('/seasons/ch:series:42:s1/episodes?limit=1','Episodes');assert.equal(first.nextAfter,1);
       const last=await get('/seasons/ch:series:42:s1/episodes?after=1&limit=1','Episodes');assert.equal(last.items[0].number,3);assert.equal(last.nextAfter,null);
