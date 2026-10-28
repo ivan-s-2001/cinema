@@ -16,7 +16,7 @@ final class CinemaCatalog {
     CinemaCatalog(Context context){this.context=context;this.base=CinemaServer.base(context);snapshot=new CinemaSnapshot(context);}
     static JSONObject manifest() throws JSONException {
         JSONArray rows=new JSONArray();for(String[] row:ROWS)rows.put(new JSONObject().put("id",row[0]).put("name",row[1]).put("type",row[2]).put("pageSize",24).put("showInHome",Boolean.parseBoolean(row[3])).put("extra",new JSONArray().put(new JSONObject().put("name","skip")).put(new JSONObject().put("name","search"))));
-        return new JSONObject().put("id","app.cinemahall.catalog").put("name","CinemaHall").put("version","0.7.4")
+        return new JSONObject().put("id","app.cinemahall.catalog").put("name","CinemaHall").put("version","0.7.5")
             .put("description","Каталог, метаданные и источники CinemaHall").put("types",new JSONArray(Arrays.asList("movie","series")))
             .put("idPrefixes",new JSONArray(Arrays.asList("ch:"))).put("resources",new JSONArray(Arrays.asList("catalog","meta","stream","subtitles"))).put("catalogs",rows);
     }

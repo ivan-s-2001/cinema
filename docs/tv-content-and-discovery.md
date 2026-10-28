@@ -69,3 +69,12 @@ journalctl -u cinemahall-api-tv074 -f -n 40
 ```
 
 Wait for `API_UPDATE_OK`, then install the APK. This updates the existing database/service through the established deployment flow. The later documentation commit does not change release code. [Zona/open-source research](zona-streaming-research.md) distinguishes the current implementation from the proposed persistent file/track index and combined playback choices.
+
+
+## TV 0.7.5: choose before starting
+
+Every explicit CinemaHall film/episode launch opens quality and voice selection before creating the player, including cached results, resume and retry. Direct autoplay preferences and remembered source groups cannot bypass this boundary. The picker focuses its first quality tab, renders the first discovered options without waiting for search completion, preserves the selected quality during later updates, and omits the automatic/recommended pseudo-quality. Choosing a voice starts playback with the existing resume position handling.
+
+In-player automatic continuation uses the chosen quality/voice binge group. If that combination is missing for the next episode, it opens the picker instead of silently changing the studio or quality. Filename-only fallback follows the same rule. Manual episode selection in the player already opens quality/voice choices.
+
+TV version: 0.7.5-tv, versionCode 1077. Server file/track indexing remains the separate architecture work described in the research document; this change establishes the requested launch behavior.

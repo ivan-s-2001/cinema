@@ -1016,9 +1016,16 @@ internal fun CinemaHallQualityVoicePicker(
     firstTabFocusRequester: FocusRequester? = null,
     modifier: Modifier = Modifier
 ) {
+    val initialFocus = firstTabFocusRequester ?: remember { FocusRequester() }
+    LaunchedEffect(streams.isNotEmpty()) {
+        if (streams.isNotEmpty() && firstTabFocusRequester == null) {
+            androidx.compose.runtime.withFrameNanos { }
+            runCatching { initialFocus.requestFocus() }
+        }
+    }
     val order = remember { listOf("4K", "2K", "1080p", "720p", "576p", "480p", "360p", "240p") }
     val groups = remember(streams) {
-        streams.groupBy { it.name.orEmpty().removePrefix("CinemaHall · ").trim().ifEmpty { "Не указано" } }
+        cinemaSelectableStreams(streams).groupBy { it.name.orEmpty().removePrefix("CinemaHall · ").trim().ifEmpty { "Не указано" } }
             .toList()
             .sortedWith(compareBy({ order.indexOf(it.first).let { rank -> if (rank < 0) 99 else rank } }, { it.first }))
     }
@@ -1041,7 +1048,7 @@ internal fun CinemaHallQualityVoicePicker(
                 val selected = quality == entry.first
                 Card(
                     onClick = { quality = entry.first },
-                    modifier = if (entry == groups.firstOrNull() && firstTabFocusRequester != null) Modifier.focusRequester(firstTabFocusRequester) else Modifier,
+                    modifier = if (entry == groups.firstOrNull()) Modifier.focusRequester(initialFocus) else Modifier,
                     colors = CardDefaults.colors(
                         containerColor = if (selected) NuvioTheme.colors.Secondary else NuvioTheme.colors.BackgroundCard,
                         focusedContainerColor = NuvioTheme.colors.Secondary

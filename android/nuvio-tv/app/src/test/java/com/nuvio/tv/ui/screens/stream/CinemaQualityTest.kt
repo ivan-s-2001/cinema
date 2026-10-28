@@ -4,6 +4,8 @@ import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.data.mapper.toDomain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class CinemaQualityTest {
@@ -28,4 +30,18 @@ class CinemaQualityTest {
         assertEquals(2, cinemaVoiceChoices(listOf(mapped, other)).size)
         assertEquals("HDR10+ · Dolby Atmos", cinemaTechnologyLabel(mapped))
     }
+    @Test fun `new film and episode launches require a choice before any autoplay`() {
+        assertTrue(cinemaRequiresInitialSelection("ch:snapshot:movie:tmdb:550", false))
+        assertTrue(cinemaRequiresInitialSelection("ch:snapshot:tv:tmdb:1622:5:3", false))
+        assertTrue(cinemaRequiresInitialSelection("tt12345", true))
+        assertFalse(cinemaRequiresInitialSelection("tt12345", false))
+        assertEquals(listOf("CinemaHall · 1080p"), cinemaSelectableStreams(listOf(stream("Авто"), stream("1080p"))).map { it.name })
+    }
+    @Test fun `next episode keeps the exact chosen voice and quality or returns to selection`() {
+        val picked = stream("1080p").copy(behaviorHints = com.nuvio.tv.domain.model.StreamBehaviorHints(notWebReady = null, bingeGroup = "cinemahall:1080p:lostfilm", countryWhitelist = null, proxyHeaders = null))
+        assertEquals(picked, cinemaContinuationStream(listOf(stream("4K"), picked), "cinemahall:1080p:lostfilm"))
+        assertNull(cinemaContinuationStream(listOf(stream("4K")), "cinemahall:1080p:lostfilm"))
+        assertNull(cinemaContinuationStream(listOf(picked), null))
+    }
+
 }

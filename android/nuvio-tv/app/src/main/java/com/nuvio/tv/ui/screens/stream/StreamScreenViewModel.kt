@@ -147,9 +147,9 @@ class StreamScreenViewModel @Inject constructor(
     private val contentLanguage: String? = savedStateHandle.getOptionalString("contentLanguage")
     private val playbackProfileId: Int = savedStateHandle.get<String>("profileId")?.toIntOrNull()
         ?: profileManager.activeProfileId.value
-    private val manualSelection: Boolean = savedStateHandle.get<String>("manualSelection")
-        ?.toBooleanStrictOrNull()
-        ?: false
+    private val manualSelection: Boolean = cinemaRequiresInitialSelection(
+        videoId, savedStateHandle.get<String>("manualSelection")?.toBooleanStrictOrNull() ?: false
+    )
     private val streamCacheKey: String = "${contentType.lowercase()}|$videoId"
     private val partyKey: String = com.nuvio.tv.core.party.partyMediaKey(
         metaType = contentType,
@@ -297,7 +297,7 @@ class StreamScreenViewModel @Inject constructor(
                 }
         }
         if (manualSelection) {
-            // Returning from a playback error: keep the user on stream selection.
+            // Initial launches and retries show choices before creating the player.
             autoPlayHandledForSession = true
             directAutoPlayModeInitializedForSession = true
             directAutoPlayFlowEnabledForSession = false

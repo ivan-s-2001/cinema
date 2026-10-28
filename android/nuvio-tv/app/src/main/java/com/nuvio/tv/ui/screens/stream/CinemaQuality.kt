@@ -16,3 +16,18 @@ internal fun cinemaVoiceChoices(streams: List<Stream>): List<Stream> = streams.d
     it.title.orEmpty().trim().lowercase() to it.technologyHints.sorted()
 }
 internal fun cinemaTechnologyLabel(stream: Stream): String? = stream.technologyHints.takeIf { it.isNotEmpty() }?.joinToString(" · ")
+
+
+/** Explicit launches of our titles always show quality/voice choices, including cached searches. */
+internal fun cinemaRequiresInitialSelection(videoId: String, requestedManual: Boolean): Boolean =
+    requestedManual || videoId.startsWith("ch:")
+
+/** Continue the selected quality/studio, or ask again instead of silently changing the voice. */
+internal fun cinemaContinuationStream(streams: List<Stream>, selectedGroup: String?): Stream? =
+    selectedGroup?.takeIf { it.startsWith("cinemahall:") }?.let { group ->
+        streams.firstOrNull { it.addonName == "CinemaHall" && it.behaviorHints?.bingeGroup == group }
+    }
+
+internal fun cinemaSelectableStreams(streams: List<Stream>): List<Stream> = streams.filter {
+    it.addonName == "CinemaHall" && it.name?.removePrefix("CinemaHall · ")?.trim() != "Авто"
+}
