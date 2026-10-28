@@ -426,6 +426,7 @@ fun StreamScreen(
                 backdropUrl = uiState.backdrop ?: uiState.poster,
                 logoUrl = uiState.logo,
                 title = uiState.title,
+                logoCaption = uiState.logoCaption,
                 message = if (uiState.directAutoPlayMessage != null) {
                     uiState.directAutoPlayMessage
                 } else {
@@ -443,6 +444,7 @@ fun StreamScreen(
                 LeftContentSection(
                     title = uiState.title,
                     logo = uiState.logo,
+                    logoCaption = uiState.logoCaption,
                     isEpisode = uiState.isEpisode,
                     season = uiState.season,
                     episode = uiState.episode,
@@ -644,6 +646,7 @@ private fun StreamGradientLayer(
 private fun LeftContentSection(
     title: String,
     logo: String?,
+    logoCaption: String?,
     isEpisode: Boolean,
     season: Int?,
     episode: Int?,
@@ -654,16 +657,6 @@ private fun LeftContentSection(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var logoLoadFailed by remember(logo) { mutableStateOf(false) }
-    val density = LocalDensity.current
-    val logoModel = remember(context, logo) {
-        logo?.let { image ->
-            ImageRequest.Builder(context)
-                .data(image)
-                .crossfade(false)
-                .build()
-        }
-    }
     val infoText = remember(genres, year) {
         listOfNotNull(genres, year).joinToString(" • ")
     }
@@ -676,27 +669,10 @@ private fun LeftContentSection(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxWidth(0.8f)
         ) {
-            if (logoModel != null && !logoLoadFailed) {
-                AsyncImage(
-                    model = logoModel,
-                    contentDescription = title,
-                    onError = { logoLoadFailed = true },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(120.dp),
-                    contentScale = ContentScale.Fit,
-                    alignment = Alignment.Center
-                )
-            } else {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.displaySmall,
-                    color = NuvioTheme.colors.TextPrimary,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center
-                )
-            }
+            com.nuvio.tv.ui.components.CinemaTitleArtwork(
+                title = title, logo = logo, caption = logoCaption,
+                height = 120.dp, modifier = Modifier.fillMaxWidth()
+            )
 
             // Show episode info or movie info
             if (isEpisode && season != null && episode != null) {

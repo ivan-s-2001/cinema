@@ -1305,6 +1305,7 @@ fun PlayerScreen(
             backdropUrl = uiState.backdrop,
             logoUrl = uiState.logo,
             title = uiState.title,
+            logoCaption = uiState.logoCaption,
             message = uiState.loadingMessage.takeIf { uiState.showPlayerLoadingStatus || uiState.isTorrentStream },
             progress = uiState.loadingProgress,
             modifier = Modifier
@@ -2430,7 +2431,7 @@ private fun PlayerControlsOverlay(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(200.dp)
+                .height(320.dp)
                 .align(Alignment.BottomCenter)
                 .background(
                     Brush.verticalGradient(
@@ -2440,6 +2441,19 @@ private fun PlayerControlsOverlay(
                         )
                     )
                 )
+        )
+
+        val displayName = if (uiState.currentSeason != null && uiState.currentEpisode != null) {
+            uiState.contentName ?: uiState.title
+        } else uiState.title
+        com.nuvio.tv.ui.components.CinemaTitleArtwork(
+            title = displayName,
+            logo = uiState.logo,
+            caption = uiState.logoCaption,
+            height = 64.dp,
+            modifier = Modifier.align(Alignment.TopStart)
+                .padding(horizontal = NuvioTheme.spacing.xxl, vertical = NuvioTheme.spacing.lg)
+                .width(240.dp)
         )
 
         Column(
@@ -2463,21 +2477,6 @@ private fun PlayerControlsOverlay(
                 exit = fadeOut(animationSpec = tween(NuvioMotion.tokens.durations.fast))
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    val displayName = if (uiState.currentSeason != null && uiState.currentEpisode != null) {
-                        uiState.contentName ?: uiState.title
-                    } else {
-                        uiState.title
-                    }
-
-                    Text(
-                        text = displayName,
-                        modifier = Modifier.reportRightEdge("name", titleRights),
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
                     if (uiState.currentSeason != null && uiState.currentEpisode != null) {
                         val seasonEpisodeCode = stringResource(
                             R.string.season_episode_format,
@@ -2536,7 +2535,7 @@ private fun PlayerControlsOverlay(
                     ) {
                         PlayerControlsProgressBarHost(
                             viewModel = viewModel,
-                            chapters = emptyList(),
+                            chapters = uiState.chapters,
                             focusRequester = progressBarFocusRequester,
                             upFocusRequester = progressBarUpFocusRequester,
                             downFocusRequester = playPauseFocusRequester,
@@ -2552,57 +2551,66 @@ private fun PlayerControlsOverlay(
                 Spacer(modifier = Modifier.height(NuvioTheme.spacing.lg))
             }
 
-            // Control buttons row — always LTR regardless of locale
+            // Transport and content actions have separate rows so every action has room for a label.
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val hasEpisodeContext = uiState.currentSeason != null || uiState.contentType in listOf("series", "tv")
-                    ControlButton(icon = if (uiState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        iconPainter = if (uiState.isPlaying) customPausePainter else customPlayPainter,
-                        contentDescription = if (uiState.isPlaying) "Пауза" else "Продолжить",
-                        onClick = onPlayPause, focusRequester = playPauseFocusRequester,
-                        upFocusRequester = progressUpTarget, onDownKey = onHideControls, onFocused = onResetHideTimer)
-                    if (!isLivePlayback) {
-                        ControlButton(icon = Icons.Default.Replay10, contentDescription = "Назад на 10 секунд",
-                            onClick = onSeekBackward, upFocusRequester = progressUpTarget,
-                            onDownKey = onHideControls, onFocused = onResetHideTimer)
-                        ControlButton(icon = Icons.Default.Forward10, contentDescription = "Вперёд на 10 секунд",
-                            onClick = onSeekForward, upFocusRequester = progressUpTarget,
-                            onDownKey = onHideControls, onFocused = onResetHideTimer)
+                val hasEpisodeContext = uiState.currentSeason != null || uiState.contentType in listOf("series", "tv")
+                val contentActionsFocusRequester = remember { FocusRequester() }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (!isLivePlayback) {
+                            ControlButton(icon = Icons.Default.Replay10, contentDescription = "Назад на 10 секунд",
+                                onClick = onSeekBackward, upFocusRequester = progressUpTarget,
+                                downFocusRequester = contentActionsFocusRequester, onFocused = onResetHideTimer)
+                        }
+                        ControlButton(icon = if (uiState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            iconPainter = if (uiState.isPlaying) customPausePainter else customPlayPainter,
+                            contentDescription = if (uiState.isPlaying) "Пауза" else "Продолжить",
+                            visibleLabel = if (uiState.isPlaying) "Пауза" else "Продолжить",
+                            onClick = onPlayPause, focusRequester = playPauseFocusRequester,
+                            upFocusRequester = progressUpTarget, downFocusRequester = contentActionsFocusRequester,
+                            onFocused = onResetHideTimer)
+                        if (!isLivePlayback) {
+                            ControlButton(icon = Icons.Default.Forward10, contentDescription = "Вперёд на 10 секунд",
+                                onClick = onSeekForward, upFocusRequester = progressUpTarget,
+                                downFocusRequester = contentActionsFocusRequester, onFocused = onResetHideTimer)
+                        }
                     }
+                    Column(horizontalAlignment = Alignment.End) {
+                        PlayerControlsTimeTextHost(viewModel = viewModel)
+                        uiState.currentStreamName?.takeIf { it.isNotBlank() }?.let {
+                            Text(it.replace("CinemaHall · ", ""), style = MaterialTheme.typography.labelSmall,
+                                color = Color.White.copy(alpha = 0.65f), maxLines = 1,
+                                overflow = TextOverflow.Ellipsis, modifier = Modifier.width(220.dp))
+                        }
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
                     if (hasEpisodeContext) {
                         ControlButton(icon = Icons.AutoMirrored.Filled.List, iconPainter = customEpisodesPainter,
                             contentDescription = "Серии", visibleLabel = "Серии", onClick = onShowEpisodesPanel,
-                            upFocusRequester = progressUpTarget, onDownKey = onHideControls, onFocused = onResetHideTimer)
+                            upFocusRequester = playPauseFocusRequester, onDownKey = onHideControls, onFocused = onResetHideTimer)
                     }
                     ControlButton(icon = Icons.Default.SwapHoriz, iconPainter = customSourcePainter,
                         contentDescription = "Качество и озвучка", visibleLabel = "Качество и озвучка", onClick = onShowSourcesPanel,
-                        upFocusRequester = progressUpTarget, onDownKey = onHideControls, onFocused = onResetHideTimer)
+                        focusRequester = contentActionsFocusRequester, upFocusRequester = playPauseFocusRequester,
+                        onDownKey = onHideControls, onFocused = onResetHideTimer)
                     if (uiState.subtitleTracks.isNotEmpty() || uiState.addonSubtitles.isNotEmpty()) {
-                        ControlButton(icon = Icons.Default.ClosedCaption, contentDescription = "Субтитры",
+                        ControlButton(icon = Icons.Default.ClosedCaption, contentDescription = "Субтитры", visibleLabel = "Субтитры",
                             onClick = { viewModel.onEvent(PlayerEvent.OnShowSubtitleOverlay) },
-                            upFocusRequester = progressUpTarget, onDownKey = onHideControls, onFocused = onResetHideTimer)
+                            upFocusRequester = playPauseFocusRequester, onDownKey = onHideControls, onFocused = onResetHideTimer)
                     }
                     if (uiState.nextEpisode?.hasAired == true) {
-                        ControlButton(icon = Icons.Default.SkipNext, contentDescription = "Следующая серия",
+                        ControlButton(icon = Icons.Default.SkipNext, contentDescription = "Следующая серия", visibleLabel = "Следующая",
                             onClick = { viewModel.onEvent(PlayerEvent.OnPlayNextEpisode) },
-                            upFocusRequester = progressUpTarget, onDownKey = onHideControls, onFocused = onResetHideTimer)
+                            upFocusRequester = playPauseFocusRequester, onDownKey = onHideControls, onFocused = onResetHideTimer)
                     }
-                    ControlButton(icon = Icons.Default.MoreHoriz, contentDescription = "Ещё",
+                    ControlButton(icon = Icons.Default.MoreHoriz, contentDescription = "Настройки", visibleLabel = "Настройки",
                         onClick = { viewModel.onEvent(PlayerEvent.OnShowMoreDialog) },
-                        upFocusRequester = progressUpTarget, onDownKey = onHideControls, onFocused = onResetHideTimer)
+                        upFocusRequester = playPauseFocusRequester, onDownKey = onHideControls, onFocused = onResetHideTimer)
                 }
-
-                // Right side - Time display only
-                PlayerControlsTimeTextHost(viewModel = viewModel)
-            }
             }
         }
     }
@@ -2613,8 +2621,11 @@ private fun PlayerControlsOverlay(
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Дополнительно", style = MaterialTheme.typography.titleLarge, color = Color.White)
                 if (uiState.showAspectRatioIndicator) Text(uiState.aspectRatioIndicatorText, color = Color.White.copy(alpha = 0.8f))
-                DialogButton(text = "Скорость воспроизведения", onClick = { viewModel.onEvent(PlayerEvent.OnShowSpeedDialog) }, isPrimary = false)
+                DialogButton(text = "Скорость · ${uiState.playbackSpeed}×", onClick = { viewModel.onEvent(PlayerEvent.OnShowSpeedDialog) }, isPrimary = false)
                 DialogButton(text = "Формат изображения", onClick = { viewModel.onEvent(PlayerEvent.OnToggleAspectRatio) }, isPrimary = false)
+                if (uiState.chapters.isNotEmpty()) {
+                    DialogButton(text = "Главы", onClick = { viewModel.onEvent(PlayerEvent.OnShowChaptersPanel) }, isPrimary = false)
+                }
                 DialogButton(text = "Закрыть", onClick = { viewModel.onEvent(PlayerEvent.OnDismissMoreDialog) }, isPrimary = false)
             }
         }
@@ -2723,6 +2734,7 @@ private fun ControlButton(
     focusRequester: FocusRequester? = null,
     upFocusRequester: FocusRequester? = null,
     enabled: Boolean = true,
+    downFocusRequester: FocusRequester? = null,
     onDownKey: (() -> Unit)? = null,
     onFocused: (() -> Unit)? = null,
     contentColor: Color = Color.White
@@ -2734,14 +2746,21 @@ private fun ControlButton(
         enabled = enabled,
         modifier = Modifier
             .then(if (visibleLabel == null) Modifier.size(NuvioTheme.spacing.xxxl)
-                  else Modifier.width(if (visibleLabel == "Серии") 100.dp else 184.dp).height(NuvioTheme.spacing.xxxl))
+                  else Modifier.width(when (visibleLabel) {
+                      "Качество и озвучка" -> 184.dp
+                      "Серии" -> 100.dp
+                      else -> 132.dp
+                  }).height(NuvioTheme.spacing.xxxl))
             .then(
                 if (focusRequester != null) Modifier.focusRequester(focusRequester)
                 else Modifier
             )
             .then(
-                if (upFocusRequester != null) {
-                    Modifier.focusProperties { up = upFocusRequester }
+                if (upFocusRequester != null || downFocusRequester != null) {
+                    Modifier.focusProperties {
+                        upFocusRequester?.let { up = it }
+                        downFocusRequester?.let { down = it }
+                    }
                 } else {
                     Modifier
                 }
@@ -2755,6 +2774,13 @@ private fun ControlButton(
                     try {
                         upFocusRequester.requestFocus()
                     } catch (_: Exception) {}
+                    true
+                } else if (
+                    downFocusRequester != null &&
+                    keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
+                    keyEvent.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_DOWN
+                ) {
+                    runCatching { downFocusRequester.requestFocus() }
                     true
                 } else if (
                     onDownKey != null &&

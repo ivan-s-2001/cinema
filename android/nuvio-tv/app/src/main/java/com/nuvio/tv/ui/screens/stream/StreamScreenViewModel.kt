@@ -1202,7 +1202,6 @@ class StreamScreenViewModel @Inject constructor(
     }
 
     private fun loadMissingMetaDetailsIfNeeded() {
-        val requiresMetadataLookup = genres.isNullOrBlank() || year.isNullOrBlank() || runtime == null
         val metaId = contentId ?: com.nuvio.tv.core.streams.videoContentId(videoId)
         if (metaId.isBlank() || contentType.isBlank()) return
 
@@ -1214,7 +1213,6 @@ class StreamScreenViewModel @Inject constructor(
 
             val meta = result.data
             playbackMetaVideos = meta.videos
-            if (!requiresMetadataLookup) return@launch
             val metaGenres = meta.genres.takeIf { it.isNotEmpty() }
                 ?.joinToString(" • ") { localizedGenreLabel(context, it) }
             val metaYear = meta.releaseInfo
@@ -1225,13 +1223,15 @@ class StreamScreenViewModel @Inject constructor(
             _uiState.update { state ->
                 val posterValue = state.poster ?: meta.poster
                 val backdropValue = state.backdrop ?: meta.backdropUrl
-                val logoValue = state.logo ?: meta.logo
+                val logoValue = meta.logo?.takeIf { it.isNotBlank() } ?: state.logo
+                val logoCaption = if (!meta.logo.isNullOrBlank()) meta.logoCaption else state.logoCaption
                 val genresValue = state.genres?.takeIf { it.isNotBlank() } ?: metaGenres
                 val yearValue = state.year?.takeIf { it.isNotBlank() } ?: metaYear
                 val runtimeValue = state.runtime ?: metaRuntime
                 if (state.poster == posterValue &&
                     state.backdrop == backdropValue &&
                     state.logo == logoValue &&
+                    state.logoCaption == logoCaption &&
                     state.genres == genresValue &&
                     state.year == yearValue &&
                     state.runtime == runtimeValue
@@ -1242,6 +1242,7 @@ class StreamScreenViewModel @Inject constructor(
                         poster = posterValue,
                         backdrop = backdropValue,
                         logo = logoValue,
+                        logoCaption = logoCaption,
                         genres = genresValue,
                         year = yearValue,
                         runtime = runtimeValue

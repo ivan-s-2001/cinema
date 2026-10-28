@@ -84,3 +84,12 @@ Source/voice/quality switches within the current episode capture the live absolu
 
 
 Detail loading artwork is now taken from the clicked card, hero item or continue-watching entry immediately before navigation. It no longer borrows the last displayed home hero while focus/enrichment is still catching up. A missing backdrop clears the transition seed; a portrait equal to the poster is not used as a wide background. The last actually displayed home backdrop is retained independently for home return transitions. A regression covers fast clicking another title and missing/portrait-only artwork.
+
+
+## TV 0.7.6: title artwork and balanced player controls
+
+The player now applies the logo and its Russian caption from server metadata, including when navigation supplied no logo. CinemaHall titles do not issue client-side TMDB enrichment requests that could replace proxied artwork. The quality/voice screen always merges the returned metadata, even when genre/year/runtime were already supplied. English artwork retains the small centered Russian caption on the picker, loading overlay and playback controls. Missing or failed image assets retain a readable text fallback. Original studio artwork coverage is still determined by the metadata provider.
+
+The playback OSD places a bounded logo at the top and season/episode information above the full-width seek bar. Transport (±10 seconds and labeled play/pause) is separate from labeled series, quality/voice, subtitles, next episode and settings actions. Down from transport reaches quality/voice, up returns to pause/the timeline, and down from the last action row dismisses the controls. The settings menu includes speed, aspect ratio and chapters when the current file supplies them; chapter markers are also restored on the timeline. Embedded audio remains accessible through the unified quality/voice flow only; the separate audio menu, technical stream information and party controls remain unavailable.
+
+TV 0.7.6-tv, versionCode 1078. This is an APK update; no new backend deployment or migration is required. Physical-TV logo rendering, D-pad navigation and playback still need a device smoke check.

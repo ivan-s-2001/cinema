@@ -5,7 +5,6 @@ internal fun cinemaPlayerActionAllowed(event: PlayerEvent): Boolean = when (even
     PlayerEvent.OnShowAudioOverlay,
     is PlayerEvent.OnSelectAudioTrack,
     PlayerEvent.OnShowStreamInfo,
-    PlayerEvent.OnShowChaptersPanel,
     PlayerEvent.OnShowPartyPanel -> false
     else -> true
 }

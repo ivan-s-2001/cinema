@@ -70,6 +70,9 @@ internal fun PlayerRuntimeController.applyMetaDetails(meta: Meta) {
     recomputeNextEpisode(resetVisibility = false)
     _uiState.update { state ->
         state.copy(
+            logo = meta.logo?.takeIf { it.isNotBlank() } ?: state.logo,
+            logoCaption = if (!meta.logo.isNullOrBlank()) meta.logoCaption else state.logoCaption,
+            backdrop = meta.backdropUrl?.takeIf { it.isNotBlank() } ?: state.backdrop,
             description = description ?: state.description,
             castMembers = if (meta.castMembers.isNotEmpty()) meta.castMembers else state.castMembers,
             isNextEpisodeMetadataResolved = true
@@ -110,6 +113,8 @@ internal fun PlayerRuntimeController.updateEpisodeDescription() {
 
 private suspend fun PlayerRuntimeController.enrichDescriptionFromTmdb(id: String?, type: String?) {
     if (id.isNullOrBlank() || type.isNullOrBlank()) return
+    // CinemaHall already supplies localized metadata and proxied RU/EN artwork.
+    if (id.startsWith("ch:")) return
     val settings = tmdbSettingsDataStore.settings.first()
     if (!settings.enabled || !settings.useBasicInfo) return
 
