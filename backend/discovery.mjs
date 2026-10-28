@@ -1,6 +1,6 @@
 // Read-only discovery API. Works with existing titles.payload JSON; no schema migration.
 const kinds=new Set(['movie','series']);
-const sortColumns={recent:'updated_at DESC',year:'year DESC',title:'title ASC'};
+const sortColumns={recent:'updated_at DESC,id ASC',year:'year DESC,id ASC',title:'title ASC,id ASC'};
 const text=v=>typeof v==='string'?v:'';
 const array=v=>Array.isArray(v)?v:[];
 const obj=v=>{if(v&&typeof v==='object')return v;try{return JSON.parse(v||'{}')}catch{return {}}};
@@ -32,6 +32,7 @@ export async function handleDiscovery(req,res,url,pool,send){
    const counts=await pool.query('SELECT kind, COUNT(*) AS total, SUM(poster IS NOT NULL AND poster<>"") AS withPoster, SUM(description IS NOT NULL AND description<>"") AS withDescription FROM titles GROUP BY kind');
    send(res,200,{counts});return true;
   }
+  if(path!=='/api/v1/discover'){
   const rows=await pool.query('SELECT kind,year,payload FROM titles');
   const genreMap=new Map(),countryMap=new Map(),years=new Set();
   for(const r of rows){
@@ -43,6 +44,7 @@ export async function handleDiscovery(req,res,url,pool,send){
   const sorted=m=>[...m].map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name,'ru'));
   if(path==='/api/v1/genres'){send(res,200,{genres:sorted(genreMap)});return true;}
   if(path==='/api/v1/filters'){send(res,200,{types:['movie','series'],genres:sorted(genreMap),countries:sorted(countryMap),years:[...years].sort((a,b)=>b-a)});return true;}
+  }
   const kind=url.searchParams.get('type');
   const genre=text(url.searchParams.get('genre')).trim().slice(0,80);
   const country=text(url.searchParams.get('country')).trim().slice(0,80);
@@ -50,7 +52,8 @@ export async function handleDiscovery(req,res,url,pool,send){
   const limit=Math.min(60,Math.max(1,parseInt(url.searchParams.get('limit')||'24',10)||24));
   const page=Math.min(10000,Math.max(1,parseInt(url.searchParams.get('page')||'1',10)||1));
   const sort=url.searchParams.get('sort')||'recent';
-  if((kind&&!kinds.has(kind))||(genre&&genre.length<2)||(country&&country.length<2)||
+  if(!Number.isFinite(from)||!Number.isFinite(to)||(from&&to&&from>to)||
+    (kind&&!kinds.has(kind))||(genre&&genre.length<2)||(country&&country.length<2)||
     (from&&(!Number.isInteger(from)||from<1888||from>2100))||
     (to&&(!Number.isInteger(to)||to<1888||to>2100))||
     !Object.hasOwn(sortColumns,sort)){send(res,400,{error:'Invalid filter'});return true;}
@@ -62,8 +65,8 @@ export async function handleDiscovery(req,res,url,pool,send){
   if(genre){clauses.push("JSON_CONTAINS(COALESCE(JSON_EXTRACT(payload,'$.genres'),'[]'),JSON_QUOTE(?))");values.push(genre);}
   if(country){clauses.push("JSON_CONTAINS(COALESCE(JSON_EXTRACT(payload,'$.countries'),'[]'),JSON_QUOTE(?))");values.push(country);}
   const where='WHERE '+clauses.join(' AND ');
-  const items=await select(pool,where,values,sort,limit,(page-1)*limit);
-  send(res,200,{items,page,limit,hasMore:items.length===limit,filters:{type:kind||null,genre:genre||null,country:country||null,yearFrom:from||null,yearTo:to||null,sort}});
+  const items=await select(pool,where,values,sort,limit+1,(page-1)*limit);
+  send(res,200,{items:items.slice(0,limit),page,limit,hasMore:items.length>limit,filters:{type:kind||null,genre:genre||null,country:country||null,yearFrom:from||null,yearTo:to||null,sort}});
  }catch(error){console.error('Discovery API',error.code||error.name);send(res,503,{error:'Catalog temporarily unavailable'});}
  return true;
 }

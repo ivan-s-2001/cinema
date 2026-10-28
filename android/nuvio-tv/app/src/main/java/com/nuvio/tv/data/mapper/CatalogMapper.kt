@@ -19,6 +19,7 @@ fun MetaPreviewDto.toDomainOrNull(catalogType: String, sourceAddonBaseUrl: Strin
         posterShape = PosterShape.fromString(posterShape),
         background = background,
         logo = logo,
+        logoCaption = logoCaption,
         description = description,
         releaseInfo = releaseInfo,
         imdbRating = imdbRating?.toFloatOrNull(),

@@ -1,4 +1,5 @@
 import mariadb from 'mariadb';
+import { canonicalId, saveExternalIds, recordRefresh } from './catalog-identity.mjs';
 
 const KINO = 'https://kinoapi.lampac.dev/api/v1';
 const key = process.env.KINOAPI_KEY || '';
@@ -100,13 +101,15 @@ function fromJson(value) {
   if (value && typeof value === 'object') return value;
   try { return JSON.parse(value || '{}'); } catch { return {}; }
 }
-async function store(db, raw, force = false) {
+async function storeRecord(db, raw, force = false) {
   stats.scanned++;
   const row = normalize(raw);
   if (!row) { stats.invalid++; return; }
+  row.id = await canonicalId(db,row);
   const result = await db.query('SELECT title,description,year,poster,backdrop,payload,updated_at FROM titles WHERE id=?', [row.id]);
   const previous = result[0], old = fromJson(previous?.payload);
-  if (previous && !force && (completed(old.status) || (mode === 'daily' && Date.now() - new Date(previous.updated_at).getTime() < 20 * 3600000))) {
+  const refresh = previous ? await db.query('SELECT next_refresh_at FROM title_refresh_state WHERE title_id=?',[row.id]) : [];
+  if (previous && !force && refresh.length && new Date(refresh[0].next_refresh_at).getTime()>Date.now()) {
     stats.skipped++; return;
   }
   const curator = old.curator || {};
@@ -138,15 +141,22 @@ async function store(db, raw, force = false) {
     'poster=VALUES(poster),backdrop=VALUES(backdrop),payload=VALUES(payload)',
     [row.id, row.kind, payload.title, payload.year, payload.description, payload.poster, payload.backdrop, JSON.stringify(payload)]
   );
+  await saveExternalIds(db,{...payload,id:row.id,kind:row.kind});
+  await recordRefresh(db,row.id,payload);
   if (previous) stats.updated++; else stats.inserted++;
+}
+async function store(db,raw,force=false) {
+  await db.beginTransaction();
+  try { await storeRecord(db,raw,force); await db.commit(); }
+  catch(error) { await db.rollback(); throw error; }
 }
 async function run() {
   if (mode === 'selftest') { selfTest(); return; }
-  if (!['bootstrap', 'daily', 'one'].includes(mode) || (mode !== 'one' && (!Number.isInteger(pages) || pages < 1 || pages > 200)))
-    throw Error('Usage: node sync-catalog.mjs bootstrap|daily [pages 1..200], or one kinopoisk|tmdb ID');
+  if (!['bootstrap', 'daily', 'refresh', 'one'].includes(mode) || (mode !== 'one' && (!Number.isInteger(pages) || pages < 1 || pages > 200)))
+    throw Error('Usage: node sync-catalog.mjs bootstrap|daily|refresh [pages 1..200], or one kinopoisk|tmdb ID');
   if (!key || !process.env.DB_PASSWORD) throw Error('KINOAPI_KEY and DB_PASSWORD must be configured');
   const pool = mariadb.createPool({
-    host: process.env.DB_HOST || '127.0.0.1', user: process.env.DB_USER || 'cinemahall',
+    host: process.env.DB_HOST || '127.0.0.1', port:Number(process.env.DB_PORT||3306), user: process.env.DB_USER || 'cinemahall',
     password: process.env.DB_PASSWORD, database: process.env.DB_NAME || 'cinemahall',
     connectionLimit: 1, connectTimeout: 5000
   });
@@ -163,6 +173,17 @@ async function run() {
       const record = await get('/titles/by/' + source + '/' + id + '?include=images');
       if (!record?.data) throw Error('No title returned from KinoAPI');
       await store(db, record.data, true);
+    } else if(mode==='refresh') {
+      // A bounded pass over existing due records, independent of popularity pages.
+      const due=await db.query('SELECT t.id,t.payload FROM titles t JOIN title_refresh_state r ON r.title_id=t.id WHERE r.next_refresh_at<=UTC_TIMESTAMP(3) ORDER BY r.next_refresh_at,t.id LIMIT ?',[Math.min(pages*10,200)]);
+      for(const saved of due) {
+        const ids=fromJson(saved.payload).ids||{};
+        const source=['tmdb','kinopoisk'].find(k=>/^[0-9]{1,12}$/.test(String(ids[k]||'')));
+        if(!source){await db.query('UPDATE title_refresh_state SET next_refresh_at=DATE_ADD(UTC_TIMESTAMP(3),INTERVAL 1 DAY) WHERE title_id=?',[saved.id]);stats.skipped++;continue;}
+        const record=await get('/titles/by/'+source+'/'+ids[source]+'?include=images');
+        if(!record?.data || String(idsFor(record.data)[source])!==String(ids[source]))throw Error('Incorrect title returned during refresh');
+        await store(db,record.data,true);
+      }
     } else {
       for (const kind of ['movie', 'tv']) {
         for (let page = 1; page <= pages; page++) {

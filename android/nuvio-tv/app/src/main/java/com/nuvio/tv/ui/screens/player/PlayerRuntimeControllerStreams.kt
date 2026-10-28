@@ -15,7 +15,7 @@ import com.nuvio.tv.domain.model.AddonStreams
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.model.StreamDebridCacheState
 import com.nuvio.tv.domain.model.Video
-import com.nuvio.tv.ui.screens.stream.cinemaPreferredStream
+import com.nuvio.tv.ui.screens.stream.cinemaContinuationStream
 import com.nuvio.tv.domain.model.enabledAddons
 import com.nuvio.tv.ui.components.SourceChipItem
 import com.nuvio.tv.ui.components.SourceChipStatus
@@ -138,6 +138,8 @@ internal fun PlayerRuntimeController.showSourcesPanel() {
     _uiState.update {
         it.copy(
             showSourcesPanel = true,
+            error = null,
+            showLoadingOverlay = false,
             showControls = true,
             showAudioOverlay = false,
             showSubtitleOverlay = false,
@@ -944,6 +946,9 @@ internal fun PlayerRuntimeController.switchToSourceStream(
         return
     }
 
+    val sourcePosition = cinemaSourceSwitchPosition(currentPlaybackPositionMs(), hasRenderedFirstFrame,
+        pendingSourceSwitchPositionMs ?: _uiState.value.pendingSeekPosition, playbackTimeline.value.currentPosition)
+
     // Stop any active torrent before switching to HTTP stream
     stopTorrentStream()
 
@@ -958,6 +963,11 @@ internal fun PlayerRuntimeController.switchToSourceStream(
 
     resetLoadingOverlayForNewStream()
     releasePlayer(flushPlaybackState = false)
+    pendingResumeProgress = null
+    pendingSourceSwitchPositionMs = sourcePosition
+    _uiState.update { it.copy(pendingSeekPosition = sourcePosition) }
+    updatePlaybackTimeline(currentPosition = sourcePosition)
+
 
     applySelectedStreamState(
         stream = stream,
@@ -1037,7 +1047,8 @@ internal fun PlayerRuntimeController.switchToSourceStream(
         initializePlayer(playbackUrl, playbackHeaders)
     }
 
-    loadSavedProgressFor(currentSeason, currentEpisode)
+    // The live position above is newer than an asynchronous database or server resume snapshot.
+
 }
 
 internal fun PlayerRuntimeController.dismissEpisodesPanel() {
@@ -1072,6 +1083,19 @@ internal fun PlayerRuntimeController.selectEpisodesSeason(season: Int) {
             episodes = episodesForSeason
         )
     }
+    val titleId = contentId?.takeIf { it.startsWith("ch:") }
+        ?: currentVideoId?.replace(Regex(":\\d+:\\d+$"), "")?.takeIf { it.startsWith("ch:") }
+    if (titleId != null && season > 0) scope.launch {
+        try {
+            val images = com.nuvio.tv.data.remote.CinemaSeasonArtwork.load(titleId, season)
+            _uiState.update { state ->
+                val merged = state.episodesAll.map { com.nuvio.tv.data.remote.CinemaSeasonArtwork.merge(it, images) }
+                state.copy(episodesAll = merged, episodes = merged.filter { it.season == state.episodesSelectedSeason }.sortedBy { it.episode })
+            }
+        } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
+        catch (failure: Exception) { android.util.Log.w("CinemaHall", "Player season artwork unavailable: $season", failure) }
+    }
+
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -1079,6 +1103,9 @@ private fun PlayerRuntimeController.switchToTorrentSourceStream(
     stream: Stream
 ) {
     val infoHash = stream.getEffectiveInfoHash() ?: return
+    val sourcePosition = cinemaSourceSwitchPosition(currentPlaybackPositionMs(), hasRenderedFirstFrame,
+        pendingSourceSwitchPositionMs ?: _uiState.value.pendingSeekPosition, playbackTimeline.value.currentPosition)
+
     sourceStreamsScope?.cancel()
     sourceStreamsScope = null
     sourceStreamsJob = null
@@ -1088,6 +1115,11 @@ private fun PlayerRuntimeController.switchToTorrentSourceStream(
     flushPlaybackSnapshotForSwitchOrExit()
     resetLoadingOverlayForNewStream()
     releasePlayer(flushPlaybackState = false)
+    pendingResumeProgress = null
+    pendingSourceSwitchPositionMs = sourcePosition
+    _uiState.update { it.copy(pendingSeekPosition = sourcePosition) }
+    updatePlaybackTimeline(currentPosition = sourcePosition)
+
     hasRetriedCurrentStreamAfter416 = false
     errorRetryCount = 0
     subtitleDisabledByPersistedPreference = false
@@ -1119,7 +1151,7 @@ private fun PlayerRuntimeController.switchToTorrentSourceStream(
     currentFilename = stream.behaviorHints?.filename
     showStreamSourceIndicator(stream)
     resetPostPlayOverlayState(clearEpisode = false)
-    launchTorrentSourceStream(stream, infoHash, loadSavedProgress = true)
+    launchTorrentSourceStream(stream, infoHash, loadSavedProgress = false)
     persistTorrentStreamForReuse(stream)
 }
 
@@ -1189,6 +1221,7 @@ internal fun PlayerRuntimeController.loadEpisodesIfNeeded() {
                         episodesError = null
                     )
                 }
+                selectEpisodesSeason(selectedSeason)
             }
 
             is NetworkResult.Error -> {
@@ -1260,9 +1293,6 @@ internal fun PlayerRuntimeController.loadStreamsForEpisode(video: Video, forceRe
             )
         }
 
-        val cinemaAutoPlay = video.id.startsWith("ch:")
-        val preferredQuality = if (cinemaAutoPlay) playerSettingsDataStore.playerSettings.first().cinemaPreferredQuality else "BEST"
-        var cinemaSelected = false
         val installedAddons = streamAddonsFor(video.id)
         val installedAddonOrder = installedAddons.map { it.displayName }
         val installedAddonNames = installedAddonOrder.toSet()
@@ -1283,14 +1313,6 @@ internal fun PlayerRuntimeController.loadStreamsForEpisode(video: Video, forceRe
                 is NetworkResult.Success -> {
                     val addonStreams = StreamAutoPlaySelector.orderAddonStreams(result.data, installedAddonOrder, preferredServerNames)
                     val allStreams = addonStreams.flatMap { it.streams }
-                    if (cinemaAutoPlay && !cinemaSelected) {
-                        val selected = cinemaPreferredStream(allStreams, preferredQuality)
-                        if (selected != null) {
-                            cinemaSelected = true
-                            switchToEpisodeStream(selected, forcedTargetVideo = video)
-                            return@collect
-                        }
-                    }
                     val availableAddons = addonStreams.map { it.addonName }
                     val currentFilter = _uiState.value.episodeSelectedAddonFilter
                     val filteredStreams = if (currentFilter == null) {
@@ -1437,6 +1459,16 @@ internal fun PlayerRuntimeController.switchToEpisodeStream(
     forcedTargetVideo: Video? = null,
     isAutoPlay: Boolean = false
 ) {
+    val selectedEpisodeId = forcedTargetVideo?.id ?: _uiState.value.episodeStreamsForVideoId
+    if (selectedEpisodeId != null && selectedEpisodeId == currentVideoId) {
+        episodeStreamsScope?.cancel()
+        episodeStreamsScope = null
+        episodeStreamsJob = null
+        _uiState.update { it.copy(showEpisodesPanel = false, showEpisodeStreams = false, isLoadingEpisodeStreams = false) }
+        switchToSourceStream(stream)
+        return
+    }
+    if (pendingSourceSwitchPositionMs != null) clearPendingInitialResumePosition()
     if (openExternalStreamInBrowser(stream = stream, fromEpisodePanel = true)) {
         return
     }
@@ -1963,7 +1995,7 @@ internal fun PlayerRuntimeController.playNextEpisode(userInitiated: Boolean = fa
             fun trySelectStream(data: List<AddonStreams>): Stream? {
                 val orderedStreams = StreamAutoPlaySelector.orderAddonStreams(data, installedAddonOrder, preferredServerNames)
                 val allStreams = orderedStreams.flatMap { it.streams }
-                if (cinemaEpisode) return cinemaPreferredStream(allStreams, playerSettings.cinemaPreferredQuality)
+                if (cinemaEpisode) return cinemaContinuationStream(allStreams, currentStreamBingeGroup)
                 return StreamAutoPlaySelector.selectAutoPlayStream(
                     streams = allStreams,
                     mode = effectiveMode,
@@ -2021,6 +2053,7 @@ internal fun PlayerRuntimeController.playNextEpisode(userInitiated: Boolean = fa
             }
 
             fun tryFilenameOnly(data: List<AddonStreams>): Stream? {
+                if (cinemaEpisode) return trySelectStream(data)
                 val nextFilename = com.nuvio.tv.core.player.FilenameEpisodeMatcher.buildNextFilename(
                     filename = currentFilename.orEmpty(),
                     currentSeason = _uiState.value.currentSeason,

@@ -426,6 +426,7 @@ fun StreamScreen(
                 backdropUrl = uiState.backdrop ?: uiState.poster,
                 logoUrl = uiState.logo,
                 title = uiState.title,
+                logoCaption = uiState.logoCaption,
                 message = if (uiState.directAutoPlayMessage != null) {
                     uiState.directAutoPlayMessage
                 } else {
@@ -443,6 +444,7 @@ fun StreamScreen(
                 LeftContentSection(
                     title = uiState.title,
                     logo = uiState.logo,
+                    logoCaption = uiState.logoCaption,
                     isEpisode = uiState.isEpisode,
                     season = uiState.season,
                     episode = uiState.episode,
@@ -644,6 +646,7 @@ private fun StreamGradientLayer(
 private fun LeftContentSection(
     title: String,
     logo: String?,
+    logoCaption: String?,
     isEpisode: Boolean,
     season: Int?,
     episode: Int?,
@@ -654,16 +657,6 @@ private fun LeftContentSection(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var logoLoadFailed by remember(logo) { mutableStateOf(false) }
-    val density = LocalDensity.current
-    val logoModel = remember(context, logo) {
-        logo?.let { image ->
-            ImageRequest.Builder(context)
-                .data(image)
-                .crossfade(false)
-                .build()
-        }
-    }
     val infoText = remember(genres, year) {
         listOfNotNull(genres, year).joinToString(" • ")
     }
@@ -676,27 +669,10 @@ private fun LeftContentSection(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxWidth(0.8f)
         ) {
-            if (logoModel != null && !logoLoadFailed) {
-                AsyncImage(
-                    model = logoModel,
-                    contentDescription = title,
-                    onError = { logoLoadFailed = true },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(120.dp),
-                    contentScale = ContentScale.Fit,
-                    alignment = Alignment.Center
-                )
-            } else {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.displaySmall,
-                    color = NuvioTheme.colors.TextPrimary,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center
-                )
-            }
+            com.nuvio.tv.ui.components.CinemaTitleArtwork(
+                title = title, logo = logo, caption = logoCaption,
+                height = 120.dp, modifier = Modifier.fillMaxWidth()
+            )
 
             // Show episode info or movie info
             if (isEpisode && season != null && episode != null) {
@@ -1014,17 +990,32 @@ internal fun CinemaHallQualityVoicePicker(
     streams: List<Stream>,
     onStreamSelected: (Stream) -> Unit,
     firstTabFocusRequester: FocusRequester? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    playingQuality: String? = null,
+    embeddedVoices: List<CinemaVoiceChoice> = emptyList(),
+    onVoiceSelected: (Int) -> Unit = {}
 ) {
+    val initialFocus = firstTabFocusRequester ?: remember { FocusRequester() }
     val order = remember { listOf("4K", "2K", "1080p", "720p", "576p", "480p", "360p", "240p") }
-    val groups = remember(streams) {
-        streams.groupBy { it.name.orEmpty().removePrefix("CinemaHall · ").trim().ifEmpty { "Не указано" } }
+    val groups = remember(streams, playingQuality, embeddedVoices.isNotEmpty()) {
+        val grouped = cinemaSelectableStreams(streams).groupBy { it.name.orEmpty().removePrefix("CinemaHall · ").trim().ifEmpty { "Не указано" } }.toMutableMap()
+        if (!playingQuality.isNullOrBlank() && embeddedVoices.isNotEmpty()) grouped.putIfAbsent(playingQuality, emptyList())
+        grouped
             .toList()
             .sortedWith(compareBy({ order.indexOf(it.first).let { rank -> if (rank < 0) 99 else rank } }, { it.first }))
     }
-    var quality by remember(groups) { mutableStateOf(groups.firstOrNull()?.first.orEmpty()) }
+    LaunchedEffect(groups.isNotEmpty()) {
+        if (groups.isNotEmpty() && firstTabFocusRequester == null) {
+            androidx.compose.runtime.withFrameNanos { }
+            runCatching { initialFocus.requestFocus() }
+        }
+    }
+    var quality by remember { mutableStateOf(playingQuality ?: groups.firstOrNull()?.first.orEmpty()) }
+    LaunchedEffect(groups) { if (groups.none { it.first == quality }) quality = groups.firstOrNull()?.first.orEmpty() }
+    val localVoices = if (quality == playingQuality) embeddedVoices else emptyList()
     val voices = groups.firstOrNull { it.first == quality }?.second.orEmpty()
-        .distinctBy { it.title.orEmpty().trim().lowercase() }
+        .let(::cinemaVoiceChoices)
+        .filterNot { stream -> localVoices.any { it.key == app.cinemahall.tv.Logic.voiceKey(stream.title.orEmpty()) } }
     Column(
         modifier = modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.lg)
@@ -1039,7 +1030,7 @@ internal fun CinemaHallQualityVoicePicker(
                 val selected = quality == entry.first
                 Card(
                     onClick = { quality = entry.first },
-                    modifier = if (entry == groups.firstOrNull() && firstTabFocusRequester != null) Modifier.focusRequester(firstTabFocusRequester) else Modifier,
+                    modifier = if (entry == groups.firstOrNull()) Modifier.focusRequester(initialFocus) else Modifier,
                     colors = CardDefaults.colors(
                         containerColor = if (selected) NuvioTheme.colors.Secondary else NuvioTheme.colors.BackgroundCard,
                         focusedContainerColor = NuvioTheme.colors.Secondary
@@ -1068,7 +1059,19 @@ internal fun CinemaHallQualityVoicePicker(
             verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
             modifier = Modifier.weight(1f)
         ) {
-            itemsIndexed(voices, key = { index, _ -> index }) { _, stream ->
+            items(localVoices, key = { "voice:${it.index}" }) { voice ->
+                Card(
+                    onClick = { onVoiceSelected(voice.index) },
+                    colors = CardDefaults.colors(containerColor = NuvioTheme.colors.BackgroundCard, focusedContainerColor = NuvioTheme.colors.Secondary),
+                    border = CardDefaults.border(focusedBorder = Border(border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs), shape = RoundedCornerShape(NuvioTheme.radii.sm))),
+                    shape = CardDefaults.shape(shape = RoundedCornerShape(NuvioTheme.radii.sm))
+                ) {
+                    Text(text = voice.label + if (voice.selected) " · выбрано" else "",
+                        style = MaterialTheme.typography.bodyLarge, color = NuvioTheme.colors.TextPrimary,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp))
+                }
+            }
+            itemsIndexed(voices, key = { _, stream -> cinemaVoiceChoiceKey(stream) }) { _, stream ->
                 Card(
                     onClick = { onStreamSelected(stream) },
                     colors = CardDefaults.colors(
@@ -1081,12 +1084,13 @@ internal fun CinemaHallQualityVoicePicker(
                     )),
                     shape = CardDefaults.shape(shape = RoundedCornerShape(NuvioTheme.radii.sm))
                 ) {
-                    Text(
-                        text = stream.title?.takeIf { it.isNotBlank() } ?: "Озвучка не указана",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = NuvioTheme.colors.TextPrimary,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)
-                    )
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(text = stream.title?.takeIf { it.isNotBlank() } ?: "Озвучка не указана",
+                            style = MaterialTheme.typography.bodyLarge, color = NuvioTheme.colors.TextPrimary)
+                        cinemaTechnologyLabel(stream)?.let { label ->
+                            Text(text = label, style = MaterialTheme.typography.labelMedium, color = NuvioTheme.colors.Secondary)
+                        }
+                    }
                 }
             }
         }

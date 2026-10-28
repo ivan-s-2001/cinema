@@ -66,7 +66,9 @@ data class HeroPreview(
     val frozenBackdropUrl: String? = null,
     /** Same idea for the logo URL. */
     val frozenLogoUrl: String? = null,
-    val kinopoiskRatingText: String? = null
+    val kinopoiskRatingText: String? = null,
+    val logoCaption: String? = null,
+    val cinemaRatings: List<com.nuvio.tv.domain.model.CinemaRating> = emptyList()
 )
 
 @Immutable
@@ -483,6 +485,7 @@ internal fun buildCatalogItem(
     val heroPreview = HeroPreview(
         title = item.name,
         logo = item.logo,
+        logoCaption = item.logoCaption,
         description = item.description,
         contentTypeText = when (item.apiType.lowercase()) {
             "movie" -> strTypeMovie.ifBlank { item.apiType.replaceFirstChar { ch -> ch.uppercase() } }
@@ -496,6 +499,7 @@ internal fun buildCatalogItem(
             ?.let { String.format("%.1f", it) },
         kinopoiskRatingText = item.cinemaRatings.firstOrNull { it.source == "kinopoisk" }
             ?.let { String.format(java.util.Locale.ROOT, "%.1f", it.value) },
+        cinemaRatings = item.cinemaRatings,
         ageRatingText = item.ageRating,
         statusText = item.status,
         countryText = item.country,

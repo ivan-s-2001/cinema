@@ -574,6 +574,7 @@ class PlayerRuntimeController(
     internal var mpvHardwareDecodeModeSetting: MpvHardwareDecodeMode = MpvHardwareDecodeMode.AUTO_SAFE
     internal var mpvPreferredAudioLanguages: List<String> = emptyList()
     internal var currentStreamBingeGroup: String? = navigationArgs.bingeGroup
+    internal var cinemaAudioSelectionKey: String? = null
     // Per-device delay + current stream's behaviorHints.audioDelayMs + the user's tweak on that stream.
     internal var audioDelayParts: AudioDelayParts = AudioDelayParts().withStream(navigationArgs.audioDelayMs ?: 0, navigationArgs.audioDelayLanguage)
     internal var hasAppliedRememberedAudioSelection: Boolean = false
@@ -651,6 +652,7 @@ class PlayerRuntimeController(
             }
         }
     internal var pendingResumeProgress: WatchProgress? = null
+    internal var pendingSourceSwitchPositionMs: Long? = null
     internal var hasRetriedCurrentStreamAfter416: Boolean = false
     internal var isReleasingPlayer: Boolean = false
     internal var cachedDecoderPriority: Int = 1

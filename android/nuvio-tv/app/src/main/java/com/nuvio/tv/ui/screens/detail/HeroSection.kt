@@ -204,17 +204,17 @@ fun HeroContentSection(
         ) {
             // Logo/Title — always visible during trailer, animates size
             if (shouldShowLogo) {
-                AsyncImage(
-                    model = logoModel,
-                    contentDescription = meta.name,
-                    onError = { logoLoadFailed = true },
-                    modifier = Modifier
-                        .height(logoHeight)
-                        .fillMaxWidth(logoMaxWidth)
-                        .padding(bottom = logoBottomPadding),
-                    contentScale = ContentScale.Fit,
-                    alignment = Alignment.CenterStart
-                )
+                Column(modifier = Modifier.fillMaxWidth(logoMaxWidth).padding(bottom = logoBottomPadding)) {
+                    AsyncImage(
+                        model = logoModel,
+                        contentDescription = meta.name,
+                        onError = { logoLoadFailed = true },
+                        modifier = Modifier.height(logoHeight).fillMaxWidth(),
+                        contentScale = ContentScale.Fit,
+                        alignment = if (meta.logoCaption.isNullOrBlank()) Alignment.CenterStart else Alignment.Center
+                    )
+                    com.nuvio.tv.ui.components.CinemaLogoCaption(meta.logoCaption)
+                }
             } else {
                 // Text title hides entirely during trailer
                 AnimatedVisibility(

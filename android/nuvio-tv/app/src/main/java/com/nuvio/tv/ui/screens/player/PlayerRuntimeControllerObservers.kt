@@ -342,14 +342,14 @@ internal fun PlayerRuntimeController.observeSubtitleSettings() {
                     subtitleStyle = settings.subtitleStyle,
                     loadingOverlayEnabled = settings.loadingOverlayEnabled,
                     showPlayerLoadingStatus = settings.showPlayerLoadingStatus,
-                    playbackIssueReportsEnabled = settings.playbackIssueReportsEnabled,
+                    playbackIssueReportsEnabled = false,
                     showLoadingOverlay = shouldShowOverlay,
                     loadingIssueReportVisible = if (settings.playbackIssueReportsEnabled) {
                         state.loadingIssueReportVisible
                     } else {
                         false
                     },
-                    pauseOverlayEnabled = settings.pauseOverlayEnabled,
+                    pauseOverlayEnabled = false,
                     osdClockEnabled = settings.osdClockEnabled,
                     internalPlayerEngine = resolvedInternalPlayerEngine,
                     frameRateMatchingMode = settings.frameRateMatchingMode,
@@ -682,6 +682,11 @@ internal fun PlayerRuntimeController.fetchSkipIntervals(id: String?, season: Int
 }
 
 internal fun PlayerRuntimeController.tryApplyPendingResumeProgress(player: Player) {
+    pendingSourceSwitchPositionMs?.let { position ->
+        if (player.isCurrentMediaItemSeekable) player.seekTo(cinemaSourceSwitchTarget(position, player.duration))
+        clearPendingInitialResumePosition()
+        return
+    }
     val saved = pendingResumeProgress ?: return
     if (!player.isCurrentMediaItemSeekable) {
         pendingResumeProgress = null
@@ -703,6 +708,7 @@ internal fun PlayerRuntimeController.tryApplyPendingResumeProgress(player: Playe
 }
 
 internal fun PlayerRuntimeController.resolvePendingInitialResumePosition(): Long {
+    pendingSourceSwitchPositionMs?.let { return it.coerceAtLeast(0L) }
     val saved = pendingResumeProgress ?: return 0L
     val target = when {
         saved.duration > 0L -> saved.resolveResumePosition(saved.duration)
@@ -716,6 +722,7 @@ internal fun PlayerRuntimeController.resolvePendingInitialResumePosition(): Long
 }
 
 internal fun PlayerRuntimeController.clearPendingInitialResumePosition() {
+    pendingSourceSwitchPositionMs = null
     pendingResumeProgress = null
     _uiState.update { it.copy(pendingSeekPosition = null) }
 }
@@ -789,6 +796,7 @@ internal fun PlayerRuntimeController.maybeScheduleStallWatchdog() {
     stallWatchdogJob = scope.launch {
         var lastBufferedPosition = player.bufferedPosition
         var lastAdvanceAtMs = System.currentTimeMillis()
+        val cinemaWaitStartedAt = lastAdvanceAtMs
 
         while (isActive) {
             delay(PlayerRuntimeController.STALL_WATCHDOG_POLL_INTERVAL_MS)
@@ -800,12 +808,22 @@ internal fun PlayerRuntimeController.maybeScheduleStallWatchdog() {
 
             val nowMs = System.currentTimeMillis()
             val bufferedNow = livePlayer.bufferedPosition
+            if (CinemaPlaybackPolicy.isProvider(currentStreamUrl) && CinemaPlaybackPolicy.timedOut(
+                    nowMs - cinemaWaitStartedAt, nowMs - lastAdvanceAtMs, hasRenderedFirstFrame, !livePlayer.playWhenReady)) {
+                livePlayer.pause()
+                _uiState.update { it.copy(error = "Источник не передаёт видео. Попробуйте другое качество или озвучку.",
+                    isBuffering = false, showLoadingOverlay = false, showControls = true) }
+                return@launch
+            }
             if (bufferedNow > lastBufferedPosition) {
                 // Real progress — reset the stall timer.
                 lastBufferedPosition = bufferedNow
                 lastAdvanceAtMs = nowMs
                 continue
             }
+
+            // Torrent sources have a bounded wait; seeking through a stalled source cannot create data.
+            if (CinemaPlaybackPolicy.isProvider(currentStreamUrl)) continue
 
             val stalledForMs = nowMs - lastAdvanceAtMs
             when (
@@ -826,7 +844,7 @@ internal fun PlayerRuntimeController.maybeScheduleStallWatchdog() {
                             "during STATE_BUFFERING (playhead=${livePlayer.currentPosition.coerceAtLeast(0L)}); " +
                             "skipping self-seek because duration is unknown"
                     )
-                    return@launch
+                    if (!CinemaPlaybackPolicy.isProvider(currentStreamUrl)) return@launch
                 }
                 PlayerStallWatchdogPolicy.Decision.SkipBufferedNotAhead -> {
                     Log.w(
@@ -835,7 +853,7 @@ internal fun PlayerRuntimeController.maybeScheduleStallWatchdog() {
                             "during STATE_BUFFERING (playhead=${livePlayer.currentPosition.coerceAtLeast(0L)}); " +
                             "skipping self-seek because buffered position is not ahead"
                     )
-                    return@launch
+                    if (!CinemaPlaybackPolicy.isProvider(currentStreamUrl)) return@launch
                 }
                 PlayerStallWatchdogPolicy.Decision.SkipTargetNotForward -> {
                     Log.w(
@@ -987,8 +1005,8 @@ internal fun PlayerRuntimeController.observePlayerStatsHud() {
             .collect { (buttonAvailable, isHudEnabled) ->
                 _uiState.update {
                     it.copy(
-                        playerStatsHudButtonAvailable = buttonAvailable,
-                        playerStatsHudEnabled = isHudEnabled
+                        playerStatsHudButtonAvailable = false,
+                        playerStatsHudEnabled = false
                     )
                 }
             }

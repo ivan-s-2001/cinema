@@ -75,6 +75,7 @@ data class PlayerUiState(
     val currentStreamAddonName: String? = null, // Addon name of the currently playing stream
     val backdrop: String? = null,
     val logo: String? = null,
+    val logoCaption: String? = null,
     val description: String? = null,
     val castMembers: List<MetaCastMember> = emptyList(),
     val showControls: Boolean = true,

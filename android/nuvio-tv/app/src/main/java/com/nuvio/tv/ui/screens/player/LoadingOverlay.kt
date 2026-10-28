@@ -58,6 +58,7 @@ fun LoadingOverlay(
     backdropUrl: String?,
     logoUrl: String?,
     title: String? = null,
+    logoCaption: String? = null,
     message: String? = null,
     progress: Float? = null,
     modifier: Modifier = Modifier
@@ -200,6 +201,9 @@ fun LoadingOverlay(
                                 )
                             }
                         }
+                        com.nuvio.tv.ui.components.CinemaLogoCaption(
+                            logoCaption, Modifier.width(320.dp)
+                        )
                     } else if (!title.isNullOrBlank()) {
                         Text(
                             text = title,

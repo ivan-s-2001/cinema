@@ -351,7 +351,7 @@ class MetaDetailsViewModel @Inject constructor(
             is MetaDetailsEvent.OnCommentsEpisodeSelected -> selectCommentsEpisode(event.video)
             MetaDetailsEvent.OnPlayClick -> { /* Start playback */ }
             MetaDetailsEvent.OnToggleLibrary -> toggleLibrary()
-            MetaDetailsEvent.OnRetry -> loadMeta()
+            MetaDetailsEvent.OnRetry -> { metaRepository.clearCache(); loadMeta() }
             MetaDetailsEvent.OnRetryComments -> _uiState.value.meta?.let { loadComments(it, forceRefresh = true) }
             MetaDetailsEvent.OnLoadMoreComments -> loadMoreComments()
             is MetaDetailsEvent.OnCommentSelected -> openCommentOverlay(event.review)
@@ -1276,6 +1276,11 @@ class MetaDetailsViewModel @Inject constructor(
     }
 
     private fun loadMoreLikeThisAsync(meta: Meta) {
+        if (meta.id.startsWith("ch:")) {
+            moreLikeThisJob?.cancel()
+            _uiState.update { it.copy(moreLikeThis = meta.cinemaRelated, moreLikeThisSource = null) }
+            return
+        }
         moreLikeThisJob?.cancel()
         moreLikeThisJob = viewModelScope.launch {
             val source = when {
@@ -1711,6 +1716,25 @@ class MetaDetailsViewModel @Inject constructor(
             "movie", "film" -> ContentType.MOVIE
             "series", "tv", "show", "tvshow" -> ContentType.SERIES
             else -> null
+        }
+    }
+
+    init {
+        viewModelScope.launch {
+            _uiState.map { it.meta?.id to it.selectedSeason }.distinctUntilChanged().collectLatest { (id, season) ->
+                if (id?.startsWith("ch:") != true || season < 1) return@collectLatest
+                try {
+                    val images = com.nuvio.tv.data.remote.CinemaSeasonArtwork.load(id, season)
+                    _uiState.update { state ->
+                        val current = state.meta
+                        if (current == null || current.id != id) state else {
+                            val updated = current.copy(videos = current.videos.map { com.nuvio.tv.data.remote.CinemaSeasonArtwork.merge(it, images) })
+                            state.copy(meta = updated, episodesForSeason = getEpisodesForSeason(updated, state.selectedSeason))
+                        }
+                    }
+                } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
+                catch (failure: Exception) { android.util.Log.w("CinemaHall", "Season artwork unavailable: $season", failure) }
+            }
         }
     }
 

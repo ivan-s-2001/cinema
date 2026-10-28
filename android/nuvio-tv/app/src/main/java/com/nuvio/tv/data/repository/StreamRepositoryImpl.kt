@@ -62,6 +62,7 @@ class StreamRepositoryImpl @Inject constructor(
     private val serverStreams: ServerStreams
 ) : StreamRepository {
     private val streamSearchSessions = StreamSearchSessionCache()
+    private val cinemaDiscoveryComplete = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
     private val localPluginSearchPaused = MutableStateFlow(false)
 
     override fun setLocalPluginSearchPaused(paused: Boolean) {
@@ -216,6 +217,8 @@ class StreamRepositoryImpl @Inject constructor(
                 streamAddons.forEach { addon ->
                     launch {
                         try {
+                            var discoveryAttempt = 0
+                            do {
                             val streamsResult = getStreamsFromAddon(addon, type, videoId)
                             when (streamsResult) {
                                 is NetworkResult.Success -> {
@@ -230,7 +233,7 @@ class StreamRepositoryImpl @Inject constructor(
                                                 streams = namedStreams
                                             )
                                         )
-                                    } else {
+                                    } else if (cinemaDiscoveryComplete["${addon.baseUrl}|$type|$videoId"] != false) {
                                         // Stream endpoint returned empty - try inline
                                         // streams from meta response as fallback.
                                         val inlineStreams = fetchInlineStreamsFromMeta(
@@ -254,6 +257,10 @@ class StreamRepositoryImpl @Inject constructor(
                                 }
                                 NetworkResult.Loading -> Unit
                             }
+                            val continuing = streamsResult is NetworkResult.Success && cinemaDiscoveryComplete["${addon.baseUrl}|$type|$videoId"] == false
+                            if (!continuing || ++discoveryAttempt >= 20) break
+                            kotlinx.coroutines.delay(1500)
+                            } while (true)
                         } catch (e: Exception) {
                             if (e is CancellationException) throw e
                             Log.e(TAG, "Addon ${addon.name} failed: ${e.message}")
@@ -655,6 +662,8 @@ class StreamRepositoryImpl @Inject constructor(
 
         return when (val result = safeApiCall(context) { api.getStreams(streamUrl) }) {
             is NetworkResult.Success -> {
+                if (cinemaDiscoveryComplete.size >= 64) cinemaDiscoveryComplete.keys.firstOrNull()?.let { cinemaDiscoveryComplete.remove(it) }
+                cinemaDiscoveryComplete["${addon.baseUrl}|$type|$videoId"] = result.data.discoveryComplete
                 val streams = result.data.streams?.map { 
                     it.toDomain(addonName, addonLogo) 
                 } ?: emptyList()

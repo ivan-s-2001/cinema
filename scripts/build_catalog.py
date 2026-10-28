@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import http.client
 import json
+import logging
 import os
 import time
 import urllib.error
@@ -29,6 +30,7 @@ MAX_RESPONSE = 6 * 1024 * 1024
 _last_kino_request = 0.0
 _requests = Counter()
 _failed = Counter()
+log = logging.getLogger("cinemahall.catalog")
 
 
 class SameHostRedirect(urllib.request.HTTPRedirectHandler):
@@ -67,6 +69,7 @@ def fetch(url, *, key="", body=None, optional=False):
     host = urllib.parse.urlparse(url).hostname or "unknown"
     for attempt in range(5):
         try:
+            log.info("Request %s%s attempt %d/5", host, urllib.parse.urlparse(url).path, attempt + 1)
             _requests[host] += 1
             with _opener.open(request, timeout=12) as response:
                 if int(response.headers.get("Content-Length", "0")) > MAX_RESPONSE:
@@ -74,14 +77,18 @@ def fetch(url, *, key="", body=None, optional=False):
                 payload = response.read(MAX_RESPONSE + 1)
                 if len(payload) > MAX_RESPONSE:
                     raise ValueError("Response too large")
-                return json.loads(payload)
+                result = json.loads(payload)
+                log.info("Received %s bytes from %s%s", len(payload), host, urllib.parse.urlparse(url).path)
+                return result
         except urllib.error.HTTPError as error:
             if error.code in (429, 503) and attempt < 4:
                 try:
                     delay = max(2 ** attempt, int(error.headers.get("Retry-After", "0")))
                 except ValueError:
                     delay = 2 ** attempt
-                time.sleep(min(60, max(1, delay)))
+                delay = min(60, max(1, delay))
+                log.warning("HTTP %d from %s; retry in %ds", error.code, host, delay)
+                time.sleep(delay)
                 continue
             if optional:
                 _failed[host] += 1
@@ -90,6 +97,7 @@ def fetch(url, *, key="", body=None, optional=False):
         except (OSError, http.client.HTTPException):
             # KinoAPI occasionally cuts chunked responses mid-body; retry a fresh connection.
             if attempt < 4:
+                log.warning("Connection failed for %s; retry %d/5", host, attempt + 2)
                 time.sleep(min(8, 2 ** attempt))
                 continue
             if optional:
@@ -577,6 +585,7 @@ def split_snapshot(result, shard_size=250):
 
 
 def main():
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(description="Build a KinoAPI-led static metadata catalog")
     parser.add_argument("--pages", type=int, default=15, help="Popular pages per movie/TV type (100 titles each)")
     parser.add_argument("--enrich", type=int, default=100, help="Maximum optional cross-provider enrichments")

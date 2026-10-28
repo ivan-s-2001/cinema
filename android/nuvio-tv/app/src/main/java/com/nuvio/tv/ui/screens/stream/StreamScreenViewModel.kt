@@ -147,13 +147,13 @@ class StreamScreenViewModel @Inject constructor(
     private val contentLanguage: String? = savedStateHandle.getOptionalString("contentLanguage")
     private val playbackProfileId: Int = savedStateHandle.get<String>("profileId")?.toIntOrNull()
         ?: profileManager.activeProfileId.value
-    private val manualSelection: Boolean = savedStateHandle.get<String>("manualSelection")
-        ?.toBooleanStrictOrNull()
-        ?: false
+    private val manualSelection: Boolean = cinemaRequiresInitialSelection(
+        videoId, savedStateHandle.get<String>("manualSelection")?.toBooleanStrictOrNull() ?: false
+    )
     private val streamCacheKey: String = "${contentType.lowercase()}|$videoId"
     private val partyKey: String = com.nuvio.tv.core.party.partyMediaKey(
         metaType = contentType,
-        metaId = contentId ?: videoId.substringBefore(":"),
+        metaId = contentId ?: com.nuvio.tv.core.streams.videoContentId(videoId),
         season = season,
         episode = episode
     )
@@ -195,7 +195,7 @@ class StreamScreenViewModel @Inject constructor(
     )
     val uiState: StateFlow<StreamScreenUiState> = _uiState.asStateFlow()
     val watchProgress = run {
-        val id = contentId ?: videoId.substringBefore(":")
+        val id = contentId ?: com.nuvio.tv.core.streams.videoContentId(videoId)
         if (season != null && episode != null) {
             watchProgressRepository.getEpisodeProgress(id, season, episode, playbackProfileId)
         } else {
@@ -297,7 +297,7 @@ class StreamScreenViewModel @Inject constructor(
                 }
         }
         if (manualSelection) {
-            // Returning from a playback error: keep the user on stream selection.
+            // Initial launches and retries show choices before creating the player.
             autoPlayHandledForSession = true
             directAutoPlayModeInitializedForSession = true
             directAutoPlayFlowEnabledForSession = false
@@ -482,7 +482,7 @@ class StreamScreenViewModel @Inject constructor(
                                 infoHash = cached.infoHash,
                                 ytId = null,
                                 headers = cached.headers,
-                                contentId = contentId ?: videoId.substringBefore(":"),
+                                contentId = contentId ?: com.nuvio.tv.core.streams.videoContentId(videoId),
                                 contentType = contentType,
                                 contentName = contentName ?: title,
                                 poster = poster,
@@ -630,11 +630,7 @@ class StreamScreenViewModel @Inject constructor(
                 // chance to return higher-quality streams before the selector
                 // picks from whatever is available.
                 val shouldAutoSelect = !autoPlayHandledForSession && !resolvedAutoPlayTarget && isAllLoaded
-                val cinemaStreams = allStreams.filter { it.addonName == "CinemaHall" }
-                val selectedAutoPlayStream = if (!manualSelection && videoId.startsWith("ch:") &&
-                    !autoPlayHandledForSession && !resolvedAutoPlayTarget && cinemaStreams.isNotEmpty()) {
-                    cinemaPreferredStream(cinemaStreams, playerSettings.cinemaPreferredQuality)
-                } else if (earlyBingeGroupMatch != null) {
+                val selectedAutoPlayStream = if (earlyBingeGroupMatch != null) {
                     earlyBingeGroupMatch
                 } else if (!shouldAutoSelect) {
                     null
@@ -1038,7 +1034,7 @@ class StreamScreenViewModel @Inject constructor(
             } == true) return true
         if (contentType.equals("other", ignoreCase = true)) return true
 
-        val canonicalVideoMetaId = videoId.substringBefore(":")
+        val canonicalVideoMetaId = com.nuvio.tv.core.streams.videoContentId(videoId)
         return !metaId.equals(canonicalVideoMetaId, ignoreCase = true)
     }
 
@@ -1206,8 +1202,7 @@ class StreamScreenViewModel @Inject constructor(
     }
 
     private fun loadMissingMetaDetailsIfNeeded() {
-        val requiresMetadataLookup = genres.isNullOrBlank() || year.isNullOrBlank() || runtime == null
-        val metaId = contentId ?: videoId.substringBefore(":")
+        val metaId = contentId ?: com.nuvio.tv.core.streams.videoContentId(videoId)
         if (metaId.isBlank() || contentType.isBlank()) return
 
         viewModelScope.launch {
@@ -1218,7 +1213,6 @@ class StreamScreenViewModel @Inject constructor(
 
             val meta = result.data
             playbackMetaVideos = meta.videos
-            if (!requiresMetadataLookup) return@launch
             val metaGenres = meta.genres.takeIf { it.isNotEmpty() }
                 ?.joinToString(" • ") { localizedGenreLabel(context, it) }
             val metaYear = meta.releaseInfo
@@ -1229,13 +1223,15 @@ class StreamScreenViewModel @Inject constructor(
             _uiState.update { state ->
                 val posterValue = state.poster ?: meta.poster
                 val backdropValue = state.backdrop ?: meta.backdropUrl
-                val logoValue = state.logo ?: meta.logo
+                val logoValue = meta.logo?.takeIf { it.isNotBlank() } ?: state.logo
+                val logoCaption = if (!meta.logo.isNullOrBlank()) meta.logoCaption else state.logoCaption
                 val genresValue = state.genres?.takeIf { it.isNotBlank() } ?: metaGenres
                 val yearValue = state.year?.takeIf { it.isNotBlank() } ?: metaYear
                 val runtimeValue = state.runtime ?: metaRuntime
                 if (state.poster == posterValue &&
                     state.backdrop == backdropValue &&
                     state.logo == logoValue &&
+                    state.logoCaption == logoCaption &&
                     state.genres == genresValue &&
                     state.year == yearValue &&
                     state.runtime == runtimeValue
@@ -1246,6 +1242,7 @@ class StreamScreenViewModel @Inject constructor(
                         poster = posterValue,
                         backdrop = backdropValue,
                         logo = logoValue,
+                        logoCaption = logoCaption,
                         genres = genresValue,
                         year = yearValue,
                         runtime = runtimeValue
@@ -1560,7 +1557,7 @@ class StreamScreenViewModel @Inject constructor(
             infoHash = stream.getEffectiveInfoHash(),
             ytId = stream.ytId,
             headers = stream.behaviorHints?.proxyHeaders?.request,
-            contentId = contentId ?: videoId.substringBefore(":"),  // Use explicit contentId or extract from videoId
+            contentId = contentId ?: com.nuvio.tv.core.streams.videoContentId(videoId),  // Use explicit contentId or extract from videoId
             contentType = contentType,
             contentName = contentName ?: title,
             poster = poster,
@@ -1838,7 +1835,7 @@ class StreamScreenViewModel @Inject constructor(
         // Will be set to real timestamp right before the player intent is sent.
         externalPlayerLaunchTimeMs = Long.MAX_VALUE
 
-        val contentId = playbackInfo.contentId ?: videoId.substringBefore(":")
+        val contentId = playbackInfo.contentId ?: com.nuvio.tv.core.streams.videoContentId(videoId)
         val metadata = com.nuvio.tv.core.player.ExternalPlaybackMetadata(
             contentId = contentId,
             contentType = playbackInfo.contentType ?: "movie",

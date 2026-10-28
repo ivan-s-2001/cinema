@@ -1,0 +1,1616 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cinemahome.duckdns.org/schemas/catalog-v2",
+  "$defs": {
+    "Availability": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "enum": [
+            "unknown",
+            "available",
+            "unavailable"
+          ]
+        },
+        "checkedAt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expiresAt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "checkedAt",
+        "expiresAt"
+      ],
+      "additionalProperties": false
+    },
+    "Rating": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "value": {
+          "type": "number"
+        },
+        "scale": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "votes": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "fetchedAt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "source",
+        "value",
+        "scale",
+        "votes",
+        "fetchedAt"
+      ],
+      "additionalProperties": false
+    },
+    "TitleCard": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "movie",
+            "series"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "originalTitle": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "year": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "poster": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "backdrop": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ratings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Rating"
+          }
+        },
+        "ageRating": {
+          "type": [
+            "string",
+            "number",
+            "null"
+          ]
+        },
+        "releaseState": {
+          "enum": [
+            "upcoming",
+            "released",
+            "unknown"
+          ]
+        },
+        "availability": {
+          "$ref": "#/$defs/Availability"
+        },
+        "updatedAt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "genres": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "runtimeMinutes": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "logo": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "logoLanguage": {
+          "enum": [
+            "ru",
+            "en",
+            null
+          ]
+        },
+        "logoCaption": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "title",
+        "originalTitle",
+        "year",
+        "poster",
+        "backdrop",
+        "ratings",
+        "ageRating",
+        "releaseState",
+        "availability",
+        "updatedAt"
+      ],
+      "additionalProperties": false
+    },
+    "Credit": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "character": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "photo": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "character",
+        "photo"
+      ],
+      "additionalProperties": false
+    },
+    "TitleDetail": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "movie",
+            "series"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "originalTitle": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "year": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "poster": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "backdrop": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ratings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Rating"
+          }
+        },
+        "ageRating": {
+          "type": [
+            "string",
+            "number",
+            "null"
+          ]
+        },
+        "releaseState": {
+          "enum": [
+            "upcoming",
+            "released",
+            "unknown"
+          ]
+        },
+        "availability": {
+          "$ref": "#/$defs/Availability"
+        },
+        "updatedAt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "titlesByLanguage": {
+          "type": "object",
+          "properties": {
+            "ru": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "en": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "original": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "ru",
+            "en",
+            "original"
+          ],
+          "additionalProperties": false
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "releaseDate": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "runtimeMinutes": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "genres": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "countries": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "languages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "externalIds": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "cast": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Credit"
+          }
+        },
+        "directors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Credit"
+          }
+        },
+        "writers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Credit"
+          }
+        },
+        "logo": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "metadataState": {
+          "enum": [
+            "ready",
+            "partial"
+          ]
+        },
+        "logoLanguage": {
+          "enum": [
+            "ru",
+            "en",
+            null
+          ]
+        },
+        "logoCaption": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "title",
+        "originalTitle",
+        "year",
+        "poster",
+        "backdrop",
+        "ratings",
+        "ageRating",
+        "releaseState",
+        "availability",
+        "updatedAt",
+        "titlesByLanguage",
+        "aliases",
+        "description",
+        "releaseDate",
+        "status",
+        "runtimeMinutes",
+        "genres",
+        "countries",
+        "languages",
+        "externalIds",
+        "cast",
+        "directors",
+        "writers",
+        "logo",
+        "metadataState"
+      ],
+      "additionalProperties": false
+    },
+    "Title": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "$ref": "#/$defs/TitleDetail"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "additionalProperties": false
+    },
+    "Page": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TitleCard"
+          }
+        },
+        "nextCursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor"
+      ],
+      "additionalProperties": false
+    },
+    "RowSpec": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "movie",
+            "series"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "Row": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "movie",
+            "series"
+          ]
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TitleCard"
+          }
+        },
+        "nextCursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "type",
+        "items",
+        "nextCursor"
+      ],
+      "additionalProperties": false
+    },
+    "Home": {
+      "type": "object",
+      "properties": {
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Row"
+          }
+        }
+      },
+      "required": [
+        "rows"
+      ],
+      "additionalProperties": false
+    },
+    "Config": {
+      "type": "object",
+      "properties": {
+        "apiVersion": {
+          "const": 2
+        },
+        "capabilities": {
+          "type": "object",
+          "properties": {
+            "home": {
+              "const": true
+            },
+            "search": {
+              "const": true
+            },
+            "discover": {
+              "const": true
+            },
+            "seasons": {
+              "const": true
+            },
+            "episodes": {
+              "const": true
+            },
+            "playbackStrategy": {
+              "const": "local"
+            },
+            "serverPlaybackOptions": {
+              "const": false
+            },
+            "profileSync": {
+              "const": false
+            },
+            "sourceDiscovery": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "home",
+            "search",
+            "discover",
+            "seasons",
+            "episodes",
+            "playbackStrategy",
+            "serverPlaybackOptions",
+            "profileSync",
+            "sourceDiscovery"
+          ],
+          "additionalProperties": false
+        },
+        "limits": {
+          "type": "object",
+          "properties": {
+            "pageSize": {
+              "const": 60
+            }
+          },
+          "required": [
+            "pageSize"
+          ],
+          "additionalProperties": false
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RowSpec"
+          }
+        }
+      },
+      "required": [
+        "apiVersion",
+        "capabilities",
+        "limits",
+        "rows"
+      ],
+      "additionalProperties": false
+    },
+    "Season": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "titleId": {
+          "type": "string"
+        },
+        "number": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "episodeCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id",
+        "titleId",
+        "number",
+        "episodeCount"
+      ],
+      "additionalProperties": false
+    },
+    "Seasons": {
+      "type": "object",
+      "properties": {
+        "titleId": {
+          "type": "string"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Season"
+          }
+        }
+      },
+      "required": [
+        "titleId",
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "Episode": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "titleId": {
+          "type": "string"
+        },
+        "seasonId": {
+          "type": "string"
+        },
+        "season": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "still": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "airAt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "runtimeMinutes": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "releaseState": {
+          "enum": [
+            "upcoming",
+            "released",
+            "unknown"
+          ]
+        },
+        "availability": {
+          "$ref": "#/$defs/Availability"
+        }
+      },
+      "required": [
+        "id",
+        "titleId",
+        "seasonId",
+        "season",
+        "number",
+        "title",
+        "description",
+        "still",
+        "airAt",
+        "runtimeMinutes",
+        "releaseState",
+        "availability"
+      ],
+      "additionalProperties": false
+    },
+    "EpisodeDetail": {
+      "type": "object",
+      "properties": {
+        "episode": {
+          "$ref": "#/$defs/Episode"
+        }
+      },
+      "required": [
+        "episode"
+      ],
+      "additionalProperties": false
+    },
+    "Episodes": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Episode"
+          }
+        },
+        "nextAfter": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "items",
+        "nextAfter"
+      ],
+      "additionalProperties": false
+    },
+    "NextEpisode": {
+      "type": "object",
+      "properties": {
+        "episode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Episode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "canAutoPlay": {
+          "type": "boolean"
+        },
+        "reason": {
+          "enum": [
+            "end_of_series",
+            "aired",
+            "not_aired"
+          ]
+        }
+      },
+      "required": [
+        "episode",
+        "canAutoPlay",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "Playback": {
+      "type": "object",
+      "properties": {
+        "titleId": {
+          "type": "string"
+        },
+        "strategy": {
+          "const": "local"
+        },
+        "matchIdentity": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "movie",
+                "series"
+              ]
+            },
+            "externalIds": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "names": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "year": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "externalIds",
+            "names",
+            "year"
+          ],
+          "additionalProperties": false
+        },
+        "availability": {
+          "$ref": "#/$defs/Availability"
+        }
+      },
+      "required": [
+        "titleId",
+        "strategy",
+        "matchIdentity",
+        "availability"
+      ],
+      "additionalProperties": false
+    },
+    "Error": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "retryable": {
+              "type": "boolean"
+            },
+            "requestId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "code",
+            "message",
+            "retryable",
+            "requestId"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "error"
+      ],
+      "additionalProperties": false
+    },
+    "SourceCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hash": {
+          "type": "string"
+        },
+        "torrent_download_link": {
+          "type": "string"
+        },
+        "resolution": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "translate_info": {
+          "type": "string"
+        },
+        "languages_parser": {
+          "type": "string"
+        },
+        "seeds": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "episodes_map_auto": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "hash",
+        "torrent_download_link",
+        "resolution",
+        "name",
+        "translate_info",
+        "languages_parser",
+        "seeds",
+        "episodes_map_auto"
+      ]
+    },
+    "SourceDiscovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "titleId": {
+          "type": "string"
+        },
+        "episode": {
+          "type": "string"
+        },
+        "engine": {
+          "const": "local"
+        },
+        "status": {
+          "const": "ready"
+        },
+        "candidates": {
+          "type": "array",
+          "maxItems": 60,
+          "items": {
+            "$ref": "#/$defs/SourceCandidate"
+          }
+        },
+        "discoveryComplete": {
+          "type": "boolean"
+        },
+        "availableReleases": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "nextOffset": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      },
+      "required": [
+        "titleId",
+        "episode",
+        "engine",
+        "status",
+        "candidates"
+      ]
+    },
+    "TvMetadata": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "$ref": "#/$defs/TitleDetail"
+        },
+        "meta": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "type": {
+              "enum": [
+                "movie",
+                "series"
+              ]
+            },
+            "name": {
+              "type": "string"
+            },
+            "poster": {
+              "type": "string"
+            },
+            "releaseInfo": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "background": {
+              "type": "string"
+            },
+            "runtime": {
+              "type": "string"
+            },
+            "released": {
+              "type": "string"
+            },
+            "imdb_id": {
+              "type": "string"
+            },
+            "imdbRating": {
+              "type": "string"
+            },
+            "genres": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "aliases": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "app_extras": {
+              "type": "object",
+              "properties": {
+                "certificationLocal": {
+                  "type": "string"
+                },
+                "cast": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "character": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "photo": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "personId": {
+                        "type": "string",
+                        "pattern": "^person:[a-f0-9]{32}$"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "character",
+                      "photo"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "directors": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "character": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "photo": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "personId": {
+                        "type": "string",
+                        "pattern": "^person:[a-f0-9]{32}$"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "character",
+                      "photo"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "writers": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "character": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "photo": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "personId": {
+                        "type": "string",
+                        "pattern": "^person:[a-f0-9]{32}$"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "character",
+                      "photo"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "additionalProperties": false
+            },
+            "cinemaRatings": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "number"
+                  },
+                  "scale": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "required": [
+                  "source",
+                  "label",
+                  "value",
+                  "scale"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "videos": {
+              "type": "array",
+              "maxItems": 10000,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "season": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "episode": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "thumbnail": {
+                    "type": "string"
+                  },
+                  "released": {
+                    "type": "string"
+                  },
+                  "overview": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "season",
+                  "episode",
+                  "title"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "logo": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "country": {
+              "type": "string"
+            },
+            "language": {
+              "type": "string"
+            },
+            "cast": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "director": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "writer": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "cinemaRelated": {
+              "type": "array",
+              "maxItems": 12,
+              "items": {
+                "$ref": "#/$defs/TvPreview"
+              }
+            },
+            "cinemaWatchOrders": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "order": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "totalParts": {
+                    "type": "integer"
+                  },
+                  "availableParts": {
+                    "type": "integer"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/TvPreview"
+                    }
+                  },
+                  "scope": {
+                    "enum": [
+                      "narrative",
+                      "universe"
+                    ]
+                  },
+                  "connections": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "fromTitleId": {
+                          "type": "string"
+                        },
+                        "toTitleId": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "enum": [
+                            "original",
+                            "sequel",
+                            "prequel",
+                            "spin_off",
+                            "alternate_sequel",
+                            "reboot",
+                            "interquel",
+                            "universe"
+                          ]
+                        },
+                        "source": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "fromTitleId",
+                        "toTitleId",
+                        "type",
+                        "source"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "order",
+                  "items",
+                  "totalParts",
+                  "availableParts",
+                  "scope",
+                  "connections"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "logoLanguage": {
+              "enum": [
+                "ru",
+                "en",
+                null
+              ]
+            },
+            "logoCaption": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "name",
+            "poster",
+            "releaseInfo",
+            "description",
+            "genres",
+            "aliases"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "title",
+        "meta"
+      ],
+      "additionalProperties": false
+    },
+    "TvPreview": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9:_-]{1,160}$"
+        },
+        "type": {
+          "enum": [
+            "movie",
+            "series"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "poster": {
+          "type": "string"
+        },
+        "background": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "releaseInfo": {
+          "type": "string"
+        },
+        "genres": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cinemaRatings": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "watchOrderPosition": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "logo": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cycleRoles": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "original",
+              "sequel",
+              "prequel",
+              "spin_off",
+              "alternate_sequel",
+              "reboot",
+              "interquel",
+              "universe"
+            ]
+          }
+        },
+        "cycleRoleLabel": {
+          "type": "string"
+        },
+        "logoLanguage": {
+          "enum": [
+            "ru",
+            "en",
+            null
+          ]
+        },
+        "logoCaption": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "name",
+        "poster"
+      ],
+      "additionalProperties": false
+    },
+    "Facets": {
+      "type": "object",
+      "properties": {
+        "genres": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "countries": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "years": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        }
+      },
+      "required": [
+        "genres",
+        "countries",
+        "years"
+      ],
+      "additionalProperties": false
+    },
+    "NarrativeCycle": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "order": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "totalParts": {
+          "type": "integer"
+        },
+        "availableParts": {
+          "type": "integer"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TvPreview"
+          }
+        },
+        "scope": {
+          "enum": [
+            "narrative",
+            "universe"
+          ]
+        },
+        "connections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "fromTitleId": {
+                "type": "string"
+              },
+              "toTitleId": {
+                "type": "string"
+              },
+              "type": {
+                "enum": [
+                  "original",
+                  "sequel",
+                  "prequel",
+                  "spin_off",
+                  "alternate_sequel",
+                  "reboot",
+                  "interquel",
+                  "universe"
+                ]
+              },
+              "source": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "fromTitleId",
+              "toTitleId",
+              "type",
+              "source"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "order",
+        "items",
+        "totalParts",
+        "availableParts",
+        "scope",
+        "connections"
+      ],
+      "additionalProperties": false
+    },
+    "Relations": {
+      "type": "object",
+      "properties": {
+        "titleId": {
+          "type": "string"
+        },
+        "cycles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NarrativeCycle"
+          }
+        },
+        "universes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NarrativeCycle"
+          }
+        }
+      },
+      "required": [
+        "titleId",
+        "cycles",
+        "universes"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

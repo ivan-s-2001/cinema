@@ -1,1 +1,22 @@
-{"name":"cinemahall-api","version":"0.1.0","private":true,"type":"module","engines":{"node":">=22"},"scripts":{"start":"node server.mjs"},"dependencies":{"mariadb":"^3.4.5"}}
+{
+  "name": "cinemahall-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test test/*.test.mjs ../tests/test_backend_catalog.mjs ../tests/test_catalog_client.mjs",
+    "test:integration": "node --test test/catalog-v2.test.mjs",
+    "catalog:refresh": "node sync-catalog.mjs refresh 10",
+    "catalog:backfill": "node backfill-catalog-identity.mjs"
+  },
+  "dependencies": {
+    "mariadb": "^3.4.5"
+  },
+  "devDependencies": {
+    "ajv": "^8.20.0"
+  }
+}

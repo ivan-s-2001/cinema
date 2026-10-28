@@ -116,9 +116,10 @@ class MetaRepositoryImpl @Inject constructor(
     /** Wrapper for cached meta with an expiration timestamp. */
     private data class CachedMeta(
         val meta: Meta,
-        val expiresAtMs: Long
+        val expiresAtMs: Long,
+        val createdAtMs: Long = System.currentTimeMillis()
     ) {
-        fun isExpired(): Boolean = System.currentTimeMillis() >= expiresAtMs
+        fun isExpired(): Boolean = System.currentTimeMillis() >= if (meta.id.startsWith("ch:")) minOf(expiresAtMs, createdAtMs + 60_000L) else expiresAtMs
     }
 
     private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

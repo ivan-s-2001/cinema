@@ -1106,7 +1106,7 @@ internal fun PlayerRuntimeController.initializePlayer(
 
                 if (initialResumePosition > 0L) {
                     setMediaSource(initialMediaSource, initialResumePosition)
-                    clearPendingInitialResumePosition()
+                    if (pendingSourceSwitchPositionMs == null) clearPendingInitialResumePosition()
                     updatePlaybackTimeline(currentPosition = initialResumePosition)
                 } else {
                     setMediaSource(initialMediaSource)

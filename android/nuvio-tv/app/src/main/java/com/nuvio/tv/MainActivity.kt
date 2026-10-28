@@ -283,11 +283,7 @@ open class MainActivity : ComponentActivity() {
     @Inject
     lateinit var trackingProgressRefreshCoordinator: TrackingProgressRefreshCoordinator
 
-    @Inject
-    lateinit var startupSyncService: StartupSyncService
 
-    @Inject
-    lateinit var androidTvChannelSyncService: com.nuvio.tv.core.sync.androidtv.AndroidTvChannelSyncService
 
     @Inject
     lateinit var profileSyncService: ProfileSyncService
@@ -370,7 +366,7 @@ open class MainActivity : ComponentActivity() {
         // Wire the Activity-level launcher to the tracker
         externalPlaybackTracker.activityLauncher = externalPlayerLauncher
 
-        PluginRuntimeHooks.onActivityCreate(this)
+        if (com.nuvio.tv.core.build.AppFeaturePolicy.pluginsEnabled) PluginRuntimeHooks.onActivityCreate(this)
 
         window?.decorView?.post {
             val snapshot = com.nuvio.tv.core.player.DisplayCapabilities.detect(this)
@@ -741,7 +737,7 @@ open class MainActivity : ComponentActivity() {
                     val sidebarCollapsed = mainUiPrefs.sidebarCollapsed
                     val modernSidebarEnabled = mainUiPrefs.modernSidebarEnabled
                     val modernSidebarBlurEnabled =
-                        mainUiPrefs.modernSidebarBlurPref && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+                        false
                     val hideBuiltInHeadersForFloatingPill = modernSidebarEnabled && !sidebarCollapsed
 
                     val startDestination = when {
@@ -935,7 +931,7 @@ open class MainActivity : ComponentActivity() {
                     }
 
                     val strNavHome = stringResource(R.string.nav_home)
-                    val strNavDiscover = stringResource(R.string.nav_discover)
+                    val strNavDiscover = stringResource(R.string.cinemahall_catalogue)
                     val strNavSearch = stringResource(R.string.nav_search)
                     val strNavLibrary = stringResource(R.string.nav_library)
                     val strNavSettings = stringResource(R.string.nav_settings)
@@ -1170,7 +1166,6 @@ open class MainActivity : ComponentActivity() {
         memberAccessRepository.refreshIfStale()
         lifecycleScope.launch {
             deviceSessionRegistration.requestForegroundRegistration()
-            startupSyncService.requestForegroundSync()
         }
         lifecycleScope.launch {
             val refreshIntent = if (isFirstResumeAfterCreate) {
@@ -1250,22 +1245,18 @@ open class MainActivity : ComponentActivity() {
         // tracked; onActivityResult keeps it for a completion or dismisses it otherwise.
         externalPlaybackTracker.raiseAutoNextOverlayOnReturn()
         super.onStart()
-        startupSyncService.startPeriodicSurfacePulls()
-        androidTvChannelSyncService.onForegroundChanged(true)
     }
 
     override fun onStop() {
         externalPlaybackTracker.onExternalPlayerCoveredApp()
         super.onStop()
-        startupSyncService.stopPeriodicSurfacePulls()
         // App going to background (e.g. user returning to the launcher): reconcile the
         // Continue Watching channel once so Projectivy repaints it with fresh progress.
-        androidTvChannelSyncService.onForegroundChanged(false)
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        PluginRuntimeHooks.onActivityDestroy()
+        if (com.nuvio.tv.core.build.AppFeaturePolicy.pluginsEnabled) PluginRuntimeHooks.onActivityDestroy()
     }
 }
 

@@ -188,6 +188,7 @@ fun ModernHomeContent(
                     items = uiState.heroItems.asStable(),
                     showImdbRatings = uiState.homeImdbRatingsVisibility.showRatings,
                     onItemClick = { item ->
+                        HeroBackdropState.prepareForDetail(item.id, item.backdropUrl, item.poster)
                         onNavigateToDetail(item.id, item.apiType, "")
                     },
                     onItemFocus = { item -> onItemFocus(item) }
@@ -738,6 +739,7 @@ fun ModernHomeContent(
                             kinopoiskRatingText = enrichedItem.cinemaRatings.firstOrNull { it.source == "kinopoisk" }
                                 ?.let { String.format(java.util.Locale.ROOT, "%.1f", it.value) }
                                 ?: activeCarouselItem?.heroPreview?.kinopoiskRatingText,
+                            cinemaRatings = enrichedItem.cinemaRatings.ifEmpty { activeCarouselItem?.heroPreview?.cinemaRatings.orEmpty() },
                             ageRatingText = enrichedItem.ageRating,
                             statusText = enrichedItem.status,
                             countryText = enrichedItem.country,
@@ -1290,8 +1292,13 @@ fun ModernHomeContent(
                 )
                 optionsItem.value = null
             },
-            onDetails = {
-                onNavigateToDetail(selectedOptionsItem.contentId(), selectedOptionsItem.contentType(), "")
+            onDetails = details@{
+                val selection = selectedOptionsItem ?: return@details
+                when (val selected = selection) {
+                    is ContinueWatchingItem.InProgress -> HeroBackdropState.prepareForDetail(selected.contentId(), selected.progress.backdrop, selected.progress.poster)
+                    is ContinueWatchingItem.NextUp -> HeroBackdropState.prepareForDetail(selected.contentId(), selected.info.backdrop, selected.info.poster)
+                }
+                onNavigateToDetail(selection.contentId(), selection.contentType(), "")
                 optionsItem.value = null
             },
             onStartFromBeginning = {

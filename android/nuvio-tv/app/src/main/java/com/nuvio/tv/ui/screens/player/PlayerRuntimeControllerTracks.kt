@@ -317,6 +317,7 @@ internal fun PlayerRuntimeController.updateAvailableTracks(tracks: Tracks) {
         audioTracks = audioTracks,
         subtitleTracks = subtitleTracks
     )
+    applyCinemaVoiceSelection(audioTracks)
     if (currentStreamHasVideoTrack) {
         maybeScheduleFirstFrameWatchdog()
     } else {
@@ -324,6 +325,17 @@ internal fun PlayerRuntimeController.updateAvailableTracks(tracks: Tracks) {
     }
     tryAutoSelectPreferredSubtitleFromAvailableTracks()
     maybeAdjustLibassPipelineForTracks(tracks)
+}
+
+internal fun PlayerRuntimeController.applyCinemaVoiceSelection(tracks: List<TrackInfo>) {
+    if (!CinemaPlaybackPolicy.isProvider(currentStreamUrl)) return
+    val key = "$currentStreamUrl|$currentStreamBingeGroup"
+    if (cinemaAudioSelectionKey == key) return
+    val index = cinemaMatchingAudioIndex(tracks, cinemaSelectedVoice(currentStreamBingeGroup)) ?: return
+    // Record before selecting: an engine may immediately publish another snapshot.
+    cinemaAudioSelectionKey = key
+    rememberAudioSelection(index)
+    if (tracks.none { it.index == index && it.isSelected }) selectAudioTrack(index)
 }
 
 private fun formatSupportRank(@C.FormatSupport formatSupport: Int): Int {

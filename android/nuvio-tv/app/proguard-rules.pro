@@ -60,14 +60,6 @@
 -keep class com.nuvio.engine.** { *; }
 -keep interface com.nuvio.engine.** { *; }
 
-#── QuickJS ────────────────────────────────────────────────────────────────────
-# Keep quickjs-kt library classes for proper type conversion
--keep class com.dokar.quickjs.** { *; }
--keepclassmembers class com.dokar.quickjs.** { *; }
-# Keep PluginRuntime and related classes for JS bindings
--keep class com.nuvio.tv.core.plugin.** { *; }
--keepclassmembers class com.nuvio.tv.core.plugin.** { *; }
-
 # ── ExoPlayer / Media3 ────────────────────────────────────────────────────────
 -dontwarn androidx.media3.**
 -keep class androidx.media3.** { *; }
@@ -102,14 +94,6 @@
     kotlinx.serialization.KSerializer serializer(...);
 }
 
-# ── External extension compatibility stubs (loaded via DexClassLoader) ────────
--keep class com.lagradost.cloudstream3.** { *; }
--keepclassmembers class com.lagradost.cloudstream3.** { *; }
--keep class com.lagradost.nicehttp.** { *; }
--keepclassmembers class com.lagradost.nicehttp.** { *; }
--keep class com.lagradost.api.** { *; }
--keepclassmembers class com.lagradost.api.** { *; }
-
 # ── General ────────────────────────────────────────────────────────────────────
 # Keep line numbers for crash reports
 -keepattributes SourceFile,LineNumberTable
@@ -119,33 +103,3 @@
 # Native code reflects into multiple classes/methods under is.xyz.mpv,
 # so keep the whole package to avoid JNI lookup crashes after R8.
 -keep class is.xyz.mpv.** { *; }
-
-# ── Missing class stubs (referenced by cloudstream3 / jsoup / newpipe) ────────
--dontwarn org.mozilla.javascript.**
--dontwarn com.google.re2j.**
--dontwarn javax.script.**
--dontwarn okhttp3.internal.sse.**
--dontwarn org.jsoup.helper.Re2jRegex
-
-# ── DexClassLoader runtime deps (CloudStream extensions) ─────────────────────
-# Extensions are DEX files loaded at runtime via DexClassLoader. They resolve
-# dependencies by fully-qualified name from the host classloader. R8 must not
-# rename or remove any class that extensions may reference.
--keep class kotlin.** { *; }
--keep class kotlinx.coroutines.** { *; }
-
--keep class okhttp3.** { *; }
--keepclassmembers class okhttp3.** { *; }
--keep class okio.** { *; }
--keepclassmembers class okio.** { *; }
--keep class org.jsoup.** { *; }
--keepclassmembers class org.jsoup.** { *; }
--keep class com.fasterxml.jackson.** { *; }
--keepclassmembers class com.fasterxml.jackson.** { *; }
-
-# AndroidX components referenced by extensions
--keep class androidx.fragment.app.** { *; }
--keep interface androidx.fragment.app.** { *; }
-
--dontwarn java.beans.ConstructorProperties
--dontwarn java.beans.Transient

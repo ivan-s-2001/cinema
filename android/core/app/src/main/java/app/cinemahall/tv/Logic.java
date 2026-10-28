@@ -154,6 +154,12 @@ public final class Logic {
     public static String voiceKey(String label){
         String key=Normalizer.normalize(label==null?"":label,Normalizer.Form.NFKC)
             .toLowerCase(Locale.ROOT).replace('ё','е').replaceAll("[^\\p{L}\\p{N}]+"," ").trim().replaceAll(" +"," ");
+        for(String[] alias:new String[][]{{"lost\\s*film","lostfilm"},{"nova\\s*film","novafilm"},{"(?:ren\\s*tv|рен\\s*тв)","ren tv"},{"sony\\s*sci\\s*fi","sony sci fi"},{"cold\\s*film","coldfilm"}}){
+            key=key.replaceAll("(?<![\\p{L}\\p{N}])(?:"+alias[0]+")(?![\\p{L}\\p{N}])",alias[1]);
+        }
+        // Only a whole, known studio label may lose an unambiguous descriptor.
+        // A second unknown studio, dubbing type or qualifier must stay distinct.
+        key=key.replaceFirst("^(lostfilm|novafilm|ren tv|sony sci fi|coldfilm) (?:многоголосый(?: закадровый)?|mvo)$","$1");
         if(key.equals("дубляж"))return "дублированный";
         if(key.equals("original")||key.equals("оригинальный"))return "оригинал";
         return key.isEmpty()?"не указано":key;

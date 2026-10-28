@@ -410,6 +410,7 @@ private fun ModernCatalogRowItem(
             when (payload) {
                 is ModernPayload.Catalog -> {
                     if (!payload.itemId.startsWith("__placeholder_")) {
+                        HeroBackdropState.prepareForDetail(payload.itemId, item.metaPreview?.backdropUrl ?: item.heroPreview.backdrop, item.heroPreview.poster)
                         onNavigateToDetail(
                             payload.itemId,
                             payload.itemType,
@@ -1480,18 +1481,18 @@ private fun ModernCarouselCard(
                 }
 
                 if (hasLandscapeLogo) {
-                    AsyncImage(
-                        model = logoModel,
-                        contentDescription = item.title,
-                        onError = { landscapeLogoLoadFailed = true },
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .fillMaxWidth(0.62f)
-                            .height(cardHeight * 0.34f)
-                            .padding(start = 10.dp, end = 10.dp, bottom = NuvioTheme.spacing.sm),
-                        contentScale = ContentScale.Fit,
-                        alignment = Alignment.CenterStart
-                    )
+                    Column(Modifier.align(Alignment.BottomStart).fillMaxWidth(0.62f)
+                        .padding(start = 10.dp, end = 10.dp, bottom = NuvioTheme.spacing.sm), horizontalAlignment = Alignment.CenterHorizontally) {
+                        AsyncImage(
+                            model = logoModel,
+                            contentDescription = item.title,
+                            onError = { landscapeLogoLoadFailed = true },
+                            modifier = Modifier.fillMaxWidth().height(cardHeight * 0.34f),
+                            contentScale = ContentScale.Fit,
+                            alignment = if (item.metaPreview?.logoCaption.isNullOrBlank()) Alignment.CenterStart else Alignment.Center
+                        )
+                        com.nuvio.tv.ui.components.CinemaLogoCaption(item.metaPreview?.logoCaption)
+                    }
                 } else if ((useLandscapeOverlayTreatment || isBackdropExpanded) && !isCollectionFolder && !(useLandscapeAsExpanded && !trailerFirstFrameRendered) && (effectiveIgnoreLandscapePoster || item.metaPreview?.landscapePoster.isNullOrBlank() || customPosterLoadFailed)) {
                     Text(
                         text = item.title,

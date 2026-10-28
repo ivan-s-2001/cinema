@@ -14,6 +14,7 @@ import com.nuvio.tv.domain.model.PosterShape
 import com.nuvio.tv.domain.model.TmdbSettings
 import com.nuvio.tv.domain.repository.AddonRepository
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -57,6 +58,21 @@ class HomeEnrichmentRepositoryBoundaryTest {
         created.forEach { it.viewModelScope.cancel() }
         created.clear()
         Dispatchers.resetMain()
+    }
+
+    @Test
+    fun cinemaHallFocusUsesServerPreviewWithoutNetwork() = runBlocking {
+        val api = mockk<AddonApi>(relaxed = true)
+        val viewModel = newViewModel(realRepository(api))
+        val preview = item("ch:snapshot:movie:tmdb:550").copy(description = "Server description")
+        viewModel.seedCatalog(preview)
+        viewModel.onItemFocusPipeline(preview)
+        viewModel.preloadAdjacentItemPipeline(preview)
+        delay(HomeViewModel.EXTERNAL_META_PREFETCH_FOCUS_DEBOUNCE_MS + 100)
+        coVerify(exactly = 0) { api.getMeta(any()) }
+        assertEquals("Server description", viewModel.enrichedPreviews.value[preview.id]?.description)
+        assertEquals(null, viewModel.tmdbEnrichFocusJob)
+        assertEquals(null, viewModel.adjacentItemPrefetchJob)
     }
 
     @Test

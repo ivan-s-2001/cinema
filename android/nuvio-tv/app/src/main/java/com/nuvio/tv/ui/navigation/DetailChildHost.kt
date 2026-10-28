@@ -147,6 +147,13 @@ internal fun DetailChildHost(
                 popExitTransition = { ExitTransition.None }
             ) {
                 composable(DETAIL_CHILD_IDLE) {}
+                composable(Screen.CinemaPerson.route, arguments = listOf(navArgument("personId") { type = NavType.StringType })) { entry ->
+                    com.nuvio.tv.ui.screens.person.CinemaPersonScreen(
+                        personId = entry.arguments?.getString("personId").orEmpty(),
+                        onBack = { childNav.popBackStack() },
+                        onOpenFilm = { id, type -> childNav.navigateNestedDetail(id, type, "http://127.0.0.1:18991") }
+                    )
+                }
                 composable(
                     route = Screen.CastDetail.route,
                     arguments = listOf(
@@ -238,6 +245,7 @@ internal fun DetailChildHost(
                         playOnLoad = nestedArgs?.getString("playOnLoad")?.toBooleanStrictOrNull() == true,
                         playOnLoadManually = nestedArgs?.getString("manualSelection")?.toBooleanStrictOrNull() == true,
                         onBackPress = { childNav.popBackStack() },
+                        onNavigateToCinemaPerson = { personId -> childNav.navigate(Screen.CinemaPerson.createRoute(personId)) },
                         onNavigateToCastDetail = { personId, personName, preferCrew ->
                             childNav.navigate(Screen.CastDetail.createRoute(personId, personName, preferCrew))
                         },
@@ -282,6 +290,7 @@ private fun NavBackStackEntry.toSavedChildRoute(): String? {
     if (route == DETAIL_CHILD_IDLE) return null
     val args = arguments ?: return null
     return when (route) {
+        Screen.CinemaPerson.route -> args.getString("personId")?.let(Screen.CinemaPerson::createRoute)
         Screen.CastDetail.route -> {
             val personId = args.getString("personId")?.toIntOrNull() ?: return null
             val personName = args.getString("personName") ?: return null

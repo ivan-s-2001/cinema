@@ -286,7 +286,7 @@ private fun HeroCarouselSlide(
     }
     val ratingText = remember(item.imdbRating, showImdbRatings) {
         item.imdbRating
-            ?.takeIf { showImdbRatings }
+            ?.takeIf { showImdbRatings && item.cinemaRatings.isEmpty() }
             ?.let { String.format("%.1f", it) }
     }
 
@@ -396,13 +396,15 @@ private fun HeroCarouselSlide(
                 }
             }
 
-            if (mdbListShowOnHero && item.mdbListRatings != null && !item.mdbListRatings.isEmpty()) {
+            if (item.cinemaRatings.isEmpty() && mdbListShowOnHero && item.mdbListRatings != null && !item.mdbListRatings.isEmpty()) {
                 MDBListRatingsRow(
                     ratings = item.mdbListRatings,
                     order = mdbListRatingOrder,
                     maxItems = 6
                 )
             }
+
+            CinemaRatingsRow(item.cinemaRatings)
 
             item.description?.takeIf { it.isNotBlank() }?.let { description ->
                 Text(

@@ -3,16 +3,25 @@ import mariadb from 'mariadb';
 import { handleAdmin, startAdminScheduler } from './admin.mjs';
 import { handleAccountRequest } from './accounts.mjs';
 import { handleDiscovery } from './discovery.mjs';
+import { handleSearch } from './search.mjs';
+import { createCatalogV2 } from './catalog-v2.mjs';
+import { startRefreshScheduler } from './refresh-scheduler.mjs';
+import {spawn} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+import {startDiscoveryScheduler} from './discovery-index.mjs';
+import {createMetadataLibrary} from './metadata-library.mjs';
+import {createImageProxy} from './image-proxy.mjs';
 
+const host='127.0.0.1',port=Number(process.env.CINEMA_API_PORT||8091);
+if(!Number.isInteger(port)||port<1024||port>65535)throw new Error('Invalid CINEMA_API_PORT');
 const pool=mariadb.createPool({
-  host:'127.0.0.1', port:3306,
+  timezone:'Z',host:process.env.DB_HOST||'127.0.0.1', port:Number(process.env.DB_PORT||3306),
   user:process.env.DB_USER||'cinemahall',
   password:process.env.DB_PASSWORD,
   database:process.env.DB_NAME||'cinemahall',
   connectionLimit:2, connectTimeout:3000, acquireTimeout:4000,
   idleTimeout:30, bigIntAsNumber:true
 });
-const host='127.0.0.1',port=8091;
 const responseCache=new Map();
 const responseCacheTtl=10_000;
 const responseCacheLimit=64;
@@ -35,9 +44,14 @@ async function query(sql,params=[]){
  try{return await conn.query(sql,params);}
  finally{conn.release();}
 }
-const allowedKind=new Set(['movie','series']);
+const metadataLibrary=createMetadataLibrary(pool);
+const handleCatalogV2=createCatalogV2(pool,{metadataLibrary});
+let stopDiscovery=()=>{};
+const handleImages=createImageProxy();
 const server=http.createServer(async(req,res)=>{
  try{
+  if(await handleImages(req,res,new URL(req.url,'http://localhost')))return;
+  if(await handleCatalogV2(req,res,new URL(req.url,'http://localhost')))return;
   if(await handleAdmin(req,res,pool))return;
   if(await handleAccountRequest(req,res,new URL(req.url,'http://localhost'),pool))return;
   if(await handleDiscovery(req,res,new URL(req.url,'http://localhost'),pool,reply))return;
@@ -63,17 +77,7 @@ const server=http.createServer(async(req,res)=>{
     ]);
     reply(res,200,{rows:[{id:'movies',name:'Фильмы',items:movies},{id:'series',name:'Сериалы',items:series}]});return;
   }
-  if(route==='/api/v1/search'){
-    const q=(url.searchParams.get('q')||'').trim().slice(0,120);
-    if(q.length<2){reply(res,400,{error:'Search query must have at least 2 characters'});return;}
-    const kind=url.searchParams.get('type');
-    if(kind&&!allowedKind.has(kind)){reply(res,400,{error:'Invalid type'});return;}
-    const escaped=q.replace(/[\\%_]/g,m=>'\\'+m);
-    const rows=await query(
-      'SELECT id,kind,title,year,poster,backdrop FROM titles WHERE title LIKE ?'+(kind?' AND kind = ?':'')+' ORDER BY year DESC LIMIT 40',
-      kind?['%'+escaped+'%',kind]:['%'+escaped+'%']);
-    reply(res,200,{items:rows});return;
-  }
+  if(await handleSearch(res,url,query,reply))return;
   const match=/^\/api\/v1\/titles\/([A-Za-z0-9:_-]{1,160})(\/seasons)?$/.exec(route);
   if(match){
     const id=match[1];
@@ -95,6 +99,10 @@ server.requestTimeout=10000;
 server.headersTimeout=8000;
 server.listen(port,host,()=>{
  console.log('CinemaHall API listening on '+host+':'+port);
- if(process.env.ADMIN_SESSION_SECRET&&process.env.ADMIN_PASSWORD_SCRYPT)startAdminScheduler(pool);
+ if(process.env.CINEMA_DISABLE_SCHEDULERS!=='1'){
+  if(process.env.ADMIN_SESSION_SECRET&&process.env.ADMIN_PASSWORD_SCRYPT)startAdminScheduler(pool);
+  if(process.env.CINEMA_REFRESH_ENABLED==='1')startRefreshScheduler(pool);
+  stopDiscovery=startDiscoveryScheduler({spawnChild:()=>spawn(process.execPath,[fileURLToPath(new URL('./prepare-discovery.mjs',import.meta.url))],{stdio:['ignore','inherit','inherit'],env:process.env})});
+ }
 });
-process.on('SIGTERM',()=>server.close(()=>pool.end()));
+process.on('SIGTERM',()=>{stopDiscovery();server.close(async()=>{await metadataLibrary.close();await pool.end();});});

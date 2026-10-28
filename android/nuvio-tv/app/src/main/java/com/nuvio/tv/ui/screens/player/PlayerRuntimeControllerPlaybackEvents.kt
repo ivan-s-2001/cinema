@@ -1279,24 +1279,8 @@ internal fun PlayerRuntimeController.scheduleHideSubtitleDelayOverlay() {
 
 internal fun PlayerRuntimeController.schedulePauseOverlay() {
     pauseOverlayJob?.cancel()
-
-    if (!_uiState.value.pauseOverlayEnabled || !hasRenderedFirstFrame || !userPausedManually) {
-        _uiState.update { it.copy(showPauseOverlay = false) }
-        return
-    }
-
+    pauseOverlayJob = null
     _uiState.update { it.copy(showPauseOverlay = false) }
-    pauseOverlayJob = scope.launch {
-        delay(pauseOverlayDelayMs)
-        val s = _uiState.value
-        val anyPanelOpen = s.showSubtitleOverlay || s.showSubtitleStylePanel ||
-            s.showSpeedDialog || s.showMoreDialog || s.showEpisodesPanel ||
-            s.showSourcesPanel || s.showChaptersPanel || s.showAudioOverlay || s.showStreamInfoOverlay ||
-            s.showSubtitleTimingDialog || s.showSubtitleDelayOverlay || s.showPartyPanel
-        if (!s.isPlaying && s.pauseOverlayEnabled && s.error == null && !anyPanelOpen) {
-            _uiState.update { it.copy(showPauseOverlay = true, showControls = false) }
-        }
-    }
 }
 
 internal fun PlayerRuntimeController.cancelPauseOverlay() {
@@ -1320,6 +1304,7 @@ fun PlayerRuntimeController.hideControls() {
 }
 
 fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
+    if (!cinemaPlayerActionAllowed(event)) return
     if (event != PlayerEvent.OnParentalGuideHide) {
         onUserInteraction()
     }
@@ -1466,6 +1451,13 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
             seekToChapter(chapter.startMs)
         }
         is PlayerEvent.OnSelectAudioTrack -> {
+            if (CinemaPlaybackPolicy.isProvider(currentStreamUrl)) {
+                val chosen = _uiState.value.audioTracks.getOrNull(event.index)
+                // Continue a labelled voice by identity, never by its index or language.
+                // Unnamed tracks require a fresh choice for the next episode.
+                if (chosen != null) currentStreamBingeGroup = cinemaContinuationGroupForAudio(currentStreamBingeGroup, chosen)
+                cinemaAudioSelectionKey = "$currentStreamUrl|$currentStreamBingeGroup"
+            }
             logSwitchTrace(
                 stage = "event-select-audio",
                 message = "index=${event.index}"
@@ -1479,6 +1471,7 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
             _uiState.update {
                 it.copy(
                     showAudioOverlay = false,
+                    showSourcesPanel = false,
                     showSubtitleDelayOverlay = false,
                     showSubtitleTimingDialog = false
                 )

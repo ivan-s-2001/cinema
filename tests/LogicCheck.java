@@ -25,6 +25,10 @@ public final class LogicCheck {
         if(Logic.sourceScore("4K","ru","",20,"4K")<=Logic.sourceScore("1080p","ru","",20,"4K"))throw new AssertionError("Respect quality preference");
         if(!Logic.voiceKey("  ДУБЛЯЖ  ").equals(Logic.voiceKey("Дублированный"))||!Logic.voiceKey("Кубик в Кубе").equals(Logic.voiceKey("кубик-в-кубе")))throw new AssertionError("Equivalent voice spellings not deduplicated");
         if(Logic.voiceKey("Студия A").equals(Logic.voiceKey("Студия B"))||Logic.qualityRank("4K")>=Logic.qualityRank("1080p"))throw new AssertionError("Distinct voices or quality order lost");
+        for(String label:new String[]{"LostFilm / Jaskier","LostFilm / дубляж","LostFilm авторский","NotLostFilm","LostFilm / NovaFilm"}){
+            if(Logic.voiceKey(label).equals(Logic.voiceKey("LostFilm")))throw new AssertionError("Distinct or composite studio collapsed: "+label);
+        }
+        if(!Logic.voiceKey("Lost Film многоголосый").equals("lostfilm")||!Logic.voiceKey("Sony-Sci-Fi").equals("sony sci fi"))throw new AssertionError("Known studio aliases should match exactly");
         System.out.println("Logic checks passed");
     }
 }

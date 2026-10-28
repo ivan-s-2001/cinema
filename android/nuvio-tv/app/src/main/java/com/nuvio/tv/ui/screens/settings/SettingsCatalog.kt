@@ -32,7 +32,6 @@ internal fun visibleSettingsCategories(
 ): List<SettingsCategory> = listOf(
     SettingsCategory.PROFILES,
     SettingsCategory.APPEARANCE,
-    SettingsCategory.LAYOUT,
     SettingsCategory.PLAYBACK,
     SettingsCategory.ABOUT
 )

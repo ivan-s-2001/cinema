@@ -417,6 +417,7 @@ fun MetaDetailsScreen(
     onBackPress: () -> Unit,
     onReturnFocusConsumed: () -> Unit = {},
     onNavigateToCastDetail: (personId: Int, personName: String, preferCrew: Boolean) -> Unit = { _, _, _ -> },
+    onNavigateToCinemaPerson: (String) -> Unit = {},
     onNavigateToTmdbEntityBrowse: (entityKind: String, entityId: Int, entityName: String, sourceType: String) -> Unit = { _, _, _, _ -> },
     onNavigateToDetail: (itemId: String, itemType: String, addonBaseUrl: String?) -> Unit = { _, _, _ -> },
     onPlayClick: (
@@ -1083,6 +1084,8 @@ fun MetaDetailsScreen(
                     restorePlayFocusAfterTrailerBackToken = restorePlayFocusAfterTrailerBackToken,
                     restoreSharedTrailerFocusToken = restoreSharedTrailerFocusToken,
                     onSharedTrailerFocusRestored = { restoreSharedTrailerFocusToken = 0 },
+                    onNavigateToCinemaPerson = onNavigateToCinemaPerson,
+                    onReloadEpisodes = { viewModel.onEvent(MetaDetailsEvent.OnRetry) },
                     onNavigateToCastDetail = onNavigateToCastDetail,
                     onNavigateToTmdbEntityBrowse = onNavigateToTmdbEntityBrowse,
                     onNavigateToDetail = onNavigateToDetail,
@@ -1247,6 +1250,7 @@ private fun MetaDetailsContent(
     commentsMode: CommentsMode,
     commentsEpisodeTarget: Video?,
     selectedComment: TraktCommentReview?,
+    onReloadEpisodes: () -> Unit,
     onSeasonSelected: (Int) -> Unit,
     onEpisodeClick: (Video) -> Unit,
     onEpisodeManualPlayClick: (Video) -> Unit,
@@ -1302,6 +1306,7 @@ private fun MetaDetailsContent(
     restoreSharedTrailerFocusToken: Int,
     onSharedTrailerFocusRestored: () -> Unit,
     onNavigateToCastDetail: (personId: Int, personName: String, preferCrew: Boolean) -> Unit = { _, _, _ -> },
+    onNavigateToCinemaPerson: (String) -> Unit = {},
     onNavigateToTmdbEntityBrowse: (entityKind: String, entityId: Int, entityName: String, sourceType: String) -> Unit = { _, _, _, _ -> },
     onNavigateToDetail: (itemId: String, itemType: String, addonBaseUrl: String?) -> Unit = { _, _, _ -> },
     onPosterLongPress: (MetaPreview) -> Unit = {}
@@ -1968,7 +1973,7 @@ private fun MetaDetailsContent(
     }
     val availablePeopleTabs = remember(peopleTabItems) { peopleTabItems.map { it.tab } }
     val shouldSplitCollection = peopleTabItems.size > 3 && peopleTabItems.any { it.tab == PeopleSectionTab.COLLECTION }
-    val visiblePeopleTabItems = if (shouldSplitCollection) peopleTabItems.filterNot { it.tab == PeopleSectionTab.COLLECTION } else peopleTabItems
+    val visiblePeopleTabItems = if (meta.id.startsWith("ch:")) peopleTabItems.filter { it.tab == PeopleSectionTab.CAST } else if (shouldSplitCollection) peopleTabItems.filterNot { it.tab == PeopleSectionTab.COLLECTION } else peopleTabItems
     val hasVisiblePeopleSection = visiblePeopleTabItems.isNotEmpty()
     val hasVisiblePeopleTabs = visiblePeopleTabItems.size > 1
     val commentsItemIndex = remember(
@@ -2546,6 +2551,15 @@ private fun MetaDetailsContent(
             }
 
             // Season tabs and episodes for series
+            if (isSeries && seasons.isEmpty()) {
+                item(key = "episodes_unavailable") {
+                    Column(Modifier.padding(horizontal = NuvioTheme.spacing.xxxl, vertical = 16.dp)) {
+                        Text("Сезоны и серии", style = MaterialTheme.typography.titleLarge, color = NuvioTheme.colors.TextPrimary)
+                        Text("Список серий временно недоступен", color = NuvioTheme.colors.TextSecondary)
+                        androidx.tv.material3.Button(onClick = onReloadEpisodes) { Text("Загрузить серии") }
+                    }
+                }
+            }
             val showSeasonTabs = isSeries && seasons.isNotEmpty() && !(seasons.size == 1 && meta.apiType.equals("other", ignoreCase = true))
             val showEpisodesRow = isSeries && seasons.isNotEmpty()
             if (showSeasonTabs) {
@@ -2725,7 +2739,9 @@ private fun MetaDetailsContent(
                                     },
                                     windowResetKey = meta.id,
                                     onCastMemberClick = { member ->
-                                        member.tmdbId?.let { id ->
+                                        if (member.cinemaPersonId != null) {
+                                            onNavigateToCinemaPerson(member.cinemaPersonId)
+                                        } else member.tmdbId?.let { id ->
                                             markCastMemberRestore(id)
                                             val preferCrew = member.character.equals("Creator", ignoreCase = true) ||
                                                 member.character.equals("Director", ignoreCase = true) ||
@@ -2847,6 +2863,27 @@ private fun MetaDetailsContent(
                 }
             }
             
+            if (meta.id.startsWith("ch:")) {
+                meta.cinemaWatchOrders.filter { it.items.isNotEmpty() }.forEach { cycle ->
+                    item(key = "cinema_cycle_${cycle.id}", contentType = "horizontal_row") {
+                        Column {
+                            Text("Цикл · ${cycle.name}", style = MaterialTheme.typography.titleLarge, color = NuvioTheme.colors.TextPrimary, modifier = Modifier.padding(horizontal = NuvioTheme.spacing.xxxl))
+                            Text("${cycle.order} · доступно ${cycle.availableParts} из ${cycle.totalParts}", color = NuvioTheme.colors.TextSecondary, modifier = Modifier.padding(horizontal = NuvioTheme.spacing.xxxl))
+                            MoreLikeThisSection(items = cycle.items, listState = rememberLazyListState(),
+                                onItemClick = { onNavigateToDetail(it.id, it.apiType, "http://127.0.0.1:18991") }, windowResetKey = meta.id)
+                        }
+                    }
+                }
+                if (moreLikeThis.isNotEmpty()) item(key = "cinema_related", contentType = "horizontal_row") {
+                    Column {
+                        Text(if (isSeries) "Похожие сериалы" else "Похожие фильмы", style = MaterialTheme.typography.titleLarge,
+                            color = NuvioTheme.colors.TextPrimary, modifier = Modifier.padding(horizontal = NuvioTheme.spacing.xxxl))
+                        MoreLikeThisSection(items = moreLikeThis, listState = moreLikeThisListState,
+                            onItemClick = { onNavigateToDetail(it.id, it.apiType, "http://127.0.0.1:18991") }, windowResetKey = meta.id)
+                    }
+                }
+            }
+
             // Collection as separate section when there are too many tabs
             if (shouldSplitCollection && collection.isNotEmpty()) {
                 item(key = "collection_section", contentType = "horizontal_row") {

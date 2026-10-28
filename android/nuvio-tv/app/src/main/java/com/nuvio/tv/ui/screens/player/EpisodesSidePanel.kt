@@ -150,9 +150,14 @@ internal fun EpisodesSidePanel(
                 if (uiState.showEpisodeStreams && uiState.episodeStreamsForVideoId?.startsWith("ch:") == true) {
                     if (uiState.isLoadingEpisodeStreams) {
                         Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { LoadingIndicator() }
+                    } else if (uiState.episodeAllStreams.isNotEmpty()) {
+                        DialogButton(text = "К сериям", onClick = onBackToEpisodes, isPrimary = false)
+                        Spacer(Modifier.height(12.dp))
+                        com.nuvio.tv.ui.screens.stream.CinemaHallQualityVoicePicker(
+                            streams = uiState.episodeAllStreams, onStreamSelected = onStreamSelected,
+                            modifier = Modifier.weight(1f))
                     } else {
                         Text(uiState.episodeStreamsError ?: "Серия пока недоступна", color = NuvioTheme.colors.TextPrimary)
-                        Spacer(Modifier.height(NuvioTheme.spacing.lg))
                         DialogButton(text = "Повторить", onClick = onReloadEpisodeStreams, isPrimary = false)
                         DialogButton(text = "К сериям", onClick = onBackToEpisodes, isPrimary = false)
                     }

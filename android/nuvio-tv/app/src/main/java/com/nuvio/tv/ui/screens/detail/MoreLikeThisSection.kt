@@ -14,6 +14,9 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.relocation.BringIntoViewResponder
 import androidx.compose.foundation.relocation.bringIntoViewResponder
+import androidx.compose.runtime.CompositionLocalProvider
+import com.nuvio.tv.ui.components.LocalLandscapePosterMode
+import com.nuvio.tv.domain.model.PosterShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -106,10 +109,10 @@ fun MoreLikeThisSection(
         Modifier
     }
 
-    val landscapeStyle = remember(posterCardCornerRadius) {
+    val posterStyle = remember(posterCardCornerRadius) {
         PosterCardStyle(
-            width = 260.dp,
-            height = 146.dp,
+            width = 148.dp,
+            height = 222.dp,
             cornerRadius = posterCardCornerRadius,
             focusedBorderWidth = NuvioTheme.spacing.xxs,
             focusedScale = 1.02f
@@ -162,13 +165,14 @@ fun MoreLikeThisSection(
                         }
                     )
                 ) {
+                    CompositionLocalProvider(LocalLandscapePosterMode provides false) {
                     GridContentCard(
-                        item = item,
+                        item = item.copy(posterShape = PosterShape.POSTER),
                         onClick = { onItemClick(item) },
                         onLongPress = { onItemLongPress(item) },
-                        posterCardStyle = landscapeStyle,
+                        posterCardStyle = posterStyle,
                         showLabel = true,
-                        imageCrossfade = true,
+                        imageCrossfade = false,
                         isWatched = isItemWatched(item),
                         focusRequester = focusRequester,
                         upFocusRequester = upFocusRequester,
@@ -182,6 +186,7 @@ fun MoreLikeThisSection(
                             }
                         }
                     )
+                    }
                     val year = item.releaseInfo
                     if (!year.isNullOrBlank()) {
                         Text(
@@ -191,7 +196,7 @@ fun MoreLikeThisSection(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier
-                                .width(landscapeStyle.width)
+                                .width(posterStyle.width)
                                 .padding(start = NuvioTheme.spacing.xxs, end = NuvioTheme.spacing.xxs, top = NuvioTheme.spacing.xxs)
                         )
                     }

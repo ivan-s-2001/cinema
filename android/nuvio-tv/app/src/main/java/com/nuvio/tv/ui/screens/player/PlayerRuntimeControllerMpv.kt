@@ -141,7 +141,7 @@ internal fun PlayerRuntimeController.initializeMpvPlayer(
                 "playbackSpeed=${_uiState.value.playbackSpeed} resumePositionMs=$initialResumePosition"
         )
         if (initialResumePosition > 0L) {
-            clearPendingInitialResumePosition()
+            if (pendingSourceSwitchPositionMs == null) clearPendingInitialResumePosition()
             _uiState.update { it.copy(pendingSeekPosition = null) }
             updatePlaybackTimeline(currentPosition = initialResumePosition)
         }
@@ -494,6 +494,7 @@ private fun PlayerRuntimeController.applyMpvTrackSnapshot(snapshot: MpvTrackSnap
         audioTracks = audioTracks,
         subtitleTracks = internalSubtitleTracks
     )
+    applyCinemaVoiceSelection(audioTracks)
     logSwitchTrace(
         stage = "mpv-snapshot-after-restore",
         message = "uiAudioIndex=${_uiState.value.selectedAudioTrackIndex} " +
@@ -527,15 +528,17 @@ internal fun PlayerRuntimeController.applyPendingMpvSeekIfNeeded(
 
     val state = _uiState.value
     val savedResume = pendingResumeProgress
-    val queuedPosition = state.pendingSeekPosition ?: savedResume?.position
+    val queuedPosition = pendingSourceSwitchPositionMs ?: state.pendingSeekPosition ?: savedResume?.position
     if (queuedPosition == null) return
     if (queuedPosition <= 0L && savedResume == null) {
+        pendingSourceSwitchPositionMs = null
         _uiState.update { it.copy(pendingSeekPosition = null) }
         pendingResumeProgress = null
         return
     }
 
     val target = when {
+        pendingSourceSwitchPositionMs != null -> cinemaSourceSwitchTarget(pendingSourceSwitchPositionMs!!, durationMs)
         savedResume != null && durationMs > 0L -> {
             savedResume.resolveResumePosition(durationMs).coerceAtLeast(0L)
         }
@@ -551,6 +554,7 @@ internal fun PlayerRuntimeController.applyPendingMpvSeekIfNeeded(
     }
 
     if (target <= 0L) {
+        pendingSourceSwitchPositionMs = null
         _uiState.update { it.copy(pendingSeekPosition = null) }
         pendingResumeProgress = null
         return
@@ -559,6 +563,7 @@ internal fun PlayerRuntimeController.applyPendingMpvSeekIfNeeded(
     val isAlreadyAtTarget = currentPositionMs >= target ||
         abs(currentPositionMs - target) <= MPV_RESUME_SEEK_TOLERANCE_MS
     if (isAlreadyAtTarget) {
+        pendingSourceSwitchPositionMs = null
         if (state.pendingSeekPosition != null || savedResume != null) {
             _uiState.update { it.copy(pendingSeekPosition = null) }
             pendingResumeProgress = null

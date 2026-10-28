@@ -30,7 +30,7 @@ jobs:
       - run: python3 scripts/check_provider.py
       - name: Compile and test TV
         working-directory: android/nuvio-tv
-        run: bash ./gradlew :app:compileFullDebugKotlin :app:testFullDebugUnitTest --tests "com.nuvio.tv.ui.screens.stream.CinemaQualityTest" --tests "com.nuvio.tv.ui.screens.settings.SettingsCatalogTest" --tests "com.nuvio.tv.ui.util.HeroMetadataFormatterTest" --no-daemon --max-workers=2
+        run: bash ./gradlew :app:compileFullDebugKotlin :app:testFullDebugUnitTest --tests "com.nuvio.tv.ui.screens.home.HeroBackdropStateTest" --tests "com.nuvio.tv.ui.screens.player.CinemaPlaybackPolicyTest" --tests "com.nuvio.tv.ui.screens.player.CinemaPlayerActionsTest" --tests "com.nuvio.tv.ui.screens.search.CinemaDiscoveryTest" --tests "com.nuvio.tv.ui.screens.stream.CinemaQualityTest" --tests "com.nuvio.tv.data.mapper.CinemaMetadataTest" --tests "com.nuvio.tv.data.repository.AddonManifestPlaceholderTest" --tests "com.nuvio.tv.core.streams.CinemaContentIdTest" --tests "com.nuvio.tv.ui.components.CinemaRatingsRowTest" --tests "com.nuvio.tv.ui.screens.settings.SettingsCatalogTest" --tests "com.nuvio.tv.ui.util.HeroMetadataFormatterTest" --tests "com.nuvio.tv.ui.screens.home.HomeEnrichmentRepositoryBoundaryTest.cinemaHallFocusUsesServerPreviewWithoutNetwork" --no-daemon --max-workers=2
   catalogue:
     runs-on: ubuntu-latest
     outputs:
@@ -107,23 +107,20 @@ jobs:
         with:
           name: CinemaHall-bundled-catalogue
           path: android/core/app/src/main/assets/catalog/
-      - name: Build CinemaHall TV APK with catalogue
+      - name: Build optimized CinemaHall TV APK with catalogue
+        env:
+          CI_USE_DEBUG_SIGNING: "true"
         shell: bash
         run: |
           if [ '${{ matrix.target }}' = 'tv' ]; then
             cd android/nuvio-tv
-            bash ./gradlew :app:assembleFullDebug :app:testFullDebugUnitTest --tests "com.nuvio.tv.ui.screens.stream.CinemaQualityTest" --tests "com.nuvio.tv.ui.screens.settings.SettingsCatalogTest" --tests "com.nuvio.tv.ui.util.HeroMetadataFormatterTest" --no-daemon --max-workers=2
+            bash ./gradlew :app:assembleFullRelease --no-daemon --max-workers=2
           else
             cd android/nuvio-mobile
             bash ./gradlew :androidApp:assembleFullDebug --no-daemon --max-workers=2
           fi
       - uses: actions/upload-artifact@v4
         with:
-          name: CinemaHall-TV-armv7
-          path: android/nuvio-tv/app/build/outputs/apk/full/debug/*armeabi-v7a-debug.apk
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        with:
-          name: CinemaHall-TV-arm64
-          path: android/nuvio-tv/app/build/outputs/apk/full/debug/*arm64-v8a-debug.apk
+          name: CinemaHall-TV
+          path: android/nuvio-tv/app/build/outputs/apk/full/release/*.apk
           if-no-files-found: error

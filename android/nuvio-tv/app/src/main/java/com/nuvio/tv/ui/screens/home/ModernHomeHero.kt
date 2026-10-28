@@ -409,17 +409,17 @@ private fun HeroTitleContent(
         var logoLoadFailed by remember(preview.logo) { mutableStateOf(false) }
         val showLogo = !preview.logo.isNullOrBlank() && !logoLoadFailed
         if (showLogo) {
-            AsyncImage(
-                model = logoModel,
-                contentDescription = preview.title,
-                onError = { logoLoadFailed = true },
-                modifier = Modifier
-                    .height(100.dp)
-                    .widthIn(min = 100.dp, max = 220.dp)
-                    .fillMaxWidth(),
-                contentScale = ContentScale.Fit,
-                alignment = Alignment.CenterStart
-            )
+            Column(modifier = Modifier.widthIn(min = 100.dp, max = 220.dp).fillMaxWidth()) {
+                AsyncImage(
+                    model = logoModel,
+                    contentDescription = preview.title,
+                    onError = { logoLoadFailed = true },
+                    modifier = Modifier.height(100.dp).fillMaxWidth(),
+                    contentScale = ContentScale.Fit,
+                    alignment = if (preview.logoCaption.isNullOrBlank()) Alignment.CenterStart else Alignment.Center
+                )
+                com.nuvio.tv.ui.components.CinemaLogoCaption(preview.logoCaption)
+            }
         } else if (preview.title.isNotBlank()) {
             Text(
                 text = preview.title,
@@ -471,8 +471,8 @@ private fun HeroTitleContent(
         val statusBadge = secondaryMeta.status
         val secondaryDetails = secondaryMeta.details
         val hasSecondaryBadge = ageRatingBadge != null || statusBadge != null
-        val hasImdbRatingForLayout = !preview.imdbText.isNullOrBlank()
-        val hasMdbListRatings = mdbListShowOnHero && preview.mdbListRatings != null && !preview.mdbListRatings.isEmpty()
+        val hasImdbRatingForLayout = preview.cinemaRatings.isEmpty() && !preview.imdbText.isNullOrBlank()
+        val hasMdbListRatings = preview.cinemaRatings.isEmpty() && mdbListShowOnHero && preview.mdbListRatings != null && !preview.mdbListRatings.isEmpty()
         // When MDBList ratings are shown, don't reserve space for standalone IMDb badge.
         val reserveImdbInPrimary = !hasMdbListRatings && !preview.isSeries && !hasSecondaryBadge && hasImdbRatingForLayout
         val reserveImdbInPrimaryWithHighlight = reserveImdbInPrimary && secondaryHighlightText == null
@@ -546,7 +546,7 @@ private fun HeroTitleContent(
                             maxLines = 1
                         )
                     }
-                    preview.kinopoiskRatingText?.let { rating ->
+                    preview.kinopoiskRatingText?.takeIf { preview.cinemaRatings.isEmpty() }?.let { rating ->
                         Text(text = "КП $rating", style = labelMedium,
                             color = NuvioTheme.colors.TextSecondary, maxLines = 1)
                     }
@@ -661,6 +661,8 @@ private fun HeroTitleContent(
                 }
             }
         }
+
+        com.nuvio.tv.ui.components.CinemaRatingsRow(preview.cinemaRatings)
 
         preview.description?.takeIf { it.isNotBlank() }?.let { description ->
             Text(
