@@ -13,8 +13,15 @@ final class CinemaRemoteCatalog {
     private final LinkedHashMap<String,JSONObject> details=new LinkedHashMap<String,JSONObject>(24,.75f,true){
         @Override protected boolean removeEldestEntry(java.util.Map.Entry<String,JSONObject> entry){return size()>24;}
     };
-    private final LinkedHashMap<String,String> pages=new LinkedHashMap<String,String>(16,.75f,true){
-        @Override protected boolean removeEldestEntry(java.util.Map.Entry<String,String> entry){return size()>16;}
+    private static final class Page {
+        final String json;final long expiresAt;
+        Page(String json,long expiresAt){this.json=json;this.expiresAt=expiresAt;}
+    }
+    private final LinkedHashMap<String,Page> pages=new LinkedHashMap<String,Page>(16,.75f,true){
+        @Override protected boolean removeEldestEntry(java.util.Map.Entry<String,Page> entry){return size()>16;}
+    };
+    private final LinkedHashMap<String,Long> detailLoaded=new LinkedHashMap<String,Long>(24,.75f,true){
+        @Override protected boolean removeEldestEntry(java.util.Map.Entry<String,Long> entry){return size()>24;}
     };
     private long checkedAt;
     private boolean enabled;
@@ -29,10 +36,12 @@ final class CinemaRemoteCatalog {
     private static JSONObject copy(JSONObject value){try{return new JSONObject(value.toString());}catch(Exception invalid){return null;}}
     static boolean validId(String id){return id!=null&&id.matches("ch:[A-Za-z0-9:_-]{1,157}");}
     synchronized JSONObject catalog(String type,String rowId,String search,int skip){
-        if(!active()||!rowId.equals(type.equals("series")?"series":"movies")||skip<0||skip>240||skip%24!=0)return null;
+        if(!rowId.equals(type.equals("series")?"series":"movies")||skip<0||skip>240||skip%24!=0)return null;
         String query=search==null?"":search.trim();if(query.length()>120)return null;
         String key=type+"|"+rowId+"|"+query+"|"+skip;
-        if(pages.containsKey(key))try{return new JSONObject(pages.get(key));}catch(Exception invalid){pages.remove(key);return null;}
+        Page cached=pages.get(key);
+        if(cached!=null&&cached.expiresAt>System.currentTimeMillis())try{return new JSONObject(cached.json);}catch(Exception invalid){pages.remove(key);}
+        if(!active())return fromCache(cached);
         try{
             String cursor="",path;
             for(int index=0;index<=skip/24;index++){
@@ -47,11 +56,12 @@ final class CinemaRemoteCatalog {
                     if(validId(card.optString("id")))result.put(compact(card));
                 }
                 JSONObject resultPage=new JSONObject().put("metas",result).put("hasMore",!response.isNull("nextCursor"));
-                pages.put(key,resultPage.toString());return resultPage;
+                pages.put(key,new Page(resultPage.toString(),System.currentTimeMillis()+120000L));return resultPage;
             }
-        }catch(Exception unavailable){return null;}
-        return null;
+        }catch(Exception unavailable){return fromCache(cached);}
+        return fromCache(cached);
     }
+    private static JSONObject fromCache(Page page){try{return page==null?null:new JSONObject(page.json);}catch(Exception invalid){return null;}}
     private static JSONObject compact(JSONObject row) throws Exception {
         JSONObject result=new JSONObject().put("id",row.getString("id")).put("type",row.getString("type"))
             .put("name",row.optString("title")).put("poster",row.optString("poster"))
@@ -61,8 +71,10 @@ final class CinemaRemoteCatalog {
     }
     synchronized JSONObject detail(String id){
         if(!validId(id))return null;
-        JSONObject cached=details.get(id);if(cached!=null)return copy(cached);
-        if(!active())return null;
+        JSONObject cached=details.get(id);
+        Long loaded=detailLoaded.get(id);
+        if(cached!=null&&loaded!=null&&System.currentTimeMillis()-loaded<5*60_000L)return copy(cached);
+        if(!active())return cached==null?null:copy(cached);
         try{
             JSONObject row=CinemaRemoteSources.fetch("/titles/"+id).getJSONObject("title");
             JSONObject result=compact(row).put("description",row.optString("description"));
@@ -93,8 +105,8 @@ final class CinemaRemoteCatalog {
                 }
                 result.put("videos",videos);
             }
-            rawDetails.put(id,row);details.put(id,result);return new JSONObject(result.toString());
-        }catch(Exception unavailable){return null;}
+            rawDetails.put(id,row);details.put(id,result);detailLoaded.put(id,System.currentTimeMillis());return new JSONObject(result.toString());
+        }catch(Exception unavailable){return cached==null?null:copy(cached);}
     }
     synchronized JSONObject document(String id){
         if(!validId(id))return null;
