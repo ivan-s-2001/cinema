@@ -27,3 +27,10 @@ test('watch order follows the curated timeline, retaining positions when parts a
  const result=orderedWatchItems(order,rows,r=>({id:r.id,name:r.title}));
  assert.deepEqual(result.map(r=>r.id),['new','old']);assert.deepEqual(result.map(r=>r.watchOrderPosition),[1,4]);assert.equal(result.length,2);
 });
+
+test('long localized titles are split into bounded discovery queries',async()=>{
+ const rows=Array.from({length:8},(_,i)=>({...row,id:'ch:long:'+i,title:'Ж'.repeat(90)+i,payload:{originalTitle:'Щ'.repeat(90)+i,ids:{}}}));
+ let requests=0;
+ await updateDiscoveryIndex({query:async()=>{}},rows,{query:async(kind,params)=>{requests++;assert.ok(new URLSearchParams({q:params.q}).toString().length<6000);return {response:{docs:[]}};}});
+ assert.ok(requests>1);
+});

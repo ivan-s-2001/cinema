@@ -24,9 +24,17 @@ export async function updateDiscoveryIndex(pool,rows,{query=solr,clock=Date.now,
       if(known.length)clauses.push('id:('+known.join(' OR ')+')');
       for(const name of names)for(const field of ['name_rus','name_eng','name_original'])clauses.push(field+':'+quote(name));
       if(clauses.length){
-        const answer=await query('movie',{q:'('+clauses.join(' OR ')+') AND adult:false',rows:'200',fl:'id,serial,year,name_rus,name_eng,name_original,popularity,rating_kinopoisk,rating_imdb'});
-        if(!Array.isArray(answer?.response?.docs))throw Error('Invalid discovery metadata');
-        docs.push(...answer.response.docs);
+        const parts=[];let part=[];
+        for(const clause of clauses){
+          if(part.length&&new URLSearchParams({q:part.concat(clause).join(' OR ')}).toString().length>5500){parts.push(part);part=[];}
+          part.push(clause);
+        }
+        if(part.length)parts.push(part);
+        for(const chunk of parts){
+          const answer=await query('movie',{q:'('+chunk.join(' OR ')+') AND adult:false',rows:'200',fl:'id,serial,year,name_rus,name_eng,name_original,popularity,rating_kinopoisk,rating_imdb'});
+          if(!Array.isArray(answer?.response?.docs))throw Error('Invalid discovery metadata');
+          docs.push(...answer.response.docs);
+        }
       }
       const identities=batch.map(row=>{
         const title=titleDetail(row),known=title.externalIds.kinopoisk;

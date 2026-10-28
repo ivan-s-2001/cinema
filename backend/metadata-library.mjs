@@ -3,12 +3,12 @@ import {object,text,imageFor,date} from './catalog-model.mjs';
 import {createMetadataProvider} from './metadata-provider.mjs';
 
 export function personCredit(raw){
-  const name=text(raw.name_ru)||text(raw.name_en)||text(raw.name);
+  const name=(text(raw.name_ru)||text(raw.name_en)||text(raw.name))?.slice(0,256);
   if(!name)return null;
   const identity=['number','string'].includes(typeof raw.id)?'kinoapi:'+String(raw.id):name.toLowerCase().replaceAll('ё','е');
   const id=typeof raw.id==='string'&&/^person:[a-f0-9]{32}$/.test(raw.id)?raw.id:'person:'+createHash('sha256').update(identity).digest('hex').slice(0,32);
   const path=text(raw.profile_path)||text(raw.photo)||text(raw.image);
-  return {id,name,character:text(raw.character_ru)||text(raw.character_en)||text(raw.character),
+  return {id,name,character:(text(raw.character_ru)||text(raw.character_en)||text(raw.character))?.slice(0,512)||null,
     photo:imageFor(path?.startsWith('/')?'https://image.tmdb.org/t/p/w185'+path:path,'person')};
 }
 export function seasonInventory(raw){
