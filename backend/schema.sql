@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS titles (
  INDEX titles_kind_updated_at (kind,updated_at),
  INDEX titles_title (title(150))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS episodes (
  title_id VARCHAR(160) NOT NULL,
  season_number SMALLINT UNSIGNED NOT NULL,
@@ -23,9 +24,101 @@ CREATE TABLE IF NOT EXISTS episodes (
  PRIMARY KEY(title_id,season_number,episode_number),
  CONSTRAINT episode_title FOREIGN KEY (title_id) REFERENCES titles(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS source_cache (
  cache_key CHAR(64) PRIMARY KEY,
  payload JSON NOT NULL,
  expires_at DATETIME NOT NULL,
  INDEX cache_expires (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS accounts (
+ id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
+ email VARCHAR(254) NOT NULL UNIQUE,
+ password_hash VARCHAR(255) NOT NULL,
+ disabled BOOLEAN NOT NULL DEFAULT FALSE,
+ created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS account_sessions (
+ session_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
+ refresh_token_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL UNIQUE,
+ account_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ expires_at DATETIME NOT NULL,
+ created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ INDEX account_sessions_expiry (account_id,expires_at),
+ FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS profiles (
+ account_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ profile_index TINYINT UNSIGNED NOT NULL,
+ name VARCHAR(48) NOT NULL,
+ avatar_color CHAR(7) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT '#1E88E5',
+ uses_primary_addons BOOLEAN NOT NULL DEFAULT FALSE,
+ uses_primary_plugins BOOLEAN NOT NULL DEFAULT FALSE,
+ avatar_id VARCHAR(100) NULL,
+ avatar_url TEXT NULL,
+ profile_background_id VARCHAR(100) NULL,
+ profile_background_url TEXT NULL,
+ profile_pin_hash VARCHAR(255) NULL,
+ profile_pin_failed_attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
+ profile_pin_locked_until DATETIME NULL,
+ created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ PRIMARY KEY (account_id,profile_index),
+ FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+ CHECK (profile_index BETWEEN 1 AND 6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS sync_items (
+ account_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ profile_index TINYINT UNSIGNED NOT NULL,
+ entity_type ENUM('progress','watched','library','addon','plugin') NOT NULL,
+ item_key VARCHAR(255) NOT NULL,
+ payload JSON NULL,
+ is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+ updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY (account_id,profile_index,entity_type,item_key),
+ INDEX sync_items_snapshot (account_id,profile_index,entity_type,is_deleted,updated_at),
+ FOREIGN KEY (account_id,profile_index) REFERENCES profiles(account_id,profile_index) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS sync_mutations (
+ account_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ profile_index TINYINT UNSIGNED NOT NULL,
+ mutation_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ event_id BIGINT UNSIGNED NULL,
+ created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY (account_id,mutation_id),
+ INDEX sync_mutations_created (created_at),
+ FOREIGN KEY (account_id,profile_index) REFERENCES profiles(account_id,profile_index) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS sync_events (
+ event_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ account_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ profile_index TINYINT UNSIGNED NOT NULL,
+ mutation_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ entity_type ENUM('progress','watched','library') NOT NULL,
+ operation ENUM('upsert','delete') NOT NULL,
+ item_key VARCHAR(255) NOT NULL,
+ origin_client_id VARCHAR(128) NULL,
+ payload JSON NULL,
+ created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ UNIQUE (account_id,mutation_id),
+ INDEX sync_events_cursor (account_id,profile_index,event_id),
+ INDEX sync_events_kind_cursor (account_id,profile_index,entity_type,event_id),
+ FOREIGN KEY (account_id,profile_index) REFERENCES profiles(account_id,profile_index) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS account_blobs (
+ account_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ profile_index TINYINT UNSIGNED NOT NULL,
+ blob_type ENUM('collections','profile_settings','home_catalog_settings') NOT NULL,
+ platform VARCHAR(40) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'tv',
+ payload JSON NOT NULL,
+ updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY (account_id,profile_index,blob_type,platform),
+ FOREIGN KEY (account_id,profile_index) REFERENCES profiles(account_id,profile_index) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
