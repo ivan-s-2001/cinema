@@ -378,7 +378,274 @@ async function syncProfile(req, res, url, account, pool) {
   return true;
 }
 
+function decodeJson(value) {
+  if (typeof value !== 'string') return value;
+  try { return JSON.parse(value); } catch { return null; }
+}
+
+function watchedKey(item) {
+  return [item.content_id || '', item.season ?? '', item.episode ?? ''].join('|');
+}
+
+function libraryKey(item) {
+  return [item.content_type || '', item.content_id || ''].join('|').toLowerCase();
+}
+
+function stableMutationId(accountId, profileIndex, entityType, itemKey, operation, payload) {
+  const hex = createHash('sha256')
+    .update([accountId, profileIndex, entityType, itemKey, operation, JSON.stringify(payload)].join('|'))
+    .digest('hex')
+    .slice(0, 32)
+    .split('');
+  hex[12] = '5';
+  hex[16] = 'a';
+  const value = hex.join('');
+  return value.slice(0, 8) + '-' + value.slice(8, 12) + '-' + value.slice(12, 16) + '-' + value.slice(16, 20) + '-' + value.slice(20);
+}
+
+async function writeSyncItem(connection, accountId, profileIndex, entityType, itemKey, operation, payload, originClientId = null) {
+  const mutationId = stableMutationId(accountId, profileIndex, entityType, itemKey, operation, payload);
+  const mutation = await connection.query(
+    'INSERT IGNORE INTO sync_mutations (account_id,mutation_id) VALUES (?,?)',
+    [accountId, mutationId]
+  );
+  if (mutation.affectedRows === 0) return null;
+
+  let eventPayload = payload;
+  if (operation === 'delete') {
+    const previous = await connection.query(
+      'SELECT payload FROM sync_items WHERE account_id=? AND profile_index=? AND entity_type=? AND item_key=?',
+      [accountId, profileIndex, entityType, itemKey]
+    );
+    eventPayload = decodeJson(previous[0]?.payload) ?? null;
+    await connection.query(
+      'INSERT INTO sync_items (account_id,profile_index,entity_type,item_key,payload,is_deleted) VALUES (?,?,?,?,?,TRUE) ON DUPLICATE KEY UPDATE is_deleted=TRUE,updated_at=UTC_TIMESTAMP()',
+      [accountId, profileIndex, entityType, itemKey, null]
+    );
+  } else {
+    await connection.query(
+      'INSERT INTO sync_items (account_id,profile_index,entity_type,item_key,payload,is_deleted) VALUES (?,?,?,?,?,FALSE) ON DUPLICATE KEY UPDATE payload=VALUES(payload),is_deleted=FALSE,updated_at=UTC_TIMESTAMP()',
+      [accountId, profileIndex, entityType, itemKey, JSON.stringify(payload)]
+    );
+  }
+
+  const event = await connection.query(
+    'INSERT INTO sync_events (account_id,profile_index,mutation_id,entity_type,operation,item_key,origin_client_id,payload) VALUES (?,?,?,?,?,?,?,?)',
+    [accountId, profileIndex, mutationId, entityType, operation, itemKey, originClientId, eventPayload == null ? null : JSON.stringify(eventPayload)]
+  );
+  await connection.query(
+    'UPDATE sync_mutations SET event_id=? WHERE account_id=? AND mutation_id=?',
+    [event.insertId, accountId, mutationId]
+  );
+  return event.insertId;
+}
+
+async function syncBatch(pool, account, profileIndex, work) {
+  await requireProfile(account.id, profileIndex, pool);
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const result = await work(connection);
+    await connection.commit();
+    return result;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+async function syncCursor(pool, account, profileIndex, entityType) {
+  const rows = await pool.query(
+    'SELECT COALESCE(MAX(event_id),0) AS cursor FROM sync_events WHERE account_id=? AND profile_index=? AND entity_type=?',
+    [account.id, profileIndex, entityType]
+  );
+  return Number(rows[0].cursor);
+}
+
+async function syncDelta(pool, account, profileIndex, entityType, cursor, limit) {
+  const rows = await pool.query(
+    'SELECT event_id,operation,item_key,payload FROM sync_events WHERE account_id=? AND profile_index=? AND entity_type=? AND event_id>? ORDER BY event_id ASC LIMIT ?',
+    [account.id, profileIndex, entityType, cursor, limit]
+  );
+  return rows.map(row => {
+    const payload = decodeJson(row.payload) || {};
+    return {
+      event_id: Number(row.event_id),
+      operation: row.operation,
+      ...payload,
+      ...(entityType === 'progress' ? { progress_key: row.item_key } : {})
+    };
+  });
+}
+
+async function pullSyncItems(pool, account, profileIndex, entityType, limit, offset, since = null) {
+  const sql = since == null
+    ? 'SELECT item_key,payload FROM sync_items WHERE account_id=? AND profile_index=? AND entity_type=? AND is_deleted=FALSE ORDER BY updated_at DESC,item_key LIMIT ? OFFSET ?'
+    : 'SELECT item_key,payload FROM sync_items WHERE account_id=? AND profile_index=? AND entity_type=? AND is_deleted=FALSE AND updated_at>? ORDER BY updated_at DESC,item_key LIMIT ?';
+  const values = since == null
+    ? [account.id, profileIndex, entityType, limit, offset]
+    : [account.id, profileIndex, entityType, new Date(Number(since)), limit];
+  const rows = await pool.query(sql, values);
+  return rows.map(row => {
+    const payload = decodeJson(row.payload) || {};
+    return entityType === 'progress' ? { ...payload, progress_key: row.item_key, profile_id: profileIndex, user_id: account.id } :
+      { ...payload, profile_id: profileIndex, user_id: account.id };
+  });
+}
+
 async function handleRpc(req, res, name, account, pool) {
+  if (req.method !== 'POST') {
+    send(res, 405, { code: '405', message: 'POST required' });
+    return true;
+  }
+  const body = await readJson(req);
+  const profileIndex = validProfileIndex(body.p_profile_id ?? 1);
+  await requireProfile(account.id, profileIndex, pool);
+  const origin = typeof body.p_origin_client_id === 'string' ? body.p_origin_client_id.slice(0, 128) : null;
+
+  if (name === 'sync_pull_profiles') {
+    const rows = await pool.query(
+      'SELECT profile_index,name,avatar_color AS avatar_color_hex,uses_primary_addons,uses_primary_plugins,avatar_id,avatar_url,profile_background_id,profile_background_url,created_at,updated_at FROM profiles WHERE account_id=? ORDER BY profile_index',
+      [account.id]
+    );
+    send(res, 200, rows);
+    return true;
+  }
+  if (name === 'sync_push_profiles') {
+    const profiles = Array.isArray(body.p_profiles) ? body.p_profiles.slice(0, MAX_PROFILES) : [];
+    await syncBatch(pool, account, 1, async connection => {
+      for (const profile of profiles) {
+        const index = validProfileIndex(profile.profile_index);
+        const name = typeof profile.name === 'string' ? profile.name.trim().slice(0, 48) : '';
+        if (!name) continue;
+        const color = /^#[0-9A-Fa-f]{6}$/.test(profile.avatar_color_hex || '') ? profile.avatar_color_hex : '#1E88E5';
+        await connection.query(
+          'INSERT INTO profiles (account_id,profile_index,name,avatar_color,uses_primary_addons,uses_primary_plugins,avatar_id,avatar_url,profile_background_id,profile_background_url) VALUES (?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE name=VALUES(name),avatar_color=VALUES(avatar_color),uses_primary_addons=VALUES(uses_primary_addons),uses_primary_plugins=VALUES(uses_primary_plugins),avatar_id=VALUES(avatar_id),avatar_url=VALUES(avatar_url),profile_background_id=VALUES(profile_background_id),profile_background_url=VALUES(profile_background_url),updated_at=UTC_TIMESTAMP()',
+          [account.id,index,name,color,Boolean(profile.uses_primary_addons),Boolean(profile.uses_primary_plugins),profile.avatar_id || null,profile.avatar_url || null,profile.profile_background_id || null,profile.profile_background_url || null]
+        );
+      }
+    });
+    send(res, 200, null);
+    return true;
+  }
+  if (name === 'sync_delete_profile_data') {
+    if (profileIndex > 1) await pool.query('DELETE FROM profiles WHERE account_id=? AND profile_index=?', [account.id, profileIndex]);
+    send(res, 200, null);
+    return true;
+  }
+  if (name === 'sync_pull_profile_locks') {
+    const rows = await pool.query('SELECT profile_index FROM profiles WHERE account_id=? ORDER BY profile_index', [account.id]);
+    send(res, 200, rows.map(row => ({ profile_index: row.profile_index, pin_enabled: false, pin_locked_until: null })));
+    return true;
+  }
+
+  const cursorMatch = {
+    sync_get_watch_progress_delta_cursor: 'progress',
+    sync_get_watched_items_delta_cursor: 'watched',
+    sync_get_library_delta_cursor: 'library'
+  }[name];
+  if (cursorMatch) {
+    send(res, 200, await syncCursor(pool, account, profileIndex, cursorMatch));
+    return true;
+  }
+  const deltaType = {
+    sync_pull_watch_progress_delta: 'progress',
+    sync_pull_watched_items_delta: 'watched',
+    sync_pull_library_delta: 'library'
+  }[name];
+  if (deltaType) {
+    const cursor = Math.max(0, Number(body.p_since_event_id) || 0);
+    const limit = Math.min(1000, Math.max(1, Number(body.p_limit) || 200));
+    send(res, 200, await syncDelta(pool, account, profileIndex, deltaType, cursor, limit));
+    return true;
+  }
+
+  if (name === 'sync_push_watch_progress') {
+    const entries = Array.isArray(body.p_entries) ? body.p_entries.slice(0, 200) : [];
+    await syncBatch(pool, account, profileIndex, async connection => {
+      for (const entry of entries) {
+        const key = typeof entry.progress_key === 'string' ? entry.progress_key.slice(0, 255) : '';
+        if (key) await writeSyncItem(connection, account.id, profileIndex, 'progress', key, 'upsert', entry, origin);
+      }
+    });
+    send(res, 200, null);
+    return true;
+  }
+  if (name === 'sync_delete_watch_progress') {
+    const keys = Array.isArray(body.p_keys) ? body.p_keys : [];
+    await syncBatch(pool, account, profileIndex, async connection => {
+      for (const key of keys.slice(0, 200)) {
+        if (typeof key === 'string' && key.length <= 255) await writeSyncItem(connection, account.id, profileIndex, 'progress', key, 'delete', null, origin);
+      }
+    });
+    send(res, 200, null);
+    return true;
+  }
+  if (name === 'sync_pull_watch_progress') {
+    const since = body.p_since_last_watched == null ? null : Number(body.p_since_last_watched);
+    const limit = Math.min(2000, Math.max(1, Number(body.p_limit) || 1000));
+    send(res, 200, await pullSyncItems(pool, account, profileIndex, 'progress', limit, 0, since));
+    return true;
+  }
+
+  if (name === 'sync_push_watched_items') {
+    const items = Array.isArray(body.p_items) ? body.p_items.slice(0, 200) : [];
+    await syncBatch(pool, account, profileIndex, async connection => {
+      for (const item of items) {
+        const key = watchedKey(item);
+        if (key.length <= 255 && item.content_id) await writeSyncItem(connection, account.id, profileIndex, 'watched', key, 'upsert', item, origin);
+      }
+    });
+    send(res, 200, null);
+    return true;
+  }
+  if (name === 'sync_delete_watched_items') {
+    const keys = Array.isArray(body.p_keys) ? body.p_keys : [];
+    await syncBatch(pool, account, profileIndex, async connection => {
+      for (const item of keys.slice(0, 200)) {
+        if (item && typeof item.content_id === 'string') await writeSyncItem(connection, account.id, profileIndex, 'watched', watchedKey(item), 'delete', null, origin);
+      }
+    });
+    send(res, 200, null);
+    return true;
+  }
+  if (name === 'sync_pull_watched_items') {
+    const page = Math.min(10000, Math.max(1, Number(body.p_page) || 1));
+    const pageSize = Math.min(1000, Math.max(1, Number(body.p_page_size) || 900));
+    send(res, 200, await pullSyncItems(pool, account, profileIndex, 'watched', pageSize, (page - 1) * pageSize));
+    return true;
+  }
+
+  if (name === 'sync_push_library_items') {
+    const items = Array.isArray(body.p_items) ? body.p_items.slice(0, 200) : [];
+    await syncBatch(pool, account, profileIndex, async connection => {
+      for (const item of items) {
+        const key = libraryKey(item);
+        if (key.length <= 255 && item.content_id) await writeSyncItem(connection, account.id, profileIndex, 'library', key, 'upsert', item, origin);
+      }
+    });
+    send(res, 200, null);
+    return true;
+  }
+  if (name === 'sync_delete_library_items') {
+    const keys = Array.isArray(body.p_keys) ? body.p_keys : [];
+    await syncBatch(pool, account, profileIndex, async connection => {
+      for (const item of keys.slice(0, 200)) {
+        if (item && typeof item.content_id === 'string') await writeSyncItem(connection, account.id, profileIndex, 'library', libraryKey(item), 'delete', null, origin);
+      }
+    });
+    send(res, 200, null);
+    return true;
+  }
+  if (name === 'sync_pull_library') {
+    const limit = Math.min(2000, Math.max(1, Number(body.p_limit) || 1000));
+    const offset = Math.max(0, Number(body.p_offset) || 0);
+    send(res, 200, await pullSyncItems(pool, account, profileIndex, 'library', limit, offset));
+    return true;
+  }
+
   send(res, 404, { code: 'PGRST202', message: 'Function not found' });
   return true;
 }
