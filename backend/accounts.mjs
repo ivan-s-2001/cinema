@@ -230,6 +230,7 @@ async function requireProfile(accountId, index, pool) {
 }
 
 async function createAccount(req, res, pool) {
+  jwtSecret();
   checkRateLimit(req, 'register');
   const body = await readJson(req);
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
@@ -261,6 +262,7 @@ async function createAccount(req, res, pool) {
 }
 
 async function signIn(req, res, pool) {
+  jwtSecret();
   checkRateLimit(req, 'login');
   const body = await readJson(req);
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
@@ -347,8 +349,8 @@ async function syncProfile(req, res, url, account, pool) {
       }
 
       const inserted = await connection.query(
-        'INSERT IGNORE INTO sync_mutations (account_id,mutation_id) VALUES (?,?)',
-        [account.id, mutationId]
+        'INSERT IGNORE INTO sync_mutations (account_id,profile_index,mutation_id) VALUES (?,?,?)',
+        [account.id, profileIndex, mutationId]
       );
       if (inserted.affectedRows === 0) continue;
 
@@ -406,8 +408,8 @@ function stableMutationId(accountId, profileIndex, entityType, itemKey, operatio
 async function writeSyncItem(connection, accountId, profileIndex, entityType, itemKey, operation, payload, originClientId = null) {
   const mutationId = stableMutationId(accountId, profileIndex, entityType, itemKey, operation, payload);
   const mutation = await connection.query(
-    'INSERT IGNORE INTO sync_mutations (account_id,mutation_id) VALUES (?,?)',
-    [accountId, mutationId]
+    'INSERT IGNORE INTO sync_mutations (account_id,profile_index,mutation_id) VALUES (?,?,?)',
+    [accountId, profileIndex, mutationId]
   );
   if (mutation.affectedRows === 0) return null;
 
