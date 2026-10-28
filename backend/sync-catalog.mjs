@@ -45,6 +45,8 @@ function normalize(raw) {
     aliases, year: Number.isInteger(year) && year >= 1888 && year <= 2100 ? year : null,
     status: String(release.status || '').slice(0, 70),
     releaseDate: String(release.date || '').slice(0, 30),
+    runtimeMinutes: Number.isInteger(Number(release.runtimeMinutes)) && Number(release.runtimeMinutes)>0 ? Number(release.runtimeMinutes) : null,
+    ageRating: release.ageRating ?? null,
     description: String(raw.description?.ru || raw.description?.en || '').slice(0, 30000),
     genres: distinct(raw.genres || []).slice(0, 40),
     countries: distinct(raw.countries || []).slice(0, 40),
