@@ -1,0 +1,38 @@
+name: CinemaHome API
+on:
+  pull_request:
+    paths: ['backend/**', 'tests/test_backend_catalog.mjs', 'tests/test_catalog_client.mjs', 'web/catalogClient.mjs', '.github/workflows/backend.yml']
+  push:
+    branches: [main]
+    paths: ['backend/**', 'tests/test_backend_catalog.mjs', 'tests/test_catalog_client.mjs', 'web/catalogClient.mjs', '.github/workflows/backend.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  catalogue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: test-only-password
+          MARIADB_ROOT_HOST: '%'
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: backend
+      - run: npm test
+        working-directory: backend
+        env:
+          CATALOG_TEST_PORT: '3306'
+          CATALOG_TEST_PASSWORD: test-only-password

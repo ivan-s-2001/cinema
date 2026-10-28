@@ -3,6 +3,8 @@ import mariadb from 'mariadb';
 import { handleAdmin, startAdminScheduler } from './admin.mjs';
 import { handleAccountRequest } from './accounts.mjs';
 import { handleDiscovery } from './discovery.mjs';
+import { handleSearch } from './search.mjs';
+import { createCatalogV2 } from './catalog-v2.mjs';
 
 const pool=mariadb.createPool({
   host:'127.0.0.1', port:3306,
@@ -35,9 +37,10 @@ async function query(sql,params=[]){
  try{return await conn.query(sql,params);}
  finally{conn.release();}
 }
-const allowedKind=new Set(['movie','series']);
+const handleCatalogV2=createCatalogV2(pool);
 const server=http.createServer(async(req,res)=>{
  try{
+  if(await handleCatalogV2(req,res,new URL(req.url,'http://localhost')))return;
   if(await handleAdmin(req,res,pool))return;
   if(await handleAccountRequest(req,res,new URL(req.url,'http://localhost'),pool))return;
   if(await handleDiscovery(req,res,new URL(req.url,'http://localhost'),pool,reply))return;
@@ -63,17 +66,7 @@ const server=http.createServer(async(req,res)=>{
     ]);
     reply(res,200,{rows:[{id:'movies',name:'Фильмы',items:movies},{id:'series',name:'Сериалы',items:series}]});return;
   }
-  if(route==='/api/v1/search'){
-    const q=(url.searchParams.get('q')||'').trim().slice(0,120);
-    if(q.length<2){reply(res,400,{error:'Search query must have at least 2 characters'});return;}
-    const kind=url.searchParams.get('type');
-    if(kind&&!allowedKind.has(kind)){reply(res,400,{error:'Invalid type'});return;}
-    const escaped=q.replace(/[\\%_]/g,m=>'\\'+m);
-    const rows=await query(
-      'SELECT id,kind,title,year,poster,backdrop FROM titles WHERE title LIKE ?'+(kind?' AND kind = ?':'')+' ORDER BY year DESC LIMIT 40',
-      kind?['%'+escaped+'%',kind]:['%'+escaped+'%']);
-    reply(res,200,{items:rows});return;
-  }
+  if(await handleSearch(res,url,query,reply))return;
   const match=/^\/api\/v1\/titles\/([A-Za-z0-9:_-]{1,160})(\/seasons)?$/.exec(route);
   if(match){
     const id=match[1];
