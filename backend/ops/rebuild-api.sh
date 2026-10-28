@@ -3,7 +3,7 @@
 set -Eeuo pipefail
 umask 022
 if [[ ${1:-} != --reset-cinemahall || ! ${2:-} =~ ^[0-9a-f]{40}$ ]]; then
-  echo 'Usage: sudo bash rebuild-api.sh --reset-cinemahall COMMIT_SHA' >&2
+  echo 'Usage: sudo bash rebuild-api.sh --reset-cinemahall COMMIT_SHA [SNAPSHOT_DIRECTORY]' >&2
   exit 2
 fi
 [[ $EUID == 0 ]] || { echo 'Run as root.' >&2; exit 2; }
@@ -17,6 +17,10 @@ id cinemahall >/dev/null
 [[ -f /etc/cinemahall/database.env ]]
 repo=/opt/cinemahall-source
 commit=$2
+reuse=${3:-}
+if [[ -n $reuse ]]; then
+  [[ $reuse == /var/lib/cinemahall/rebuild-* && -s $reuse/index.json && -d $reuse/shards ]] || { echo 'Invalid saved snapshot directory.' >&2; exit 2; }
+fi
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
 backup=/root/cinemahall-rebuild-$stamp
 release=/opt/cinemahall-api/releases/$commit-$stamp
@@ -29,6 +33,8 @@ unit_changed=0
 had_unit=0
 had_dropins=0
 had_runtime=0
+smoke_running=0
+smoke_unit=cinemahall-rebuild-smoke-$stamp.service
 node_bin=$(command -v node)
 python_bin=$(command -v python3)
 install -d -m 700 "$backup"
@@ -40,6 +46,10 @@ echo "Backup: $backup"
 recover() {
   result=$?
   trap - EXIT
+  if (( smoke_running == 1 )); then
+    if (( result != 0 )); then journalctl -u "$smoke_unit" -n 40 --no-pager >&2 || true; fi
+    systemctl stop "$smoke_unit" >/dev/null 2>&1 || true
+  fi
   if (( result != 0 && cutover == 1 )); then
     echo "Rebuild failed; restoring CinemaHall from $backup" >&2
     set +e
@@ -116,7 +126,12 @@ echo 'Backup restore verified in a temporary database.'
 mariadb -e "DROP DATABASE \`$stage\`; CREATE DATABASE \`$stage\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL PRIVILEGES ON \`$stage\`.* TO '$db_user'@'$db_host';"
 
 echo 'Preparing fresh metadata and episodes. This may take several minutes.'
-job snapshot "$python_bin" -u "$release/scripts/build_catalog.py" --pages 15 --enrich 0 --details 100 --season-limit 20 --availability 0 --output "$data/index.json"
+if [[ -n $reuse ]]; then
+  echo "Reusing previously prepared snapshot: $reuse"
+  cp -a "$reuse/index.json" "$reuse/shards" "$data/"
+else
+  job snapshot "$python_bin" -u "$release/scripts/build_catalog.py" --pages 15 --enrich 0 --details 100 --season-limit 20 --availability 0 --output "$data/index.json"
+fi
 mariadb "$stage" < schema.sql
 # Fresh schema.sql already contains the index from migration 001.
 for migration in migrations/00[2345]_*.sql; do mariadb "$stage" < "$migration"; done
@@ -128,6 +143,32 @@ const db=await mariadb.createConnection({host:"127.0.0.1",user:process.env.DB_US
 try{const [row]=await db.query("SELECT (SELECT COUNT(*) FROM titles WHERE kind=\u0027movie\u0027) AS movies,(SELECT COUNT(*) FROM titles WHERE kind=\u0027series\u0027) AS series,(SELECT COUNT(*) FROM episodes) AS episodes");console.log(JSON.stringify(row));if(!row.movies||!row.series||!row.episodes)throw Error("Incomplete catalogue: production reset canceled");}finally{await db.end();}'
 (umask 077; mariadb-dump --single-transaction --quick --skip-lock-tables "$stage" | gzip > "$backup/new-database.sql.gz")
 gzip -t "$backup/new-database.sql.gz"
+
+probe() {
+  local base=$1 label=$2 ready=0
+  for attempt in {1..30}; do
+    if curl --fail --silent --show-error --max-time 5 "$base/health" > "$backup/$label-health.json" 2> "$backup/$label-health-error.log"; then ready=1; break; fi
+    sleep 1
+  done
+  if (( ready == 0 )); then cat "$backup/$label-health-error.log" >&2; return 1; fi
+  curl --fail --silent --show-error --max-time 15 "$base/api/v2/config" > "$backup/$label-config.json"
+  curl --fail --silent --show-error --max-time 60 --output "$backup/$label-home.json" --write-out "$label /home: %{time_total}s\n" "$base/api/v2/home"
+  "$node_bin" -e 'const fs=require("fs");const c=JSON.parse(fs.readFileSync(process.argv[1]));const h=JSON.parse(fs.readFileSync(process.argv[2]));if(c.apiVersion!==2||h.rows.length!==8||!h.rows.some(r=>r.items.length))process.exit(1)' "$backup/$label-config.json" "$backup/$label-home.json"
+}
+
+# Exercise the actual server and its production-sized pool against the staged
+# database before deleting production data. Background writers stay disabled.
+echo 'Testing the new API on 127.0.0.1:18091 before production cutover.'
+"$python_bin" -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",18091)); s.close()'
+smoke_running=1
+systemd-run --quiet --collect --unit="$smoke_unit" --uid=cinemahall \
+  --working-directory="$release/backend" --property=EnvironmentFile=/etc/cinemahall/database.env \
+  --property=RuntimeMaxSec=240 --property=TimeoutStopSec=10 \
+  /usr/bin/env "DB_NAME=$stage" DB_HOST=127.0.0.1 DB_PORT=3306 CINEMA_API_PORT=18091 CINEMA_DISABLE_SCHEDULERS=1 "$node_bin" server.mjs
+probe http://127.0.0.1:18091 staged
+systemctl stop "$smoke_unit"
+smoke_running=0
+echo 'Staged API health, config and all eight home rows passed.'
 
 echo 'Replacing CinemaHall database and service.'
 cutover=1
@@ -141,6 +182,7 @@ cat > "$data/runtime.env" <<'RUNTIME'
 DB_NAME=cinemahall
 DB_HOST=127.0.0.1
 DB_PORT=3306
+CINEMA_API_PORT=8091
 CINEMA_SOURCE_DISCOVERY=1
 CINEMA_REFRESH_ENABLED=1
 RUNTIME
@@ -170,10 +212,7 @@ rm -f "$unit"
 install -o root -g root -m 644 "$data/api.service" "$unit"
 systemctl daemon-reload
 systemctl restart cinemahall-api.service
-curl --fail --silent --show-error --retry 15 --retry-all-errors --retry-delay 1 http://127.0.0.1:8091/health
-curl --fail --silent --show-error http://127.0.0.1:8091/api/v2/config > "$backup/config.json"
-curl --fail --silent --show-error http://127.0.0.1:8091/api/v2/home > "$backup/home.json"
-"$node_bin" -e 'const fs=require("fs");const c=JSON.parse(fs.readFileSync(process.argv[1]));const h=JSON.parse(fs.readFileSync(process.argv[2]));if(c.apiVersion!==2||h.rows.length!==8||!h.rows.some(r=>r.items.length))process.exit(1)' "$backup/config.json" "$backup/home.json"
+probe http://127.0.0.1:8091 production
 systemctl enable --force cinemahall-api.service
 cutover=0
 # Recovery is no longer necessary. Leave both SQL dumps and old code intact.

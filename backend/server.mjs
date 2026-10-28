@@ -7,15 +7,16 @@ import { handleSearch } from './search.mjs';
 import { createCatalogV2 } from './catalog-v2.mjs';
 import { startRefreshScheduler } from './refresh-scheduler.mjs';
 
+const host='127.0.0.1',port=Number(process.env.CINEMA_API_PORT||8091);
+if(!Number.isInteger(port)||port<1024||port>65535)throw new Error('Invalid CINEMA_API_PORT');
 const pool=mariadb.createPool({
-  host:'127.0.0.1', port:3306,
+  host:process.env.DB_HOST||'127.0.0.1', port:Number(process.env.DB_PORT||3306),
   user:process.env.DB_USER||'cinemahall',
   password:process.env.DB_PASSWORD,
   database:process.env.DB_NAME||'cinemahall',
   connectionLimit:2, connectTimeout:3000, acquireTimeout:4000,
   idleTimeout:30, bigIntAsNumber:true
 });
-const host='127.0.0.1',port=8091;
 const responseCache=new Map();
 const responseCacheTtl=10_000;
 const responseCacheLimit=64;
@@ -89,7 +90,9 @@ server.requestTimeout=10000;
 server.headersTimeout=8000;
 server.listen(port,host,()=>{
  console.log('CinemaHall API listening on '+host+':'+port);
- if(process.env.ADMIN_SESSION_SECRET&&process.env.ADMIN_PASSWORD_SCRYPT)startAdminScheduler(pool);
- if(process.env.CINEMA_REFRESH_ENABLED==='1')startRefreshScheduler(pool);
+ if(process.env.CINEMA_DISABLE_SCHEDULERS!=='1'){
+  if(process.env.ADMIN_SESSION_SECRET&&process.env.ADMIN_PASSWORD_SCRYPT)startAdminScheduler(pool);
+  if(process.env.CINEMA_REFRESH_ENABLED==='1')startRefreshScheduler(pool);
+ }
 });
 process.on('SIGTERM',()=>server.close(()=>pool.end()));

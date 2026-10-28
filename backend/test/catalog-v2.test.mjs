@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import { randomUUID } from 'node:crypto';
 import http from 'node:http';
-import { execFile } from 'node:child_process';
+import { execFile,spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 const runFile=promisify(execFile);
@@ -69,6 +69,31 @@ test('identity report includes conflicts in payloads and existing mappings witho
   assert.ok(!JSON.stringify(report).includes('PRIVATE'));
   assert.equal(identityReport(rows,[],0).truncated,true);
 });
+test('concurrent cold home requests share one connection and release it after success or failure',async()=>{
+  let acquisitions=0,releases=0,queries=0,active=0,peak=0,fail=false;
+  const pool={getConnection:async()=>{
+    acquisitions++;
+    return {release(){releases++;},async query(){
+      queries++;active++;peak=Math.max(peak,active);
+      try{await new Promise(resolve=>setTimeout(resolve,2));if(fail)throw Object.assign(new Error('busy'),{code:'TEST_TIMEOUT'});return [];}
+      finally{active--;}
+    }};
+  }};
+  async function batch(handle){
+    return Promise.all(Array.from({length:12},async()=>{
+      let status,body;await handle({method:'GET'},{writeHead(s){status=s;},end(b){body=JSON.parse(b);}},new URL('http://localhost/api/v2/home'));
+      return {status,body};
+    }));
+  }
+  const success=await batch(createCatalogV2(pool));
+  for(const response of success){assert.equal(response.status,200);validate('Home',response.body);}
+  assert.deepEqual({acquisitions,releases,queries,peak},{acquisitions:1,releases:1,queries:8,peak:1});
+  const recovering=createCatalogV2(pool);fail=true;
+  for(const response of await batch(recovering))assert.equal(response.status,503);
+  assert.equal(releases,2);fail=false;
+  for(const response of await batch(recovering))assert.equal(response.status,200);
+  assert.equal(acquisitions,3);assert.equal(releases,3);assert.equal(peak,1);
+});
 
 test('MariaDB catalogue integration',{skip:!process.env.CATALOG_TEST_PORT},async t=>{
   const dbName='cinemahome_test_'+randomUUID().replaceAll('-','');
@@ -77,7 +102,7 @@ test('MariaDB catalogue integration',{skip:!process.env.CATALOG_TEST_PORT},async
   let pool,server;
   try{
     await root.query('CREATE DATABASE '+dbName+' CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
-    pool=mariadb.createPool({...connection,database:dbName,connectionLimit:2});
+    pool=mariadb.createPool({...connection,database:dbName,connectionLimit:1});
     await pool.query(await readFile(new URL('../schema.sql',import.meta.url),'utf8'));
     const migration=await readFile(new URL('../migrations/005_catalog_identity_refresh.sql',import.meta.url),'utf8');
     await pool.query(migration);await pool.query(migration);
@@ -104,7 +129,8 @@ test('MariaDB catalogue integration',{skip:!process.env.CATALOG_TEST_PORT},async
       if(schema)validate(schema,body);return body;
     }
     await t.test('config and home publish only released nonhidden records',async()=>{
-      await get('/config','Config');const home=await get('/home','Home');
+      await get('/config','Config');const [home]=await Promise.all(Array.from({length:8},()=>get('/home','Home')));
+      assert.equal((await pool.query('SELECT 1 AS ok'))[0].ok,1);
       assert.deepEqual(home.rows.map(r=>r.id),['popular','series','new','new_series','top','top_series','animation','scifi']);
       const ids=home.rows.flatMap(r=>r.items.map(i=>i.id));
       assert.ok(ids.includes('ch:snapshot:movie:tmdb:550'));assert.ok(!ids.includes('ch:movie:next'));assert.ok(!ids.includes('ch:movie:hidden'));assert.ok(!ids.includes('ch:movie:null'));
@@ -204,6 +230,26 @@ test('MariaDB catalogue integration',{skip:!process.env.CATALOG_TEST_PORT},async
         const identity=await pool.query('SELECT title_id FROM title_external_ids WHERE provider=? AND kind=? AND external_id=?',['tmdb','series','999']);assert.equal(identity[0].title_id,'ch:snapshot:tv:tmdb:999');
         await pool.query('DELETE FROM titles WHERE id=?',['ch:snapshot:tv:tmdb:999']);
       }finally{await rm(directory,{recursive:true,force:true});}
+    });
+    await t.test('standalone staged server uses configured database and port for concurrent home requests',async()=>{
+      const reservation=http.createServer();await new Promise(resolve=>reservation.listen(0,'127.0.0.1',resolve));
+      const port=reservation.address().port;await new Promise(resolve=>reservation.close(resolve));
+      const env={...process.env,DB_HOST:'127.0.0.1',DB_PORT:String(connection.port),DB_USER:connection.user,DB_PASSWORD:connection.password,DB_NAME:dbName,CINEMA_API_PORT:String(port),CINEMA_DISABLE_SCHEDULERS:'1'};
+      const child=spawn(process.execPath,[fileURLToPath(new URL('../server.mjs',import.meta.url))],{env,stdio:['ignore','pipe','pipe']});
+      let logs='';child.stdout.on('data',data=>{logs+=data;});child.stderr.on('data',data=>{logs+=data;});
+      try{
+        let ready=false;
+        for(let attempt=0;attempt<100;attempt++){
+          if(child.exitCode!==null)throw Error('Staged server exited: '+logs);
+          try{const response=await fetch('http://127.0.0.1:'+port+'/api/v2/config',{signal:AbortSignal.timeout(100)});if(response.ok){await response.json();ready=true;break;}}catch{}
+          await new Promise(resolve=>setTimeout(resolve,50));
+        }
+        assert.ok(ready,logs);
+        const health=await fetch('http://127.0.0.1:'+port+'/health');assert.equal(health.status,200);assert.equal((await health.json()).database,'connected');
+        await Promise.all(Array.from({length:10},async()=>{const response=await fetch('http://127.0.0.1:'+port+'/api/v2/home');assert.equal(response.status,200,logs);validate('Home',await response.json());}));
+      }finally{
+        if(child.exitCode===null&&child.signalCode===null)await new Promise(resolve=>{child.once('exit',resolve);child.kill('SIGTERM');});
+      }
     });
     await t.test('database failure is controlled and never returns private errors',async()=>{
       const failure=createCatalogV2({query:async()=>{throw Object.assign(new Error('PRIVATE'),{code:'TEST_DB_DOWN'});}});

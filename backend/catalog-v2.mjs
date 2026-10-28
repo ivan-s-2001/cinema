@@ -50,6 +50,7 @@ function filters(params) {
   return { type,sort,q,genre,country,yearFrom,yearTo,limit:number(params,'limit',24,1,60) };
 }
 export function createCatalogV2(pool,{sourceDiscovery=createSourceDiscovery({enabled:process.env.CINEMA_SOURCE_DISCOVERY==='1'})}={}) {
+  let homePending=null;
   // Only public metadata lives here. Bound both entry count and total serialized bytes.
   const cache=new Map();let cacheBytes=0;
   function remember(key,bytes) {
@@ -59,7 +60,7 @@ export function createCatalogV2(pool,{sourceDiscovery=createSourceDiscovery({ena
     cache.set(key,{bytes,size,until:Date.now()+15000});cacheBytes+=size;
     while(cache.size>64||cacheBytes>2*1024*1024){const first=cache.keys().next().value;cacheBytes-=cache.get(first).size;cache.delete(first);}
   }
-  async function browse(params, shelf=null) {
+  async function browse(params, shelf=null, db=pool) {
     const f=filters(params);
     if(shelf&&!params.has('sort'))f.sort=shelf.id.startsWith('top')?'rating':shelf.id.startsWith('new')?'year':'title';
     if (shelf) { if(f.type&&f.type!==shelf.type) throw new InputError('Invalid row type'); f.type=shelf.type; }
@@ -90,7 +91,7 @@ export function createCatalogV2(pool,{sourceDiscovery=createSourceDiscovery({ena
       clauses.push(`(${column} ${direction==='ASC'?'>':'<'} ? OR (${column}=? AND id>?))`);
       values.push(c.key,c.key,c.id);
     }
-    const result=await pool.query(`SELECT ${columns}${f.sort==='rating'?','+ratingScore+' AS rank_score':''} FROM titles WHERE ${clauses.join(' AND ')} ORDER BY ${column} ${direction},id ASC LIMIT ?`,[...values,f.limit+1]);
+    const result=await db.query(`SELECT ${columns}${f.sort==='rating'?','+ratingScore+' AS rank_score':''} FROM titles WHERE ${clauses.join(' AND ')} ORDER BY ${column} ${direction},id ASC LIMIT ?`,[...values,f.limit+1]);
     const page=result.slice(0,f.limit), last=page.at(-1);
     return { items:page.map(r=>titleCard(r)), nextCursor:result.length>f.limit?cursor({v:1,scope,id:last.id,key:f.sort==='year'?(last.year||0):f.sort==='rating'?Number(last.rank_score||0):last.title}):null };
   }
@@ -118,8 +119,17 @@ export function createCatalogV2(pool,{sourceDiscovery=createSourceDiscovery({ena
         send(200,{apiVersion:2,capabilities:{home:true,search:true,discover:true,seasons:true,episodes:true,playbackStrategy:'local',serverPlaybackOptions:false,sourceDiscovery:sourceDiscovery.enabled,profileSync:false},limits:{pageSize:60},rows});return true;
       }
       if(path==='/home') {
-        const result=await Promise.all(rows.map(async shelf=>({...shelf,...await browse(new URLSearchParams('limit=12'),shelf)})));
-        send(200,{rows:result});return true;
+        // One connection and one query at a time. Concurrent cold-home callers
+        // share this work instead of each queueing eight pool acquisitions.
+        if(!homePending)homePending=(async()=>{
+          const db=await pool.getConnection();
+          try{
+            const result=[];
+            for(const shelf of rows)result.push({...shelf,...await browse(new URLSearchParams('limit=12'),shelf,db)});
+            return {rows:result};
+          }finally{db.release();}
+        })().finally(()=>{homePending=null;});
+        send(200,await homePending);return true;
       }
       const shelf=/^\/rows\/([a-z_]+)\/items$/.exec(path);
       if(shelf){const row=rows.find(r=>r.id===shelf[1]);if(!row){fail(404,'not_found','Row not found');return true;}send(200,await browse(url.searchParams,row));return true;}
