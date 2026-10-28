@@ -97,9 +97,9 @@ export function createCatalogV2(pool,{sourceDiscovery=createSourceDiscovery({ena
     return result[0]||null;
   }
   async function cycles(row){
-    const orders=watchOrdersFor(object(row.payload).ids?.tmdb),result=[];
+    const orders=watchOrdersFor(object(row.payload).ids?.tmdb||object(row.payload).metadataTmdbId),result=[];
     for(const order of orders){
-      const found=await pool.query(`SELECT ${columns} FROM titles WHERE kind='movie' AND ${publicWhere} AND ${availableWhere} AND ${releasedWhere} AND CAST(JSON_VALUE(payload,'$.ids.tmdb') AS UNSIGNED) IN (${order.tmdb.map(()=>'?').join(',')})`,order.tmdb);
+      const found=await pool.query(`SELECT ${columns} FROM titles WHERE kind='movie' AND ${publicWhere} AND ${availableWhere} AND ${releasedWhere} AND CAST(COALESCE(JSON_VALUE(payload,'$.ids.tmdb'),JSON_VALUE(payload,'$.metadataTmdbId')) AS UNSIGNED) IN (${order.tmdb.map(()=>'?').join(',')})`,order.tmdb);
       const items=orderedWatchItems(order,found,tvPreview);
       result.push({id:order.id,name:order.name,order:order.order,source:order.source,totalParts:order.tmdb.length,availableParts:items.length,items});
     }

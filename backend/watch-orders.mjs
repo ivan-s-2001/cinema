@@ -12,6 +12,6 @@ export const watchOrders=[
 ];
 export function watchOrdersFor(tmdb){return watchOrders.filter(order=>order.tmdb.includes(Number(tmdb)));}
 export function orderedWatchItems(order,rows,preview){
- const byId=new Map(rows.map(row=>[Number(typeof row.payload==='string'?JSON.parse(row.payload).ids?.tmdb:row.payload?.ids?.tmdb),row]));
+ const byId=new Map(rows.map(row=>{const p=typeof row.payload==='string'?JSON.parse(row.payload):row.payload;return [Number(p?.ids?.tmdb||p?.metadataTmdbId),row];}));
  return order.tmdb.flatMap((tmdb,index)=>byId.has(tmdb)?[{...preview(byId.get(tmdb)),name:(index+1)+'. '+byId.get(tmdb).title,watchOrderPosition:index+1}]:[]);
 }

@@ -71,9 +71,9 @@ export function titleDetail(row) {
     aliases: labels(p.aliases).slice(0,100), description: text(row.description),
     releaseDate: date(p.releaseDate), status: text(p.status), runtimeMinutes: integer(p.runtimeMinutes,1,100000),
     genres: labels(p.genres), countries: labels(p.countries), languages: labels(p.languages), externalIds,
-    cast: list(p.cast || details.cast).map(credit).filter(c => c.name).slice(0,100),
-    directors: list(p.directors || details.directors).map(credit).filter(c => c.name).slice(0,50),
-    writers: list(p.writers || details.writers).map(credit).filter(c => c.name).slice(0,50),
+    cast: (list(p.cast).length?list(p.cast):list(details.cast)).map(credit).filter(c => c.name).slice(0,100),
+    directors: (list(p.directors).length?list(p.directors):list(details.directors)).map(credit).filter(c => c.name).slice(0,50),
+    writers: (list(p.writers).length?list(p.writers):list(details.writers)).map(credit).filter(c => c.name).slice(0,50),
     logo: imageFor(object(p.images).logo,'poster'), metadataState: row.description && image(row.poster) ? 'ready' : 'partial' };
 }
 export const seasonId = (titleId, season) => `${titleId}:s${season}`;

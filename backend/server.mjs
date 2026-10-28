@@ -15,7 +15,7 @@ import {createImageProxy} from './image-proxy.mjs';
 const host='127.0.0.1',port=Number(process.env.CINEMA_API_PORT||8091);
 if(!Number.isInteger(port)||port<1024||port>65535)throw new Error('Invalid CINEMA_API_PORT');
 const pool=mariadb.createPool({
-  host:process.env.DB_HOST||'127.0.0.1', port:Number(process.env.DB_PORT||3306),
+  timezone:'Z',host:process.env.DB_HOST||'127.0.0.1', port:Number(process.env.DB_PORT||3306),
   user:process.env.DB_USER||'cinemahall',
   password:process.env.DB_PASSWORD,
   database:process.env.DB_NAME||'cinemahall',

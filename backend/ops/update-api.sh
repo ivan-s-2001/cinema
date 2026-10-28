@@ -68,6 +68,12 @@ probe(){
   image=$("$node_bin" -e 'const fs=require("fs");const h=JSON.parse(fs.readFileSync(process.argv[1]));const image=h.rows.flatMap(r=>r.items).map(i=>i.poster).find(v=>v&&v.includes("/api/v2/images/tmdb/"));if(!image)throw Error("No server-hosted posters returned");console.log(new URL(image).pathname)' "$backup/$label-home.json")
   echo "$label: checking real poster bytes"
   curl --fail-with-body --silent --show-error --max-time 30 "$base$image" > "$backup/$label-poster.jpg"
+  echo "$label: checking episode selection and actor filmography"
+  curl --fail-with-body --silent --show-error --max-time 90 "$base/api/v2/titles/ch:snapshot:tv:tmdb:1668/tv-meta" > "$backup/$label-tv-meta.json"
+  local person
+  person=$("$node_bin" -e 'const fs=require("fs");const m=JSON.parse(fs.readFileSync(process.argv[1])).meta;if(!m.videos?.some(v=>v.season>0&&v.episode>0))throw Error("No selectable series episodes");const p=m.app_extras?.cast?.find(p=>/^person:[a-f0-9]{32}$/.test(p.personId));if(!p)throw Error("No navigable actors returned");console.log(p.personId)' "$backup/$label-tv-meta.json")
+  curl --fail-with-body --silent --show-error --max-time 30 "$base/api/v2/people/$person/filmography?limit=2" > "$backup/$label-filmography.json"
+  "$node_bin" -e 'const fs=require("fs");const f=JSON.parse(fs.readFileSync(process.argv[1]));if(!f.person?.id||!f.items?.length)throw Error("Actor filmography is empty");console.log("Server episodes and actor filmography verified")' "$backup/$label-filmography.json"
   echo "$label: checking source discovery"
   curl --fail-with-body --silent --show-error --max-time 30 "$base/api/v2/titles/ch:snapshot:tv:tmdb:1668/source-candidates?episode=S1E1" > "$backup/$label-sources.json"
   "$node_bin" -e 'const fs=require("fs");const s=JSON.parse(fs.readFileSync(process.argv[1]));if(s.status!=="ready"||!s.candidates.length)throw Error("Source discovery check returned no candidates");console.log("Server poster and "+s.candidates.length+" source candidates verified")' "$backup/$label-sources.json"

@@ -94,9 +94,20 @@ export function createMetadataLibrary(pool,{provider=createMetadataProvider(),cl
     if(!provider.enabled||closed)return;
     if(pending.has(row.id))return pending.get(row.id);
     if((retry.get(row.id)||0)>clock())return;
-    const payload=object(row.payload),tmdb=String(payload.ids?.tmdb||'');
-    if(!/^\d{1,12}$/.test(tmdb))return;
+    const payload=object(row.payload);
     const work=(async()=>{
+      let tmdb=String(payload.ids?.tmdb||payload.metadataTmdbId||'');
+      if(!/^\d{1,12}$/.test(tmdb)){
+        const kp=String(payload.ids?.kinopoisk||row.source_kp||'');
+        if(!/^\d{1,12}$/.test(kp))return;
+        try{
+          const response=await provider.get('/titles/by/kinopoisk/'+kp+'?include=images');
+          const source=response.data;
+          if(String(source?.id?.kinopoisk)!==kp||source?.type!==(row.kind==='series'?'tv':'movie'))throw Error('Metadata identity mismatch');
+          tmdb=String(source?.id?.tmdb||'');if(!/^\d{1,12}$/.test(tmdb))return;
+          await pool.query("UPDATE titles SET payload=JSON_SET(COALESCE(payload,JSON_OBJECT()),'$.metadataTmdbId',?) WHERE id=?",[tmdb,row.id]);
+        }catch(error){retry.set(row.id,clock()+60000);console.warn('Metadata identity refresh',row.id,error.message);return;}
+      }
       try{await credits(row,payload,tmdb);}catch(error){console.warn('Credits refresh',row.id,error.message);retry.set(row.id,clock()+60000);}
       if(row.kind==='series')try{await episodes(row,payload,tmdb);}catch(error){console.warn('Episode inventory refresh',row.id,error.message);retry.set(row.id,clock()+60000);}
       while(retry.size>256)retry.delete(retry.keys().next().value);
