@@ -34,7 +34,7 @@ export function tvMetadata(row, episodeRows=[]) {
     const seasonAir=object(row.payload).seasonAirAt;
     if(seasonAir&&seasonAir>new Date().toISOString().slice(0,10))video.available=false;
     if(ep.description)video.overview=ep.description;
-    if(ep.still)video.thumbnail=ep.still;
+    if(ep.still||title.backdrop||title.poster)video.thumbnail=ep.still||title.backdrop||title.poster;
     if(ep.airAt)video.released=instant(ep.airAt);
     return video;
   });

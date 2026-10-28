@@ -1334,6 +1334,35 @@
         "poster"
       ],
       "additionalProperties": false
+    },
+    "Facets": {
+      "type": "object",
+      "properties": {
+        "genres": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "countries": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "years": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        }
+      },
+      "required": [
+        "genres",
+        "countries",
+        "years"
+      ],
+      "additionalProperties": false
     }
   }
 }

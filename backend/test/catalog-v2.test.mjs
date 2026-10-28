@@ -100,7 +100,7 @@ test('concurrent cold home requests share one connection and release it after su
   }
   const success=await batch(createCatalogV2(pool));
   for(const response of success){assert.equal(response.status,200);validate('Home',response.body);}
-  assert.deepEqual({acquisitions,releases,queries,peak},{acquisitions:1,releases:1,queries:10,peak:1});
+  assert.deepEqual({acquisitions,releases,queries,peak},{acquisitions:1,releases:1,queries:collections.filter(r=>r.home).length,peak:1});
   const recovering=createCatalogV2(pool);fail=true;
   for(const response of await batch(recovering))assert.equal(response.status,503);
   assert.equal(releases,2);fail=false;
@@ -155,17 +155,32 @@ test('MariaDB catalogue integration',{skip:!process.env.CATALOG_TEST_PORT},async
       assert.deepEqual(home.rows.find(r=>r.id==='scifi').items.map(i=>i.id),['ch:movie:scifi']);
       assert.deepEqual(home.rows.find(r=>r.id==='top').items.map(i=>i.id),['ch:snapshot:movie:tmdb:550','ch:movie:animation','ch:movie:scifi']);
     });
+    await t.test('navigator facets come from watchable records and filters search the entire catalogue',async()=>{
+      await pool.query("UPDATE titles SET payload=JSON_SET(payload,'$.countries',JSON_ARRAY('США'),'$.runtimeMinutes',85) WHERE id='ch:movie:animation'");
+      await pool.query("UPDATE titles SET payload=JSON_SET(payload,'$.countries',JSON_ARRAY('HIDDEN COUNTRY')) WHERE id='ch:movie:hidden'");
+      const facets=await get('/facets?type=movie','Facets');
+      assert.ok(facets.genres.includes('Мультфильм'));assert.ok(facets.countries.includes('США'));assert.ok(!facets.countries.includes('HIDDEN COUNTRY'));
+      assert.ok(facets.years.includes(2021));assert.ok(!facets.years.includes(2043));
+      const result=await get('/discover?q='+encodeURIComponent('Анимация')+'&genre='+encodeURIComponent('мультфильм')+'&country='+encodeURIComponent('сша')+'&yearFrom=2021&yearTo=2021','Page');
+      assert.deepEqual(result.items.map(r=>r.id),['ch:movie:animation']);
+      assert.equal((await get('/discover?q='+encodeURIComponent('Анимация')+'&yearFrom=2000&yearTo=2001','Page')).items.length,0);
+      assert.equal((await get('/rows/short_evening/items','Page')).items[0].id,'ch:movie:animation');
+      await get('/facets?type=bad','Error',400);
+    });
     await t.test('metadata hydration persists cast, filmography and complete season numbering',async()=>{
       const provider={enabled:true,async get(path){
         if(path.includes('credits'))return {data:[{id:99,name_ru:'Актёр',profession:'actor',profile_path:'/actor.jpg',character_ru:'Герой'}]};
         if(path.endsWith('/seasons'))return {data:[{season_number:1,episode_count:3},{season_number:2,episode_count:2}]};
-        return {data:[]};
+        return {data:[{episode_number:1,name:'Episode name',still_path:'/episode.jpg',air_date:'2020-01-01',overview:'Episode story'}]};
       }};
       const library=createMetadataLibrary(pool,{provider});
       const movie=(await pool.query('SELECT * FROM titles WHERE id=?',['ch:snapshot:movie:tmdb:550']))[0];
       await pool.query("INSERT INTO titles(id,kind,title,year,payload,source_count,source_expires_at,catalog_rating)VALUES('ch:series:hydration','series','Hydrated',2020,?,1,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 6 HOUR),7)",[JSON.stringify({status:'Ended',ids:{tmdb:'43'}})]);
       const series=(await pool.query('SELECT * FROM titles WHERE id=?',['ch:series:hydration']))[0];
-      await Promise.all([library.ensure(movie),library.ensure(movie)]);await library.ensure(series);await library.idle();
+      await Promise.all([library.ensure(movie),library.ensure(movie)]);await library.ensure(series);
+      const firstArtwork=await pool.query('SELECT still,title FROM episodes WHERE title_id=? AND season_number=1 AND episode_number=1',[series.id]);
+      assert.ok(firstArtwork[0].still.includes('/episode.jpg'));assert.equal(firstArtwork[0].title,'Episode name');
+      await library.idle();
       const person=(await pool.query('SELECT * FROM people'))[0];assert.ok(person.id.startsWith('person:'));assert.equal(person.name,'Актёр');
       const cast=await pool.query('SELECT title_id FROM title_cast WHERE person_id=?',[person.id]);assert.equal(cast.length,2);
       const inventory=await pool.query('SELECT season_number,episode_number FROM episodes WHERE title_id=? AND season_number>0 ORDER BY season_number,episode_number',['ch:series:hydration']);
@@ -203,6 +218,18 @@ test('MariaDB catalogue integration',{skip:!process.env.CATALOG_TEST_PORT},async
       const home=await get('/rows/popular/items?limit=1','Page');assert.ok(home.nextCursor);await get('/rows/popular/items?limit=1&cursor='+home.nextCursor,'Page');
       const top=await get('/rows/top/items?limit=1','Page');assert.ok(top.nextCursor);
       const rest=await get('/rows/top/items?limit=1&cursor='+top.nextCursor,'Page');assert.equal(rest.items.length,1);assert.notEqual(rest.items[0].id,top.items[0].id);
+    });
+    await t.test('watch order combines related series by release date, keeping unrelated numeric movie IDs out',async()=>{
+      for(const [id,kind,tmdb,year]of [['ch:game','series',1399,2011],['ch:house','series',94997,2022],['ch:wrong-cycle','movie',1399,2010]]){
+        await pool.query("INSERT INTO titles(id,kind,title,year,payload,source_count,source_expires_at,catalog_rating)VALUES(?,?,?,?,?,1,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 6 HOUR),8)",[id,kind,id,year,JSON.stringify({status:'Released',ids:{tmdb}})]);
+      }
+      try{
+        const a=await get('/titles/ch:house/watch-orders'),b=await get('/titles/ch:game/watch-orders');
+        assert.deepEqual(a.items[0].items.map(i=>i.id),['ch:game','ch:house']);
+        assert.deepEqual(b.items[0].items.map(i=>i.id),['ch:game','ch:house']);
+        assert.equal(a.items[0].order,'Порядок выхода сериалов');
+        assert.equal((await get('/titles/ch:wrong-cycle/watch-orders')).items.length,0);
+      }finally{await pool.query("DELETE FROM titles WHERE id IN ('ch:game','ch:house','ch:wrong-cycle')");}
     });
     await t.test('invalid filters, cursor and methods return typed errors',async()=>{
       for(const q of ['limit=0','limit=abc','limit=61','yearFrom=NaN','yearFrom=2026&yearTo=2000','sort=sql','extra=1','cursor=abc'])await get('/discover?'+q,'Error',400);

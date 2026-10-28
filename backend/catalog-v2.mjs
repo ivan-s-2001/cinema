@@ -5,7 +5,7 @@ import { tvMetadata, tvPreview } from './tv-meta.mjs';
 import {collections, rowSpec, availableWhere} from './collections.mjs';
 import {createMetadataLibrary} from './metadata-library.mjs';
 import {object,imageFor} from './catalog-model.mjs';
-import {watchOrdersFor,orderedWatchItems} from './watch-orders.mjs';
+import {watchOrdersFor,orderedWatchItems,orderParts} from './watch-orders.mjs';
 
 const prefix = '/api/v2';
 const columns = 'id,kind,title,year,description,poster,backdrop,payload,updated_at,source_count,source_checked_at,source_expires_at,catalog_rating,catalog_popularity,source_kp';
@@ -66,14 +66,20 @@ export function createCatalogV2(pool,{sourceDiscovery=createSourceDiscovery({ena
       clauses.push(releasedWhere,"poster IS NOT NULL AND poster<>''");
       if(shelf.minRating){clauses.push('catalog_rating>=?');values.push(shelf.minRating);}
       if(shelf.recent)clauses.push('year>=YEAR(UTC_DATE())-2');
+      if(shelf.yearFrom){clauses.push('year>=?');values.push(shelf.yearFrom);}
+      if(shelf.yearTo){clauses.push('year<=?');values.push(shelf.yearTo);}
+      if(shelf.runtimeMax){clauses.push("CAST(JSON_VALUE(payload,'$.runtimeMinutes') AS UNSIGNED) BETWEEN 1 AND ?");values.push(shelf.runtimeMax);}
+      if(shelf.runtimeMin){clauses.push("CAST(JSON_VALUE(payload,'$.runtimeMinutes') AS UNSIGNED)>=?");values.push(shelf.runtimeMin);}
+      if(shelf.keywords){clauses.push('('+shelf.keywords.map(()=>"LOWER(CONCAT(title,' ',COALESCE(description,''))) LIKE ? ESCAPE '!'").join(' OR ')+')');values.push(...shelf.keywords.map(v=>'%'+escaped(v)+'%'));}
+
       if(shelf.genres){clauses.push('('+shelf.genres.map(()=>"JSON_CONTAINS(LOWER(COALESCE(JSON_EXTRACT(payload,'$.genres'),'[]')),JSON_QUOTE(?))").join(' OR ')+')');values.push(...shelf.genres);}
     }
     if(f.type){clauses.push('kind=?');values.push(f.type);}
     if(f.yearFrom){clauses.push('year>=?');values.push(f.yearFrom);}
     if(f.yearTo){clauses.push('year<=?');values.push(f.yearTo);}
     for (const field of ['genre','country']) if(f[field]) {
-      clauses.push(`JSON_CONTAINS(COALESCE(JSON_EXTRACT(payload,'$.${field==='genre'?'genres':'countries'}'),'[]'),JSON_QUOTE(?))`);
-      values.push(f[field]);
+      clauses.push(`JSON_CONTAINS(LOWER(COALESCE(JSON_EXTRACT(payload,'$.${field==='genre'?'genres':'countries'}'),'[]')),JSON_QUOTE(?))`);
+      values.push(f[field].toLowerCase());
     }
     if(f.q){
       const pattern='%'+escaped(f.q.toLowerCase())+'%';
@@ -97,11 +103,17 @@ export function createCatalogV2(pool,{sourceDiscovery=createSourceDiscovery({ena
     return result[0]||null;
   }
   async function cycles(row){
-    const orders=watchOrdersFor(object(row.payload).ids?.tmdb||object(row.payload).metadataTmdbId),result=[];
+    const orders=watchOrdersFor(object(row.payload).ids?.tmdb||object(row.payload).metadataTmdbId,row.kind),result=[];
     for(const order of orders){
-      const found=await pool.query(`SELECT ${columns} FROM titles WHERE kind='movie' AND ${publicWhere} AND ${availableWhere} AND ${releasedWhere} AND CAST(COALESCE(JSON_VALUE(payload,'$.ids.tmdb'),JSON_VALUE(payload,'$.metadataTmdbId')) AS UNSIGNED) IN (${order.tmdb.map(()=>'?').join(',')})`,order.tmdb);
+      const parts=orderParts(order);
+      const clauses=[],values=[];
+      for(const type of ['movie','series']){
+        const ids=parts.filter(p=>p.type===type).map(p=>p.id);if(!ids.length)continue;
+        clauses.push(`(kind=? AND CAST(COALESCE(JSON_VALUE(payload,'$.ids.tmdb'),JSON_VALUE(payload,'$.metadataTmdbId')) AS UNSIGNED) IN (${ids.map(()=>'?').join(',')}))`);values.push(type,...ids);
+      }
+      const found=await pool.query(`SELECT ${columns} FROM titles WHERE ${publicWhere} AND ${availableWhere} AND ${releasedWhere} AND (${clauses.join(' OR ')})`,values);
       const items=orderedWatchItems(order,found,tvPreview);
-      result.push({id:order.id,name:order.name,order:order.order,source:order.source,totalParts:order.tmdb.length,availableParts:items.length,items});
+      result.push({id:order.id,name:order.name,order:order.order,source:order.source,totalParts:parts.length,availableParts:items.length,items});
     }
     return result;
   }
@@ -128,6 +140,19 @@ export function createCatalogV2(pool,{sourceDiscovery=createSourceDiscovery({ena
       const path=url.pathname.slice(prefix.length);
       if(path==='/config') {
         send(200,{apiVersion:2,capabilities:{home:true,search:true,discover:true,seasons:true,episodes:true,playbackStrategy:'local',serverPlaybackOptions:false,sourceDiscovery:sourceDiscovery.enabled,profileSync:false},limits:{pageSize:60},rows:rows.map(rowSpec)});return true;
+      }
+      if(path==='/facets') {
+        if([...url.searchParams.keys()].some(k=>k!=='type'))throw new InputError('Invalid facet filter');
+        const type=url.searchParams.get('type')||'';
+        if(type&&!['movie','series'].includes(type))throw new InputError('Invalid type');
+        const where=[publicWhere,availableWhere,releasedWhere,...(type?['kind=?']:[])].join(' AND '),args=type?[type]:[];
+        const result={};
+        for(const field of ['genres','countries']){
+          const options=await pool.query(`SELECT DISTINCT facet.label AS value FROM titles CROSS JOIN JSON_TABLE(COALESCE(JSON_EXTRACT(payload,'$.${field}'),'[]'),'$[*]' COLUMNS(label VARCHAR(80) PATH '$' NULL ON ERROR)) AS facet WHERE ${where} AND facet.label IS NOT NULL AND facet.label<>'' ORDER BY facet.label`,args);
+          result[field]=options.map(o=>o.value);
+        }
+        result.years=(await pool.query(`SELECT DISTINCT year FROM titles WHERE ${where} AND year IS NOT NULL ORDER BY year DESC`,args)).map(r=>r.year);
+        send(200,result);return true;
       }
       if(path==='/home') {
         // One connection and one query at a time. Concurrent cold-home callers
@@ -170,7 +195,7 @@ export function createCatalogV2(pool,{sourceDiscovery=createSourceDiscovery({ena
           const result=tvMetadata(row,episodes);
           result.meta.cinemaRelated=(await related(row)).map(tvPreview);
           result.meta.cinemaWatchOrders=await cycles(row);
-          if(Buffer.byteLength(JSON.stringify(result))>512*1024)for(const video of result.meta.videos||[]){delete video.overview;delete video.thumbnail;}
+          if(Buffer.byteLength(JSON.stringify(result))>512*1024)for(const video of result.meta.videos||[]){delete video.overview;}
           if(Buffer.byteLength(JSON.stringify(result))>2*1024*1024){fail(503,'tv_metadata_too_large','Use paginated episode routes');return true;}
           send(200,result);return true;
         }

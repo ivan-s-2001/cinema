@@ -58,7 +58,7 @@ fun CinemaPersonScreen(personId: String, onBack: () -> Unit, onOpenFilm: (String
     var loading by remember(personId) { mutableStateOf(true) }
     var error by remember(personId) { mutableStateOf<String?>(null) }
     val backFocus = remember { FocusRequester() }
-    LaunchedEffect(personId) { backFocus.requestFocus() }
+    LaunchedEffect(personId) { withFrameNanos { }; backFocus.requestFocus() }
     LaunchedEffect(personId, generation) {
         loading = true; error = null
         try {

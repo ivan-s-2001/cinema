@@ -154,7 +154,7 @@ probe() {
   if (( ready == 0 )); then cat "$backup/$label-health-error.log" >&2; return 1; fi
   curl --fail --silent --show-error --max-time 15 "$base/api/v2/config" > "$backup/$label-config.json"
   curl --fail --silent --show-error --max-time 60 --output "$backup/$label-home.json" --write-out "$label /home: %{time_total}s\n" "$base/api/v2/home"
-  "$node_bin" -e 'const fs=require("fs");const c=JSON.parse(fs.readFileSync(process.argv[1]));const h=JSON.parse(fs.readFileSync(process.argv[2]));if(c.apiVersion!==2||h.rows.length!==10||!h.rows.some(r=>r.items.length))process.exit(1)' "$backup/$label-config.json" "$backup/$label-home.json"
+  "$node_bin" -e 'const fs=require("fs");const c=JSON.parse(fs.readFileSync(process.argv[1]));const h=JSON.parse(fs.readFileSync(process.argv[2]));if(c.apiVersion!==2||h.rows.length!==14||!h.rows.some(r=>r.items.length))process.exit(1)' "$backup/$label-config.json" "$backup/$label-home.json"
 }
 
 # Exercise the actual server and its production-sized pool against the staged
@@ -169,7 +169,7 @@ systemd-run --quiet --collect --unit="$smoke_unit" --uid=cinemahall \
 probe http://127.0.0.1:18091 staged
 systemctl stop "$smoke_unit"
 smoke_running=0
-echo 'Staged API health, config and all ten home rows passed.'
+echo 'Staged API health, config and all fourteen home rows passed.'
 
 echo 'Replacing CinemaHall database and service.'
 cutover=1

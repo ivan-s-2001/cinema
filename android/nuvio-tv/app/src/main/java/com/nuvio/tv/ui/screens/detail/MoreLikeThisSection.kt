@@ -108,8 +108,8 @@ fun MoreLikeThisSection(
 
     val landscapeStyle = remember(posterCardCornerRadius) {
         PosterCardStyle(
-            width = 260.dp,
-            height = 146.dp,
+            width = 148.dp,
+            height = 222.dp,
             cornerRadius = posterCardCornerRadius,
             focusedBorderWidth = NuvioTheme.spacing.xxs,
             focusedScale = 1.02f
@@ -168,7 +168,7 @@ fun MoreLikeThisSection(
                         onLongPress = { onItemLongPress(item) },
                         posterCardStyle = landscapeStyle,
                         showLabel = true,
-                        imageCrossfade = true,
+                        imageCrossfade = false,
                         isWatched = isItemWatched(item),
                         focusRequester = focusRequester,
                         upFocusRequester = upFocusRequester,

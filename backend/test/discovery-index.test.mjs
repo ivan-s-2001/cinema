@@ -25,7 +25,7 @@ test('watch order follows the curated timeline, retaining positions when parts a
  const order=watchOrdersFor(11).find(o=>o.id==='skywalker');
  const rows=[{id:'old',title:'Episode IV',payload:{ids:{tmdb:11}}},{id:'new',title:'Episode I',payload:{ids:{tmdb:1893}}}];
  const result=orderedWatchItems(order,rows,r=>({id:r.id,name:r.title}));
- assert.deepEqual(result.map(r=>r.id),['new','old']);assert.deepEqual(result.map(r=>r.watchOrderPosition),[1,4]);assert.equal(result.length,2);
+ assert.deepEqual(result.map(r=>r.id),['old','new']);assert.deepEqual(result.map(r=>r.watchOrderPosition),[1,4]);assert.equal(result.length,2);
 });
 
 test('long localized titles are split into bounded discovery queries',async()=>{
@@ -33,4 +33,13 @@ test('long localized titles are split into bounded discovery queries',async()=>{
  let requests=0;
  await updateDiscoveryIndex({query:async()=>{}},rows,{query:async(kind,params)=>{requests++;assert.ok(new URLSearchParams({q:params.q}).toString().length<6000);return {response:{docs:[]}};}});
  assert.ok(requests>1);
+});
+
+test('release order joins movie and TV namespaces without cross-matching numeric IDs',()=>{
+ const order=watchOrdersFor(94997,'series').find(o=>o.id==='westeros');assert.ok(order);
+ assert.equal(watchOrdersFor(94997,'movie').some(o=>o.id==='westeros'),false);
+ const rows=[{id:'house',kind:'series',title:'House',payload:{ids:{tmdb:94997}}},{id:'wrong',kind:'movie',title:'Other movie',payload:{ids:{tmdb:1399}}},{id:'game',kind:'series',title:'Game',payload:{ids:{tmdb:1399}}}];
+ assert.deepEqual(orderedWatchItems(order,rows,r=>({id:r.id})).map(r=>r.id),['game','house']);
+ const marvel=watchOrdersFor(24428).find(o=>o.id==='infinity-saga');assert.equal(marvel.tmdb[0],1726);assert.equal(marvel.order,'Порядок выхода');
+ const minions=watchOrdersFor(1315772).find(o=>o.id==='despicable-me');assert.equal(minions.tmdb[0],20352);
 });

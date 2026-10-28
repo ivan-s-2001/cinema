@@ -48,16 +48,16 @@ export function createMetadataLibrary(pool,{provider=createMetadataProvider(),cl
       const number=raw.episode_number;
       if(!Number.isInteger(number)||number<1||number>9999)continue;
       const air=date(raw.air_date)?.slice(0,10)||null;
-      const path=text(raw.still_path);
+      const path=text(raw.still_path)||text(raw.still)||text(raw.thumbnail)||text(raw.image?.original)||text(raw.image?.medium);
       const still=imageFor(path?.startsWith('/')?'https://image.tmdb.org/t/p/w1280'+path:path,'backdrop');
       await pool.query(`INSERT INTO episodes(title_id,season_number,episode_number,title,air_date,still,payload)VALUES(?,?,?,?,?,?,?)
         ON DUPLICATE KEY UPDATE title=COALESCE(NULLIF(VALUES(title),''),title),air_date=COALESCE(VALUES(air_date),air_date),still=COALESCE(VALUES(still),still),payload=VALUES(payload)`,
-        [row.id,season.number,number,text(raw.name_ru)||text(raw.name_en)||'Серия '+number,air,still,JSON.stringify({description:text(raw.overview_ru)||text(raw.overview_en)})]);
+        [row.id,season.number,number,text(raw.name_ru)||text(raw.name_en)||text(raw.name)||'Серия '+number,air,still,JSON.stringify({description:text(raw.overview_ru)||text(raw.overview_en)||text(raw.overview)})]);
     }
   }
   async function episodes(row,payload,tmdb){
     const last=Date.parse(payload.episodesCheckedAt||'');
-    if(Date.parse(payload.episodesDetailsCheckedAt||'')>clock()-6*3600000)return;
+    if(payload.episodesArtworkCheckedAt&&Date.parse(payload.episodesDetailsCheckedAt||'')>clock()-6*3600000)return;
     let seasons;
     if(last>clock()-6*3600000){
       seasons=(await pool.query('SELECT season_number AS number,COUNT(*) AS count FROM episodes WHERE title_id=? AND season_number>0 GROUP BY season_number ORDER BY season_number',[row.id])).map(s=>({...s,count:Number(s.count)}));
@@ -78,6 +78,14 @@ export function createMetadataLibrary(pool,{provider=createMetadataProvider(),cl
       await db.query("UPDATE titles SET payload=JSON_SET(COALESCE(payload,JSON_OBJECT()),'$.episodesCheckedAt',?) WHERE id=?",[new Date(clock()).toISOString(),row.id]);
       await db.commit();
     }catch(error){await db.rollback();throw error;}finally{db.release();}
+    }
+    // Warm one season before returning the first page; names and screenshots
+    // no longer depend on a background task finishing after the TV cached it.
+    if(seasons.length&&!payload.episodesArtworkCheckedAt){
+      try{
+        await seasonDetails(row,tmdb,seasons[0]);
+        await pool.query("UPDATE titles SET payload=JSON_SET(COALESCE(payload,JSON_OBJECT()),'$.episodesArtworkCheckedAt',?) WHERE id=?",[new Date(clock()).toISOString(),row.id]);
+      }catch(error){console.warn('Episode artwork warmup',row.id,error.message);}
     }
     // The inventory is useful immediately. Names/stills for other seasons are
     // filled by one bounded background worker, never by the TV.
