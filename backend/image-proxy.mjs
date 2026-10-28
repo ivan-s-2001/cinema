@@ -6,6 +6,8 @@ export function proxyTmdb(url){
 }
 export function createImageProxy({fetcher=fetch,clock=Date.now,budget=16*1024*1024}={}){
   const cache=new Map(),pending=new Map(),queue=[];let bytes=0,active=0;
+  const hosts=['https://image.tmdb.org','https://tmdb-image-prod.b-cdn.net'];
+  const unavailable=new Map();let preferred=hosts[0];
   async function slot(work){
     if(active>=2){if(queue.length>=32)throw Error('Image queue full');await new Promise(resolve=>queue.push(resolve));}
     else active++;
@@ -16,17 +18,31 @@ export function createImageProxy({fetcher=fetch,clock=Date.now,budget=16*1024*10
     if(saved&&saved.until>clock()){cache.delete(path);cache.set(path,saved);return saved;}
     if(pending.has(path))return pending.get(path);
     const work=slot(async()=>{
-      const response=await fetcher('https://image.tmdb.org/t/p/'+match[1]+'/'+match[2],{redirect:'error',signal:AbortSignal.timeout(10000)});
-      if(response.status===404)return {status:404};
-      if(!response.ok)throw Error('Image provider unavailable');
-      if(Number(response.headers.get('content-length')||0)>2*1024*1024)throw Error('Image too large');
-      const chunks=[];let length=0;
-      for await(const chunk of response.body){length+=chunk.length;if(length>2*1024*1024)throw Error('Image too large');chunks.push(chunk);}
-      const body=Buffer.concat(chunks),type=response.headers.get('content-type')?.split(';')[0];
-      const jpeg=body[0]===255&&body[1]===216&&body[2]===255;
-      const png=body.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
-      const webp=body.subarray(0,4).toString()==='RIFF'&&body.subarray(8,12).toString()==='WEBP';
-      if(!(type==='image/jpeg'&&jpeg||type==='image/png'&&png||type==='image/webp'&&webp))throw Error('Invalid image');
+      let body,type,lastError,missing=false;
+      for(const host of [preferred,...hosts.filter(host=>host!==preferred)]){
+        if((unavailable.get(host)||0)>clock())continue;
+        try{
+          // Standard TLS verification is deliberately kept on both fixed hosts.
+          const response=await fetcher(host+'/t/p/'+match[1]+'/'+match[2],{redirect:'error',signal:AbortSignal.timeout(6000)});
+          if(!response.ok){await response.body?.cancel();if(response.status===404){missing=true;continue;}throw Error('Image provider HTTP '+response.status);}
+          if(Number(response.headers.get('content-length')||0)>2*1024*1024){await response.body?.cancel();throw Error('Image too large');}
+          const chunks=[];let length=0;
+          for await(const chunk of response.body){length+=chunk.length;if(length>2*1024*1024)throw Error('Image too large');chunks.push(chunk);}
+          const candidate=Buffer.concat(chunks),mime=response.headers.get('content-type')?.split(';')[0];
+          const jpeg=candidate[0]===255&&candidate[1]===216&&candidate[2]===255;
+          const png=candidate.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
+          const webp=candidate.subarray(0,4).toString()==='RIFF'&&candidate.subarray(8,12).toString()==='WEBP';
+          if(!(mime==='image/jpeg'&&jpeg||mime==='image/png'&&png||mime==='image/webp'&&webp))throw Error('Invalid image');
+          body=candidate;type=mime;preferred=host;unavailable.delete(host);break;
+        }catch(error){
+          lastError=error;
+          if(error.cause?.code||['TimeoutError','AbortError'].includes(error.name)){
+            unavailable.set(host,clock()+300000);
+            console.warn('Image upstream temporarily skipped',new URL(host).hostname,error.cause?.code||error.name);
+          }
+        }
+      }
+      if(!body){if(missing&&!lastError)return {status:404};throw lastError||Error('Image providers temporarily unavailable');}
       const item={status:200,body,type,until:clock()+86400000};
       if(cache.has(path)){bytes-=cache.get(path).body.length;cache.delete(path);}
       if(body.length<=budget){cache.set(path,item);bytes+=body.length;}

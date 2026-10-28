@@ -22,5 +22,21 @@ test('image cache has a byte budget and cold downloads have bounded concurrency'
 });
 test('proxy rejects HTML masquerading as images and retries failed responses',async()=>{
   let calls=0;const handler=createImageProxy({fetcher:async()=>{calls++;return new Response('<html>error</html>',{headers:{'content-type':'image/jpeg'}});}});
-  assert.equal((await request(handler)).status,503);assert.equal((await request(handler)).status,503);assert.equal(calls,2);
+  assert.equal((await request(handler)).status,503);assert.equal((await request(handler)).status,503);assert.equal(calls,4);
+});
+test('TLS hostname failure uses the other fixed HTTPS origin and remembers the working one',async()=>{
+  const calls=[];
+  const handler=createImageProxy({fetcher:async(url,options)=>{
+    calls.push(url);assert.deepEqual(Object.keys(options).sort(),['redirect','signal']);
+    assert.equal(options.redirect,'error');
+    if(url.startsWith('https://image.tmdb.org/'))throw Object.assign(new TypeError('fetch failed'),{cause:{code:'ERR_TLS_CERT_ALTNAME_INVALID'}});
+    assert.ok(url.startsWith('https://tmdb-image-prod.b-cdn.net/t/p/'));return response();
+  }});
+  assert.equal((await request(handler)).status,200);
+  assert.equal((await request(handler,'/api/v2/images/tmdb/w342/another.jpg')).status,200);
+  assert.deepEqual(calls,[
+    'https://image.tmdb.org/t/p/w342/poster.jpg',
+    'https://tmdb-image-prod.b-cdn.net/t/p/w342/poster.jpg',
+    'https://tmdb-image-prod.b-cdn.net/t/p/w342/another.jpg'
+  ]);
 });
