@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile,mkdtemp,mkdir,writeFile,rm } from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import { randomUUID } from 'node:crypto';
 import http from 'node:http';
 import { execFile } from 'node:child_process';
@@ -14,6 +16,7 @@ import { titleCard, titleDetail, releaseState, imageFor } from '../catalog-model
 import { canonicalId, saveExternalIds, recordRefresh, refreshDelayMs } from '../catalog-identity.mjs';
 import { handleSearch } from '../search.mjs';
 import { tvMetadata } from '../tv-meta.mjs';
+import {identityReport} from '../identity-report.mjs';
 
 const contract=JSON.parse(await readFile(new URL('../catalog-v2.schema.json',import.meta.url),'utf8'));
 const ajv=new Ajv({strict:true,allowUnionTypes:true});ajv.addSchema(contract);
@@ -58,6 +61,13 @@ test('oversized TV episode lists fall back explicitly instead of returning incom
   let status,body;
   await handle({method:'GET'},{writeHead(s){status=s;},end(b){body=b;}},new URL('https://example.org/api/v2/titles/ch:series:large/tv-meta'));
   assert.equal(status,503);const value=JSON.parse(body);validate('Error',value);assert.equal(value.error.code,'tv_metadata_too_large');
+});
+test('identity report includes conflicts in payloads and existing mappings without exposing internals',()=>{
+  const rows=[{id:'one',kind:'movie',title:'Title',payload:{ids:{tmdb:1},secret:'PRIVATE'}},{id:'two',kind:'movie',payload:{ids:{tmdb:1}}},{id:'series',kind:'series',payload:{ids:{tmdb:1}}}];
+  const report=identityReport(rows,[{provider:'imdb',kind:'movie',external_id:'tt42',title_id:'one'},{provider:'imdb',kind:'movie',external_id:'tt42',title_id:'two'}]);
+  assert.equal(report.conflictCount,2);assert.equal(report.conflicts[0].titles.length,2);
+  assert.ok(!JSON.stringify(report).includes('PRIVATE'));
+  assert.equal(identityReport(rows,[],0).truncated,true);
 });
 
 test('MariaDB catalogue integration',{skip:!process.env.CATALOG_TEST_PORT},async t=>{
@@ -168,9 +178,32 @@ test('MariaDB catalogue integration',{skip:!process.env.CATALOG_TEST_PORT},async
       const env={...process.env,DB_HOST:'127.0.0.1',DB_PORT:process.env.CATALOG_TEST_PORT,DB_USER:connection.user,DB_PASSWORD:connection.password,DB_NAME:dbName};
       for(let i=0;i<2;i++)await runFile(process.execPath,[script],{env,timeout:10000});
       await pool.query('INSERT INTO titles(id,kind,title,payload)VALUES(?,?,?,?)',['ch:movie:conflict','movie','Conflict',JSON.stringify({ids:{tmdb:'550'}})]);
+      const before=await pool.query('SELECT COUNT(*) AS n FROM title_external_ids');
+      const check=await runFile(process.execPath,[script,'--check'],{env,timeout:10000});
+      const report=JSON.parse(check.stdout);assert.equal(report.conflictCount,1);
+      assert.deepEqual(report.conflicts[0].titles.map(row=>row.id).sort(),['ch:movie:conflict','ch:snapshot:movie:tmdb:550']);
+      assert.equal((await pool.query('SELECT COUNT(*) AS n FROM title_external_ids'))[0].n,before[0].n);
       await assert.rejects(()=>runFile(process.execPath,[script],{env,timeout:10000}),error=>error.code===1&&error.stderr.includes('CATALOG_IDENTITY_CONFLICT'));
       const identity=await pool.query('SELECT title_id FROM title_external_ids WHERE provider=? AND kind=? AND external_id=?',['tmdb','movie','550']);assert.equal(identity[0].title_id,'ch:snapshot:movie:tmdb:550');
       await pool.query('DELETE FROM titles WHERE id=?',['ch:movie:conflict']);
+    });
+    await t.test('snapshot import preserves canonical titles and imports episode dates idempotently',async()=>{
+      const directory=await mkdtemp(join(tmpdir(),'cinema-import-'));
+      try{
+        await mkdir(join(directory,'shards'));
+        const rows=[{type:'movie',ids:{tmdb:'550',kinopoisk:'361'},title:'Must not overwrite'},
+          {type:'tv',ids:{tmdb:'999'},title:'New series',details:{seasons:[{number:1,episodes:[{number:2,name:'Second',date:'2020-01-02',overview:'Story',still:'https://example.org/still.jpg'}]}]}},
+          {type:'tv',ids:{tmdb:'999'},title:'Ambiguous',collisionSuffix:'other'}];
+        await writeFile(join(directory,'index.json'),JSON.stringify({count:3,shards:[{path:'shards/tv-0.json'}]}));
+        await writeFile(join(directory,'shards/tv-0.json'),JSON.stringify(rows));
+        const env={...process.env,DB_HOST:'127.0.0.1',DB_PORT:process.env.CATALOG_TEST_PORT,DB_USER:connection.user,DB_PASSWORD:connection.password,DB_NAME:dbName};
+        const script=fileURLToPath(new URL('../import-snapshot.mjs',import.meta.url));
+        for(let i=0;i<2;i++)await runFile(process.execPath,[script,directory],{env,timeout:10000});
+        const old=await pool.query('SELECT title FROM titles WHERE id=?',['ch:snapshot:movie:tmdb:550']);assert.equal(old[0].title,'Бойцовский клуб');
+        const episodes=await pool.query('SELECT air_date,payload FROM episodes WHERE title_id=?',['ch:snapshot:tv:tmdb:999']);assert.equal(episodes.length,1);assert.equal(episodes[0].air_date,'2020-01-02');
+        const identity=await pool.query('SELECT title_id FROM title_external_ids WHERE provider=? AND kind=? AND external_id=?',['tmdb','series','999']);assert.equal(identity[0].title_id,'ch:snapshot:tv:tmdb:999');
+        await pool.query('DELETE FROM titles WHERE id=?',['ch:snapshot:tv:tmdb:999']);
+      }finally{await rm(directory,{recursive:true,force:true});}
     });
     await t.test('database failure is controlled and never returns private errors',async()=>{
       const failure=createCatalogV2({query:async()=>{throw Object.assign(new Error('PRIVATE'),{code:'TEST_DB_DOWN'});}});
