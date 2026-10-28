@@ -38,6 +38,9 @@ class CinemaQualityTest {
         val preferred = stream("1080p").copy(behaviorHints = com.nuvio.tv.domain.model.StreamBehaviorHints(
             notWebReady = null, bingeGroup = "cinemahall:1080p:lostfilm", countryWhitelist = null, proxyHeaders = null))
         val streams = listOf(auto, preferred)
+        assertTrue(cinemaReadyForAutoPlay("ch:snapshot:tv:tmdb:1622:5:3", streams))
+        assertFalse(cinemaReadyForAutoPlay("tt12345", streams))
+        assertFalse(cinemaReadyForAutoPlay("ch:snapshot:movie:tmdb:550", listOf(preferred)))
         assertEquals(auto, cinemaPreferredAutoPlayStream(streams, null))
         assertEquals(preferred, cinemaPreferredAutoPlayStream(streams, "cinemahall:1080p:lostfilm"))
         assertEquals(auto, cinemaPreferredAutoPlayStream(streams, "cinemahall:missing"))

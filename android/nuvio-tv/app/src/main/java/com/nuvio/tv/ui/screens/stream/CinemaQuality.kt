@@ -20,6 +20,14 @@ internal fun cinemaRequiresInitialSelection(requestedManual: Boolean): Boolean =
 internal fun cinemaShouldReuseBingeGroup(videoId: String, prefer: Boolean, reuse: Boolean): Boolean =
     videoId.startsWith("ch:") || (prefer && reuse)
 
+/** Start without waiting for every source search once CinemaHall offers its automatic stream. */
+internal fun cinemaReadyForAutoPlay(videoId: String, streams: List<Stream>): Boolean =
+    videoId.startsWith("ch:") && streams.any {
+        it.addonName == "CinemaHall" &&
+            it.behaviorHints?.bingeGroup == "cinemahall:auto" &&
+            !it.url.isNullOrBlank()
+    }
+
 /** Keep an earlier voice when available, otherwise let the provider choose the best release. */
 internal fun cinemaPreferredAutoPlayStream(streams: List<Stream>, selectedGroup: String?): Stream? =
     cinemaContinuationStream(streams, selectedGroup)
