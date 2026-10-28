@@ -148,7 +148,7 @@ class StreamScreenViewModel @Inject constructor(
     private val playbackProfileId: Int = savedStateHandle.get<String>("profileId")?.toIntOrNull()
         ?: profileManager.activeProfileId.value
     private val manualSelection: Boolean = cinemaRequiresInitialSelection(
-        videoId, savedStateHandle.get<String>("manualSelection")?.toBooleanStrictOrNull() ?: false
+        savedStateHandle.get<String>("manualSelection")?.toBooleanStrictOrNull() ?: false
     )
     private val streamCacheKey: String = "${contentType.lowercase()}|$videoId"
     private val partyKey: String = com.nuvio.tv.core.party.partyMediaKey(
@@ -634,6 +634,8 @@ class StreamScreenViewModel @Inject constructor(
                     earlyBingeGroupMatch
                 } else if (!shouldAutoSelect) {
                     null
+                } else if (videoId.startsWith("ch:")) {
+                    cinemaPreferredAutoPlayStream(allStreams, persistedBingeGroup)
                 } else {
                     StreamAutoPlaySelector.selectAutoPlayStream(
                         streams = allStreams,
