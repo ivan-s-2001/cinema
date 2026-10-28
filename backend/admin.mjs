@@ -165,7 +165,12 @@ export async function handleAdmin(req, res, pool) {
       const current = Date.now();
       const recent = (attempts.get(ip) || []).filter(t => current - t < 60000);
       if (recent.length >= 5) { json(res, 429, { error: 'Повторите через минуту' }); return true; }
-      recent.push(current); attempts.set(ip, recent);\n      if (attempts.size > 2048) {\n        for (const [address, times] of attempts) {\n          if (!times.some(t => current - t < 60000)) attempts.delete(address);\n        }\n      }
+      recent.push(current); attempts.set(ip, recent);
+      if (attempts.size > 2048) {
+        for (const [address, times] of attempts) {
+          if (!times.some(t => current - t < 60000)) attempts.delete(address);
+        }
+      }
       const input = await body(req);
       if (!authenticate(input.password)) { json(res, 401, { error: 'Неверный пароль или админка не настроена' }); return true; }
       attempts.delete(ip);
