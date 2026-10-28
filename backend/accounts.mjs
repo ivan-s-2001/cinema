@@ -1,10 +1,11 @@
-import { randomBytes, randomUUID, scrypt as scryptCallback, createHash, timingSafeEqual } from 'node:crypto';
+import { randomBytes, randomUUID, scrypt as scryptCallback, createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 
 const scrypt = promisify(scryptCallback);
 const MAX_BODY_BYTES = 1_048_576;
 const MAX_PROFILES = 6;
 const SESSION_DAYS = 30;
+const ACCESS_TOKEN_SECONDS = 3600;
 const RATE_WINDOW_MS = 15 * 60_000;
 const RATE_LIMIT = 8;
 const authAttempts = new Map();
@@ -84,37 +85,109 @@ function tokenHash(token) {
 }
 
 function bearer(req) {
-  const match = /^Bearer ([A-Za-z0-9_-]{40,100})$/i.exec(req.headers.authorization || '');
+  const match = /^Bearer ([A-Za-z0-9_.-]{40,2048})$/i.exec(req.headers.authorization || '');
   return match?.[1] || null;
+}
+
+function jwtSecret() {
+  const secret = process.env.AUTH_JWT_SECRET || '';
+  if (Buffer.byteLength(secret) < 32) {
+    const error = new Error('Account authentication is not configured');
+    error.status = 503;
+    throw error;
+  }
+  return secret;
+}
+
+function jwtSign(account, sessionId) {
+  const now = Math.floor(Date.now() / 1000);
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({
+    aud: 'authenticated',
+    role: 'authenticated',
+    sub: account.id,
+    email: account.email,
+    session_id: sessionId,
+    app_metadata: { provider: 'email', providers: ['email'] },
+    user_metadata: {},
+    is_anonymous: false,
+    iat: now,
+    exp: now + ACCESS_TOKEN_SECONDS
+  })).toString('base64url');
+  const input = header + '.' + payload;
+  const signature = createHmac('sha256', jwtSecret()).update(input).digest('base64url');
+  return input + '.' + signature;
+}
+
+function jwtVerify(token) {
+  const parts = token.split('.');
+  if (parts.length !== 3) throw Object.assign(new Error('Invalid session'), { status: 401 });
+  const input = parts[0] + '.' + parts[1];
+  const expected = createHmac('sha256', jwtSecret()).update(input).digest();
+  let actual;
+  let claims;
+  try {
+    actual = Buffer.from(parts[2], 'base64url');
+    claims = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+  } catch {
+    throw Object.assign(new Error('Invalid session'), { status: 401 });
+  }
+  if (actual.length !== expected.length || !timingSafeEqual(actual, expected) ||
+      claims.aud !== 'authenticated' || claims.role !== 'authenticated' ||
+      !claims.sub || !claims.session_id || !Number.isInteger(claims.exp) ||
+      claims.exp <= Math.floor(Date.now() / 1000)) {
+    throw Object.assign(new Error('Session expired'), { status: 401 });
+  }
+  return claims;
+}
+
+function authUser(account) {
+  const createdAt = account.created_at ? new Date(account.created_at).toISOString() : new Date().toISOString();
+  return {
+    id: account.id,
+    aud: 'authenticated',
+    role: 'authenticated',
+    email: account.email,
+    app_metadata: { provider: 'email', providers: ['email'] },
+    user_metadata: {},
+    identities: [],
+    created_at: createdAt,
+    updated_at: createdAt,
+    email_confirmed_at: createdAt,
+    is_anonymous: false
+  };
 }
 
 async function requireAccount(req, pool) {
   const token = bearer(req);
-  if (!token) {
-    const error = new Error('Authentication required');
-    error.status = 401;
-    throw error;
-  }
+  if (!token) throw Object.assign(new Error('Authentication required'), { status: 401 });
+  const claims = jwtVerify(token);
   const rows = await pool.query(
-    'SELECT a.id, a.email FROM account_sessions s JOIN accounts a ON a.id=s.account_id WHERE s.token_hash=? AND s.expires_at > UTC_TIMESTAMP() AND a.disabled=0',
-    [tokenHash(token)]
+    'SELECT a.id,a.email,a.created_at,s.session_id FROM account_sessions s JOIN accounts a ON a.id=s.account_id WHERE s.session_id=? AND s.account_id=? AND s.expires_at>UTC_TIMESTAMP() AND a.disabled=0',
+    [claims.session_id, claims.sub]
   );
-  if (!rows.length) {
-    const error = new Error('Session expired');
-    error.status = 401;
-    throw error;
-  }
+  if (!rows.length) throw Object.assign(new Error('Session expired'), { status: 401 });
   return rows[0];
 }
 
-async function issueSession(account, pool) {
-  const token = randomBytes(32).toString('base64url');
+async function issueSession(account, pool, sessionId = randomUUID()) {
+  const refreshToken = randomBytes(32).toString('base64url');
+  const expiresAt = Math.floor(Date.now() / 1000) + ACCESS_TOKEN_SECONDS;
   await pool.query('DELETE FROM account_sessions WHERE expires_at <= UTC_TIMESTAMP()');
-  await pool.query(
-    'INSERT INTO account_sessions (token_hash,account_id,expires_at) VALUES (?,?,DATE_ADD(UTC_TIMESTAMP(), INTERVAL 30 DAY))',
-    [tokenHash(token), account.id]
-  );
-  return { token, expiresIn: SESSION_DAYS * 86400, account: { id: account.id, email: account.email } };
+  if (account.sessionId || sessionId !== null) {
+    await pool.query(
+      'INSERT INTO account_sessions (session_id,refresh_token_hash,account_id,expires_at) VALUES (?,?,?,DATE_ADD(UTC_TIMESTAMP(), INTERVAL 30 DAY)) ON DUPLICATE KEY UPDATE refresh_token_hash=VALUES(refresh_token_hash),expires_at=VALUES(expires_at)',
+      [sessionId, tokenHash(refreshToken), account.id]
+    );
+  }
+  return {
+    access_token: jwtSign(account, sessionId),
+    token_type: 'bearer',
+    expires_in: ACCESS_TOKEN_SECONDS,
+    expires_at: expiresAt,
+    refresh_token: refreshToken,
+    user: authUser(account)
+  };
 }
 
 function validProfileIndex(value) {
@@ -168,7 +241,7 @@ async function createAccount(req, res, pool) {
   } finally {
     connection.release();
   }
-  send(res, 201, await issueSession({ id, email }, pool));
+  send(res, 200, await issueSession({ id, email, created_at: new Date() }, pool));
 }
 
 async function signIn(req, res, pool) {
@@ -180,13 +253,32 @@ async function signIn(req, res, pool) {
     send(res, 401, { error: 'Invalid email or password' });
     return;
   }
-  const rows = await pool.query('SELECT id,email,password_hash FROM accounts WHERE email=? AND disabled=0 LIMIT 1', [email]);
+  const rows = await pool.query('SELECT id,email,password_hash,created_at FROM accounts WHERE email=? AND disabled=0 LIMIT 1', [email]);
   const valid = rows.length ? await passwordMatches(password, rows[0].password_hash) : (await scrypt(password, Buffer.alloc(16), 64, { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }), false);
   if (!valid) {
     send(res, 401, { error: 'Invalid email or password' });
     return;
   }
   send(res, 200, await issueSession(rows[0], pool));
+}
+
+async function refreshSession(req, res, pool) {
+  checkRateLimit(req, 'refresh');
+  const body = await readJson(req);
+  const refreshToken = typeof body.refresh_token === 'string' ? body.refresh_token : '';
+  if (!/^[A-Za-z0-9_-]{40,100}$/.test(refreshToken)) {
+    send(res, 401, { message: 'Invalid refresh token', error: 'invalid_grant' });
+    return;
+  }
+  const rows = await pool.query(
+    'SELECT a.id,a.email,a.created_at,s.session_id FROM account_sessions s JOIN accounts a ON a.id=s.account_id WHERE s.refresh_token_hash=? AND s.expires_at>UTC_TIMESTAMP() AND a.disabled=0',
+    [tokenHash(refreshToken)]
+  );
+  if (!rows.length) {
+    send(res, 401, { message: 'Invalid refresh token', error: 'invalid_grant' });
+    return;
+  }
+  send(res, 200, await issueSession(rows[0], pool, rows[0].session_id));
 }
 
 async function syncProfile(req, res, url, account, pool) {
