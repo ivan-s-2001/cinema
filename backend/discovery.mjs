@@ -23,13 +23,11 @@ async function select(pool,where,values,sort,limit,offset=0){
  [...values,limit,offset]);
  return rows.map(card);
 }
-const animeSQL="(id LIKE 'ch:anilist:%' OR JSON_SEARCH(payload,'one','аниме',NULL,'$.genres[*]') IS NOT NULL)";
-export async function handleDiscovery(req,res,url,send){
+export async function handleDiscovery(req,res,url,pool,send){
  const path=url.pathname;
  if(!['/api/v1/genres','/api/v1/discover','/api/v1/filters','/api/v1/catalog-stats'].includes(path))return false;
  if(req.method!=='GET'){send(res,405,{error:'Method not allowed'});return true;}
  try{
-  const pool=send.pool;
   if(path==='/api/v1/catalog-stats'){
    const counts=await pool.query('SELECT kind, COUNT(*) AS total, SUM(poster IS NOT NULL AND poster<>"") AS withPoster, SUM(description IS NOT NULL AND description<>"") AS withDescription FROM titles GROUP BY kind');
    send(res,200,{counts});return true;
