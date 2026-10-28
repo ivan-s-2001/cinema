@@ -15,13 +15,6 @@ class CinemaQualityTest {
         externalUrl = null, behaviorHints = null, addonName = addon, addonLogo = null
     )
 
-    @Test fun `selects preferred quality with fallback and ignores third parties`() {
-        val choices = listOf(stream("4K"), stream("720p"), stream("1080p", "Other"))
-        assertEquals("CinemaHall · 4K", cinemaPreferredStream(choices, "BEST")?.name)
-        assertEquals("CinemaHall · 720p", cinemaPreferredStream(choices, "1080p")?.name)
-        assertEquals("CinemaHall · 720p", cinemaPreferredStream(choices, "480p")?.name)
-        assertNull(cinemaPreferredStream(listOf(stream("4K", "Other")), "BEST"))
-    }
     @Test fun `release technology survives mapping and distinguishes identical voices`() {
         val dto = com.nuvio.tv.data.remote.dto.StreamDto(name = "CinemaHall · 4K", title = "Дубляж", technologyHints = listOf("HDR10+", "Dolby Atmos", "invalid"))
         val mapped = dto.toDomain("CinemaHall", null)
@@ -42,6 +35,16 @@ class CinemaQualityTest {
         assertEquals(picked, cinemaContinuationStream(listOf(stream("4K"), picked), "cinemahall:1080p:lostfilm"))
         assertNull(cinemaContinuationStream(listOf(stream("4K")), "cinemahall:1080p:lostfilm"))
         assertNull(cinemaContinuationStream(listOf(picked), null))
+    }
+
+    @Test fun `progressive results retain a voice identity through inserts and label updates`() {
+        val lostFilm = stream("1080p").copy(title = "Lost Film", behaviorHints = com.nuvio.tv.domain.model.StreamBehaviorHints(
+            notWebReady = null, bingeGroup = "cinemahall:1080p:lostfilm", countryWhitelist = null, proxyHeaders = null))
+        val renamed = lostFilm.copy(title = "LostFilm, многоголосый")
+        val other = stream("1080p").copy(title = "Другая студия")
+        assertEquals(cinemaVoiceChoiceKey(lostFilm), cinemaVoiceChoiceKey(renamed))
+        assertEquals(2, cinemaVoiceChoices(listOf(other, lostFilm, renamed)).size)
+        assertEquals(2, listOf(other, lostFilm).map(::cinemaVoiceChoiceKey).toSet().size)
     }
 
 }

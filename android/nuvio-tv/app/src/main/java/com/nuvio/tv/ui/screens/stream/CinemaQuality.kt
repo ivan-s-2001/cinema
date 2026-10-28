@@ -2,19 +2,12 @@ package com.nuvio.tv.ui.screens.stream
 
 import com.nuvio.tv.domain.model.Stream
 
-internal fun cinemaPreferredStream(streams: List<Stream>, preferredQuality: String): Stream? {
-    val choices = streams.filter { it.addonName == "CinemaHall" }
-    val qualities = listOf("4K", "2K", "1080p", "720p", "576p", "480p", "360p", "240p")
-    val preferred = qualities.indexOf(preferredQuality).coerceAtLeast(0)
-    val order = qualities.drop(preferred) + qualities.take(preferred).reversed()
-    return order.firstNotNullOfOrNull { quality ->
-        choices.firstOrNull { it.name?.removePrefix("CinemaHall · ")?.trim() == quality }
-    } ?: choices.firstOrNull()
-}
+/** Stable identity preserves focus when progressive discovery inserts or renames a voice. */
+internal fun cinemaVoiceChoiceKey(stream: Stream): String =
+    (stream.behaviorHints?.bingeGroup?.takeIf { it.isNotBlank() } ?: stream.title.orEmpty().trim().lowercase()) +
+        "\u0000" + stream.technologyHints.sorted().joinToString("\u0000")
 
-internal fun cinemaVoiceChoices(streams: List<Stream>): List<Stream> = streams.distinctBy {
-    it.title.orEmpty().trim().lowercase() to it.technologyHints.sorted()
-}
+internal fun cinemaVoiceChoices(streams: List<Stream>): List<Stream> = streams.distinctBy(::cinemaVoiceChoiceKey)
 internal fun cinemaTechnologyLabel(stream: Stream): String? = stream.technologyHints.takeIf { it.isNotEmpty() }?.joinToString(" · ")
 
 

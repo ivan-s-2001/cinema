@@ -1077,7 +1077,7 @@ internal fun CinemaHallQualityVoicePicker(
             verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
             modifier = Modifier.weight(1f)
         ) {
-            itemsIndexed(voices, key = { index, _ -> index }) { _, stream ->
+            itemsIndexed(voices, key = { _, stream -> cinemaVoiceChoiceKey(stream) }) { _, stream ->
                 Card(
                     onClick = { onStreamSelected(stream) },
                     colors = CardDefaults.colors(

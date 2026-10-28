@@ -630,11 +630,7 @@ class StreamScreenViewModel @Inject constructor(
                 // chance to return higher-quality streams before the selector
                 // picks from whatever is available.
                 val shouldAutoSelect = !autoPlayHandledForSession && !resolvedAutoPlayTarget && isAllLoaded
-                val cinemaStreams = allStreams.filter { it.addonName == "CinemaHall" }
-                val selectedAutoPlayStream = if (!manualSelection && videoId.startsWith("ch:") &&
-                    !autoPlayHandledForSession && !resolvedAutoPlayTarget && cinemaStreams.isNotEmpty()) {
-                    cinemaPreferredStream(cinemaStreams, playerSettings.cinemaPreferredQuality)
-                } else if (earlyBingeGroupMatch != null) {
+                val selectedAutoPlayStream = if (earlyBingeGroupMatch != null) {
                     earlyBingeGroupMatch
                 } else if (!shouldAutoSelect) {
                     null
