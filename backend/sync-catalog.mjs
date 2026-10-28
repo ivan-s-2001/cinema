@@ -26,6 +26,10 @@ const idsFor = raw => {
 function normalize(raw) {
   if (!raw || !['movie', 'tv'].includes(raw.type)) return null;
   const ids = idsFor(raw);
+  const genres = Array.isArray(raw.genres) ? raw.genres : [];
+  const category = [raw.category,raw.subtype,raw.genre,raw.typeName].filter(v=>typeof v==='string').join(' ');
+  if (genres.some(g => /аниме|\\banime\\b/i.test(typeof g==='string'?g:(g?.name||''))) ||
+      /аниме|\\banime\\b/i.test(category) || ids.myAnimeList || ids.shikimori || ids.anilist) return null;
   const chosen = ['tmdb', 'kinopoisk', 'imdb', 'myAnimeList', 'shikimori'].find(k => ids[k]);
   if (!chosen) return null;
   const title = raw.title || {}, images = raw.images || {}, release = raw.release || {};
@@ -168,7 +172,7 @@ async function run() {
           if (!entries.length || data?.meta?.hasNext === false) break;
         }
       }
-      for (const path of ['/titles/latest?limit=100', '/anime?page=1&limit=100']) {
+      for (const path of ['/titles/latest?limit=100']) {
         const data = await get(path, true);
         for (const item of (Array.isArray(data?.data) ? data.data : [])) await store(db, item);
       }
