@@ -38,7 +38,7 @@ const allowedKind=new Set(['movie','series']);
 const server=http.createServer(async(req,res)=>{
  try{
   if(await handleAdmin(req,res,pool))return;
-  if(await handleAccountRequest(req,res,pool))return;
+  if(await handleAccountRequest(req,res,new URL(req.url,'http://localhost'),pool))return;
   if(req.method!=='GET'){reply(res,405,{error:'Method not allowed'});return;}
   const url=new URL(req.url,'http://localhost');
   const route=url.pathname;
