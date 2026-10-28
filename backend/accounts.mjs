@@ -549,7 +549,7 @@ async function handleRpc(req, res, name, account, pool) {
     const rows = await pool.query('SELECT profile_pin_hash,profile_pin_failed_attempts,profile_pin_locked_until FROM profiles WHERE account_id=? AND profile_index=?', [account.id,profileIndex]);
     const row = rows[0];
     if (name === 'set_profile_pin') {
-      if (!/^\\d{4,8}$/.test(pin)) throw Object.assign(new Error('PIN must contain 4 to 8 digits'), { status: 400 });
+      if (!/^\d{4,8}$/.test(pin)) throw Object.assign(new Error('PIN must contain 4 to 8 digits'), { status: 400 });
       if (row.profile_pin_hash) {
         if (!body.p_current_pin) throw Object.assign(new Error('Current PIN is required'), { status: 400 });
         if (!(await passwordMatches(String(body.p_current_pin),row.profile_pin_hash))) throw Object.assign(new Error('Current PIN is incorrect'), { status: 403 });
