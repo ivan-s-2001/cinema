@@ -2,7 +2,9 @@ package app.cinemahall.tv;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
+import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.Map;
 
 /** Thin server catalogue adapter for the existing Nuvio add-on contract. */
 final class CinemaRemoteCatalog {
@@ -17,9 +19,9 @@ final class CinemaRemoteCatalog {
         final String json;final long expiresAt;
         Page(String json,long expiresAt){this.json=json;this.expiresAt=expiresAt;}
     }
-    private final LinkedHashMap<String,Page> pages=new LinkedHashMap<String,Page>(16,.75f,true){
+    private final Map<String,Page> pages=Collections.synchronizedMap(new LinkedHashMap<String,Page>(16,.75f,true){
         @Override protected boolean removeEldestEntry(java.util.Map.Entry<String,Page> entry){return size()>16;}
-    };
+    });
     private final LinkedHashMap<String,Long> detailLoaded=new LinkedHashMap<String,Long>(24,.75f,true){
         @Override protected boolean removeEldestEntry(java.util.Map.Entry<String,Long> entry){return size()>24;}
     };
@@ -35,8 +37,10 @@ final class CinemaRemoteCatalog {
     }
     private static JSONObject copy(JSONObject value){try{return new JSONObject(value.toString());}catch(Exception invalid){return null;}}
     static boolean validId(String id){return id!=null&&id.matches("ch:[A-Za-z0-9:_-]{1,157}");}
-    synchronized JSONObject catalog(String type,String rowId,String search,int skip){
-        if(!rowId.equals(type.equals("series")?"series":"movies")||skip<0||skip>240||skip%24!=0)return null;
+    JSONObject catalog(String type,String rowId,String search,int skip){
+        boolean own=false;
+        for(String[] row:CinemaCatalog.ROWS)if(row[0].equals(rowId)&&row[2].equals(type))own=true;
+        if(!own||skip<0||skip>240||skip%24!=0)return null;
         String query=search==null?"":search.trim();if(query.length()>120)return null;
         String key=type+"|"+rowId+"|"+query+"|"+skip;
         Page cached=pages.get(key);

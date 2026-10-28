@@ -8,7 +8,7 @@ import java.util.concurrent.*;
 
 /** Own catalogue/metadata/search/streams behind the clients' normal add-on contract. */
 final class CinemaCatalog {
-    static final String[][] ROWS={{"popular","Сейчас смотрят","movie"},{"series","Популярные сериалы","series"},{"new","Новые фильмы","movie"},{"new_series","Новые сериалы","series"},{"top","Лучшие фильмы","movie"},{"top_series","Лучшие сериалы","series"},{"animation","Мультфильмы","movie"},{"scifi","Фантастика","movie"}};
+    static final String[][] ROWS={{"popular","Фильмы","movie"},{"series","Сериалы","series"},{"new","Новые фильмы","movie"},{"new_series","Новые сериалы","series"},{"top","Высокие оценки · фильмы","movie"},{"top_series","Высокие оценки · сериалы","series"},{"animation","Мультфильмы","movie"},{"scifi","Фантастика","movie"}};
     static final String AVAILABLE="playable:true AND trailer:false AND adult:false AND tor_count:[1 TO *]";
     static final String FIELDS="id,name_rus,name_eng,name_original,description,year,rating_imdb,rating_kinopoisk,serial,genre_name,runtime,episodes";
     private final Context context;

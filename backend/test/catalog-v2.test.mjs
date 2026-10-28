@@ -60,6 +60,9 @@ test('MariaDB catalogue integration',{skip:!process.env.CATALOG_TEST_PORT},async
       ['ch:movie:hidden','movie','Скрытый',2000,{status:'Released',publicationState:'hidden'}],
       ['ch:series:42','series','Сериал',2020,{status:'Ended'}],
       ['ch:movie:null','movie','Неизвестная дата',null,{}],
+      ['ch:movie:animation','movie','Анимация',2021,{status:'Released',genres:['Мультфильм'],ratings:{kinopoisk:{value:8.4}}}],
+      ['ch:movie:scifi','movie','Космос',2022,{status:'Released',genres:['Фантастика'],ratings:{kinopoisk:8.1}}],
+      ['ch:movie:low','movie','Малая оценка',2023,{status:'Released',ratings:{kinopoisk:5.1}}],
     ];
     for(const [id,kind,title,year,payload]of titles)await pool.query('INSERT INTO titles(id,kind,title,year,poster,description,payload)VALUES(?,?,?,?,?,?,?)',[id,kind,title,year,'https://example.org/poster.jpg','Description',JSON.stringify(payload)]);
     for(const [sn,en,air]of [[0,1,'2020-01-01'],[1,1,'2020-01-01'],[1,3,'2020-01-08'],[2,1,'2043-01-01']])await pool.query('INSERT INTO episodes(title_id,season_number,episode_number,title,air_date)VALUES(?,?,?,?,?)',['ch:series:42',sn,en,'Episode '+en,air]);
@@ -74,8 +77,12 @@ test('MariaDB catalogue integration',{skip:!process.env.CATALOG_TEST_PORT},async
     }
     await t.test('config and home publish only released nonhidden records',async()=>{
       await get('/config','Config');const home=await get('/home','Home');
+      assert.deepEqual(home.rows.map(r=>r.id),['popular','series','new','new_series','top','top_series','animation','scifi']);
       const ids=home.rows.flatMap(r=>r.items.map(i=>i.id));
       assert.ok(ids.includes('ch:snapshot:movie:tmdb:550'));assert.ok(!ids.includes('ch:movie:next'));assert.ok(!ids.includes('ch:movie:hidden'));assert.ok(!ids.includes('ch:movie:null'));
+      assert.deepEqual(home.rows.find(r=>r.id==='animation').items.map(i=>i.id),['ch:movie:animation']);
+      assert.deepEqual(home.rows.find(r=>r.id==='scifi').items.map(i=>i.id),['ch:movie:scifi']);
+      assert.deepEqual(home.rows.find(r=>r.id==='top').items.map(i=>i.id),['ch:movie:animation','ch:movie:scifi']);
     });
     await t.test('search aliases are case insensitive and wildcards are literal',async()=>{
       for(const q of ['fight club','FIGHT CLUB','клуб БОЙЦОВ']){const result=await get('/search?q='+encodeURIComponent(q),'Page');assert.deepEqual(result.items.map(r=>r.id),['ch:snapshot:movie:tmdb:550']);}
@@ -95,10 +102,12 @@ test('MariaDB catalogue integration',{skip:!process.env.CATALOG_TEST_PORT},async
       for(const sort of ['title','year']){
         let path='/discover?limit=2&sort='+sort,all=[];
         for(let i=0;i<10&&path;i++){const page=await get(path,'Page');all.push(...page.items.map(r=>r.id));path=page.nextCursor?'/discover?limit=2&sort='+sort+'&cursor='+page.nextCursor:null;}
-        assert.equal(all.length,5);assert.equal(new Set(all).size,5);
+        assert.equal(all.length,8);assert.equal(new Set(all).size,8);
       }
       const first=await get('/discover?limit=1','Page');await get('/discover?type=movie&cursor='+first.nextCursor,'Error',400);
-      const home=await get('/rows/movies/items?limit=1','Page');assert.ok(home.nextCursor);await get('/rows/movies/items?limit=1&cursor='+home.nextCursor,'Page');
+      const home=await get('/rows/popular/items?limit=1','Page');assert.ok(home.nextCursor);await get('/rows/popular/items?limit=1&cursor='+home.nextCursor,'Page');
+      const top=await get('/rows/top/items?limit=1','Page');assert.ok(top.nextCursor);
+      const rest=await get('/rows/top/items?limit=1&cursor='+top.nextCursor,'Page');assert.equal(rest.items.length,1);assert.notEqual(rest.items[0].id,top.items[0].id);
     });
     await t.test('invalid filters, cursor and methods return typed errors',async()=>{
       for(const q of ['limit=0','limit=abc','limit=61','yearFrom=NaN','yearFrom=2026&yearTo=2000','sort=sql','extra=1','cursor=abc'])await get('/discover?'+q,'Error',400);

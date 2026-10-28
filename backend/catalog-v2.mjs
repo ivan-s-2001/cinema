@@ -5,10 +5,20 @@ import { titleCard, titleDetail, episode, seasonId } from './catalog-model.mjs';
 const prefix = '/api/v2';
 const columns = 'id,kind,title,year,description,poster,backdrop,payload,updated_at';
 const idPattern = /^[A-Za-z0-9:_-]{1,160}$/;
-const sorts = { title: ['title','ASC'], year: ['COALESCE(year,0)','DESC'] };
+const ratingScore="COALESCE(CAST(JSON_VALUE(payload,'$.ratings.kinopoisk.value') AS DECIMAL(5,2)),CAST(JSON_VALUE(payload,'$.ratings.kinopoisk') AS DECIMAL(5,2)),CAST(JSON_VALUE(payload,'$.ratings.imdb.value') AS DECIMAL(5,2)),CAST(JSON_VALUE(payload,'$.ratings.imdb') AS DECIMAL(5,2)),0)";
+const sorts = { title: ['title','ASC'], year: ['COALESCE(year,0)','DESC'], rating:[ratingScore,'DESC'] };
 const publicWhere = "COALESCE(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.publicationState')),'') NOT IN ('hidden','draft','review') AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.curator.hidden')),'false') <> 'true'";
 const releasedWhere = "(year IS NULL OR year<=YEAR(UTC_DATE())) AND ((JSON_UNQUOTE(JSON_EXTRACT(payload,'$.releaseDate')) REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}' AND LEFT(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.releaseDate')),10)<=UTC_DATE()) OR LOWER(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.status')),'')) IN ('released','ended','finished','completed','canceled','cancelled','вышел','вышло','завершён','завершен','returning series','ongoing','airing','выходит')) AND (JSON_EXTRACT(payload,'$.releaseDate') IS NULL OR JSON_UNQUOTE(JSON_EXTRACT(payload,'$.releaseDate')) IN ('','null') OR LEFT(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.releaseDate')),10)<=UTC_DATE())";
-const rows = [{ id:'movies',name:'Фильмы',type:'movie' },{ id:'series',name:'Сериалы',type:'series' }];
+const rows = [
+  {id:'popular',name:'Фильмы',type:'movie'},
+  {id:'series',name:'Сериалы',type:'series'},
+  {id:'new',name:'Новые фильмы',type:'movie'},
+  {id:'new_series',name:'Новые сериалы',type:'series'},
+  {id:'top',name:'Высокие оценки · фильмы',type:'movie'},
+  {id:'top_series',name:'Высокие оценки · сериалы',type:'series'},
+  {id:'animation',name:'Мультфильмы',type:'movie'},
+  {id:'scifi',name:'Фантастика',type:'movie'}
+];
 class InputError extends Error {}
 function number(params,key,fallback,min,max) {
   if (!params.has(key)) return fallback;
@@ -50,11 +60,16 @@ export function createCatalogV2(pool,{sourceDiscovery=createSourceDiscovery({ena
   }
   async function browse(params, shelf=null) {
     const f=filters(params);
-    if(shelf&&!params.has('sort'))f.sort='year';
+    if(shelf&&!params.has('sort'))f.sort=shelf.id.startsWith('top')?'rating':shelf.id.startsWith('new')?'year':'title';
     if (shelf) { if(f.type&&f.type!==shelf.type) throw new InputError('Invalid row type'); f.type=shelf.type; }
     const scope=fingerprint({ ...f, limit:undefined, shelf:shelf?.id||null });
     const clauses=[publicWhere], values=[];
-    if (shelf) clauses.push(releasedWhere,"poster IS NOT NULL AND poster<>''");
+    if (shelf) {
+      clauses.push(releasedWhere,"poster IS NOT NULL AND poster<>''");
+      if(shelf.id.startsWith('top'))clauses.push(ratingScore+'>=7.5');
+      if(shelf.id==='animation')clauses.push("(JSON_SEARCH(LOWER(payload),'one','%мульт%',NULL,'$.genres[*]') IS NOT NULL OR JSON_SEARCH(LOWER(payload),'one','%animation%',NULL,'$.genres[*]') IS NOT NULL)");
+      if(shelf.id==='scifi')clauses.push("(JSON_SEARCH(LOWER(payload),'one','%фантаст%',NULL,'$.genres[*]') IS NOT NULL OR JSON_SEARCH(LOWER(payload),'one','%science fiction%',NULL,'$.genres[*]') IS NOT NULL)");
+    }
     if(f.type){clauses.push('kind=?');values.push(f.type);}
     if(f.yearFrom){clauses.push('year>=?');values.push(f.yearFrom);}
     if(f.yearTo){clauses.push('year<=?');values.push(f.yearTo);}
@@ -70,13 +85,13 @@ export function createCatalogV2(pool,{sourceDiscovery=createSourceDiscovery({ena
     const [column,direction]=sorts[f.sort];
     if(params.has('cursor')){
       const c=decodeCursor(params.get('cursor'),scope);
-      if((f.sort==='year'&&(!Number.isInteger(c.key)||c.key<0||c.key>2100)) || (f.sort==='title'&&typeof c.key!=='string')) throw new InputError('Invalid cursor key');
+      if((f.sort==='year'&&(!Number.isInteger(c.key)||c.key<0||c.key>2100)) || (f.sort==='rating'&&(typeof c.key!=='number'||c.key<0||c.key>10)) || (f.sort==='title'&&typeof c.key!=='string')) throw new InputError('Invalid cursor key');
       clauses.push(`(${column} ${direction==='ASC'?'>':'<'} ? OR (${column}=? AND id>?))`);
       values.push(c.key,c.key,c.id);
     }
-    const result=await pool.query(`SELECT ${columns} FROM titles WHERE ${clauses.join(' AND ')} ORDER BY ${column} ${direction},id ASC LIMIT ?`,[...values,f.limit+1]);
+    const result=await pool.query(`SELECT ${columns}${f.sort==='rating'?','+ratingScore+' AS rank_score':''} FROM titles WHERE ${clauses.join(' AND ')} ORDER BY ${column} ${direction},id ASC LIMIT ?`,[...values,f.limit+1]);
     const page=result.slice(0,f.limit), last=page.at(-1);
-    return { items:page.map(r=>titleCard(r)), nextCursor:result.length>f.limit?cursor({v:1,scope,id:last.id,key:f.sort==='year'?(last.year||0):last.title}):null };
+    return { items:page.map(r=>titleCard(r)), nextCursor:result.length>f.limit?cursor({v:1,scope,id:last.id,key:f.sort==='year'?(last.year||0):f.sort==='rating'?Number(last.rank_score||0):last.title}):null };
   }
   async function find(id) {
     if (!idPattern.test(id)) throw new InputError('Invalid title ID');
@@ -103,7 +118,7 @@ export function createCatalogV2(pool,{sourceDiscovery=createSourceDiscovery({ena
       }
       if(path==='/home') {
         const result=[];
-        for(const shelf of rows)result.push({...shelf,...await browse(new URLSearchParams('limit=12&sort=year'),shelf)});
+        for(const shelf of rows)result.push({...shelf,...await browse(new URLSearchParams('limit=12'),shelf)});
         send(200,{rows:result});return true;
       }
       const shelf=/^\/rows\/([a-z_]+)\/items$/.exec(path);
