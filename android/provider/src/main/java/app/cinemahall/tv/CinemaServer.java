@@ -34,7 +34,7 @@ final class CinemaServer {
             try{
                 CinemaCatalog.Reply reply=catalog.route(uri.getRawPath());
                 send(connection,reply.location==null?200:302,"application/json; charset=utf-8",reply.body,reply.location);
-            }catch(Exception error){send(connection,503,"application/json; charset=utf-8","{\"error\":\"Источник временно недоступен\"}",null);}
+            }catch(Exception error){android.util.Log.e("CinemaHall","Provider request failed",error);send(connection,503,"application/json; charset=utf-8","{\"error\":\"Источник временно недоступен\"}",null);}
         }catch(Exception ignored){}
     }
     private static void send(Socket socket,int code,String mime,String value,String location) throws IOException {

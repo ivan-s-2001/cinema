@@ -44,6 +44,11 @@ public final class ProviderCheck {
             .put("runtimeMinutes",125).put("genres",new JSONArray().put("драма"))
             .put("countries",new JSONArray().put("Россия")).put("ageRating","16+").put("releaseDate","2024-05-01"));
         if(!metadata.getString("runtime").equals("125")||!metadata.getString("imdb_id").equals("tt1234567")||!metadata.getString("country").equals("Россия")||!metadata.getJSONObject("app_extras").getString("certificationLocal").equals("16+"))throw new AssertionError("Available metadata should reach the TV client");
+        JSONObject remoteCard=CinemaRemoteCatalog.compact(new JSONObject().put("id","ch:snapshot:movie:tmdb:550").put("type","movie").put("title","Фильм")
+            .put("poster","https://cinemahome.duckdns.org/api/v2/images/tmdb/w342/poster.jpg").put("description","Описание")
+            .put("genres",new JSONArray().put("драма")).put("runtimeMinutes",125).put("ageRating","16+")
+            .put("ratings",new JSONArray().put(new JSONObject().put("source","imdb").put("value",8.2))));
+        if(!remoteCard.getString("description").equals("Описание")||remoteCard.getJSONArray("genres").length()!=1||!remoteCard.getString("imdbRating").equals("8.2")||remoteCard.getJSONArray("cinemaRatings").length()!=1||!remoteCard.getString("poster").contains("/api/v2/images/"))throw new AssertionError("Server card metadata and server-hosted posters must reach the UI");
         JSONObject bilingual=new JSONObject().put("title","English title").put("titleRu","Русское название").put("originalTitle","Original title");
         if(!CinemaSnapshot.title(bilingual).equals("Русское название"))throw new AssertionError("Playback search should prefer the verified Russian title");
         bilingual.remove("titleRu");

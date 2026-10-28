@@ -126,6 +126,24 @@
             "string",
             "null"
           ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "genres": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "runtimeMinutes": {
+          "type": [
+            "integer",
+            "null"
+          ]
         }
       },
       "required": [
@@ -988,11 +1006,95 @@
               "properties": {
                 "certificationLocal": {
                   "type": "string"
+                },
+                "cast": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "character": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "photo": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "character",
+                      "photo"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "directors": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "character": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "photo": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "character",
+                      "photo"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "writers": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "character": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "photo": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "character",
+                      "photo"
+                    ],
+                    "additionalProperties": false
+                  }
                 }
               },
-              "required": [
-                "certificationLocal"
-              ],
               "additionalProperties": false
             },
             "cinemaRatings": {
@@ -1060,6 +1162,36 @@
                   "title"
                 ],
                 "additionalProperties": false
+              }
+            },
+            "logo": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "country": {
+              "type": "string"
+            },
+            "language": {
+              "type": "string"
+            },
+            "cast": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "director": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "writer": {
+              "type": "array",
+              "items": {
+                "type": "string"
               }
             }
           },

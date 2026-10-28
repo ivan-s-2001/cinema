@@ -553,6 +553,16 @@ private suspend fun HomeViewModel.fetchExternalMetaOutcome(item: MetaPreview): E
     }
 
 internal fun HomeViewModel.onItemFocusPipeline(item: MetaPreview) {
+    if (item.id.startsWith("ch:")) {
+        // Our API already prepared the preview. D-pad navigation must not start
+        // TMDB searches, external addon lookups or full episode-list downloads.
+        tmdbEnrichFocusJob?.cancel()
+        adjacentItemPrefetchJob?.cancel()
+        pendingTmdbEnrichItemId = null
+        setEnrichingItemId(null)
+        addEnrichedPreview(item.id, item)
+        return
+    }
     if (startupGracePeriodActive) {
         deferredEnrichItem = item
         return
@@ -748,6 +758,7 @@ internal fun HomeViewModel.onItemFocusPipeline(item: MetaPreview) {
  * opportunistic and the focused path retries anyway, so aligning the two would only add requests.
  */
 internal fun HomeViewModel.preloadAdjacentItemPipeline(item: MetaPreview) {
+    if (item.id.startsWith("ch:")) return
     if (startupGracePeriodActive) return
     if (item.id in prefetchedTmdbIds || item.id in prefetchedExternalMetaIds) return
     if (pendingTmdbEnrichItemId == item.id || pendingAdjacentPrefetchItemId == item.id) return
@@ -1082,7 +1093,12 @@ private fun HomeViewModel.updateCatalogItemArtworkOnly(itemId: String, meta: Met
 internal suspend fun HomeViewModel.enrichHeroItemsPipeline(
     items: List<MetaPreview>,
     settings: TmdbSettings
-): List<MetaPreview> = metaPreviewEnricher.enrich(items, settings, currentMdbListSettings)
+): List<MetaPreview> {
+    val external = items.filterNot { it.id.startsWith("ch:") }
+    if (external.isEmpty()) return items
+    val enriched = metaPreviewEnricher.enrich(external, settings, currentMdbListSettings).associateBy { it.id }
+    return items.map { enriched[it.id] ?: it }
+}
 
 internal fun HomeViewModel.replaceGridHeroItemsPipeline(
     gridItems: List<GridItem>,

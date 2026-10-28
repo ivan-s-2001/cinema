@@ -370,7 +370,7 @@ open class MainActivity : ComponentActivity() {
         // Wire the Activity-level launcher to the tracker
         externalPlaybackTracker.activityLauncher = externalPlayerLauncher
 
-        PluginRuntimeHooks.onActivityCreate(this)
+        if (com.nuvio.tv.core.build.AppFeaturePolicy.pluginsEnabled) PluginRuntimeHooks.onActivityCreate(this)
 
         window?.decorView?.post {
             val snapshot = com.nuvio.tv.core.player.DisplayCapabilities.detect(this)
@@ -1265,7 +1265,7 @@ open class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        PluginRuntimeHooks.onActivityDestroy()
+        if (com.nuvio.tv.core.build.AppFeaturePolicy.pluginsEnabled) PluginRuntimeHooks.onActivityDestroy()
     }
 }
 

@@ -151,10 +151,10 @@ export function createCatalogV2(pool,{sourceDiscovery=createSourceDiscovery({ena
         if(title[2]==='source-candidates'){
           if(!sourceDiscovery.enabled){fail(503,'source_discovery_disabled','Source discovery is not enabled');return true;}
           const detail=titleDetail(row), kp=detail.externalIds.kinopoisk;
-          if(!kp){fail(404,'source_identity_missing','Kinopoisk identity is unavailable');return true;}
+          if(!kp&&!sourceDiscovery.loadForTitle){fail(404,'source_identity_missing','Kinopoisk identity is unavailable');return true;}
           const ep=url.searchParams.get('episode')||'';
           if([...url.searchParams.keys()].some(key=>key!=='episode')||(ep&&!/^S[0-9]{1,3}E[0-9]{1,4}$/.test(ep)))throw new InputError('Invalid episode');
-          const result=await sourceDiscovery.load(kp,ep);
+          const result=kp?await sourceDiscovery.load(kp,ep):await sourceDiscovery.loadForTitle(detail,ep);
           send(200,{titleId:row.id,episode:ep,engine:'local',status:result.status,candidates:result.candidates});return true;
         }
         if(title[2]==='playback-options'){

@@ -36,8 +36,9 @@ test('TV cards exclude heavy fields and use appropriately sized TMDB artwork',()
   const row={id:'ch:42',kind:'movie',title:'Title',year:2000,description:'x'.repeat(100000),poster:'https://image.tmdb.org/t/p/original/poster.jpg',backdrop:'https://image.tmdb.org/t/p/original/wide.jpg',payload:{cast:Array(100).fill('Actor'),aliases:Array(100).fill('Alias')}};
   const card=titleCard(row);validate('TitleCard',card);
   assert.ok(Buffer.byteLength(JSON.stringify(card))<1024);
-  assert.equal(card.poster,'https://image.tmdb.org/t/p/w342/poster.jpg');
-  assert.equal(card.backdrop,'https://image.tmdb.org/t/p/w1280/wide.jpg');
+  assert.equal(card.poster,'https://cinemahome.duckdns.org/api/v2/images/tmdb/w342/poster.jpg');
+  assert.equal(card.backdrop,'https://cinemahome.duckdns.org/api/v2/images/tmdb/w1280/wide.jpg');
+  assert.equal(card.description.length,400);
   assert.equal(imageFor('https://example.org/original.jpg','poster'),'https://example.org/original.jpg');
 });
 test('completed metadata gets a finite refresh interval',()=>{
@@ -46,12 +47,13 @@ test('completed metadata gets a finite refresh interval',()=>{
   assert.equal(refreshDelayMs({status:'Ended'}),24*3600000);
 });
 test('server TV metadata preserves ratings, episode identity and timestamps without private payload',()=>{
-  const result=tvMetadata({id:'ch:series:test',kind:'series',title:'Show',year:2020,payload:{releaseDate:'2020-01-01T12:00:00.000Z',ratings:{imdb:8.3},apiKey:'PRIVATE'}},[
+  const result=tvMetadata({id:'ch:series:test',kind:'series',title:'Show',year:2020,payload:{releaseDate:'2020-01-01T12:00:00.000Z',ratings:{imdb:8.3},cast:[{name:'Actor',photo:'https://image.tmdb.org/t/p/original/actor.jpg'}],apiKey:'PRIVATE'}},[
     {title_id:'ch:series:test',season_number:0,episode_number:1,title:'Special'},
     {title_id:'ch:series:test',season_number:1,episode_number:3,title:'Episode',air_date:'2020-01-01',still:'javascript:bad'}]);
   validate('TvMetadata',result);
   assert.equal(result.meta.released,'2020-01-01T12:00:00.000Z');
   assert.equal(result.meta.imdbRating,'8.3');assert.equal(result.meta.cinemaRatings[0].label,'IMDb');
+  assert.deepEqual(result.meta.cast,['Actor']);assert.equal(result.meta.app_extras.cast[0].photo,'https://cinemahome.duckdns.org/api/v2/images/tmdb/w185/actor.jpg');
   assert.deepEqual(result.meta.videos,[{id:'ch:series:test:1:3',season:1,episode:3,title:'Episode',released:'2020-01-01T00:00:00.000Z'}]);
   assert.ok(!JSON.stringify(result).includes('PRIVATE'));
 });

@@ -28,7 +28,7 @@ final class CinemaRemoteCatalog {
     private long checkedAt;
     private boolean enabled;
     private synchronized boolean active(){
-        if(checkedAt==0 || System.currentTimeMillis()-checkedAt>10*60_000L){
+        if(checkedAt==0 || System.currentTimeMillis()-checkedAt>(enabled?10*60_000L:15000L)){
             try {JSONObject config=CinemaRemoteSources.fetch("/config");enabled=config.optInt("apiVersion")==2&&config.optJSONObject("capabilities").optBoolean("home",false);}
             catch(Exception unavailable){enabled=false;}
             checkedAt=System.currentTimeMillis();
@@ -76,11 +76,18 @@ final class CinemaRemoteCatalog {
         return fromCache(cached);
     }
     private static JSONObject fromCache(Page page){try{return page==null?null:new JSONObject(page.json);}catch(Exception invalid){return null;}}
-    private static JSONObject compact(JSONObject row) throws Exception {
+    static JSONObject compact(JSONObject row) throws Exception {
         JSONObject result=new JSONObject().put("id",row.getString("id")).put("type",row.getString("type"))
             .put("name",row.optString("title")).put("poster",row.optString("poster"))
             .put("releaseInfo",row.isNull("year")?"Год не указан":row.optString("year"));
         if(!row.isNull("backdrop"))result.put("background",row.optString("backdrop"));
+        if(!row.isNull("description"))result.put("description",row.optString("description"));
+        if(row.optJSONArray("genres")!=null)result.put("genres",row.getJSONArray("genres"));
+        if(!row.isNull("runtimeMinutes"))result.put("runtime",row.optString("runtimeMinutes"));
+        if(!row.isNull("ageRating"))result.put("app_extras",new JSONObject().put("certificationLocal",row.optString("ageRating")));
+        JSONArray ratings=row.optJSONArray("ratings");JSONObject scores=new JSONObject();
+        if(ratings!=null)for(int i=0;i<ratings.length();i++){JSONObject rating=ratings.optJSONObject(i);if(rating!=null)scores.put(rating.optString("source"),rating.opt("value"));}
+        CinemaRatings.append(result,scores);
         return result;
     }
     synchronized JSONObject detail(String id){

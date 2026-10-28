@@ -19,7 +19,7 @@ final class CinemaRemoteSources {
     static JSONObject fetch(String path) throws Exception {
         HttpURLConnection connection=(HttpURLConnection)new URL(BASE+path).openConnection();
         connection.setInstanceFollowRedirects(false);
-        connection.setConnectTimeout(3000);connection.setReadTimeout(6000);
+        connection.setConnectTimeout(5000);connection.setReadTimeout(path.contains("source-candidates")?20000:10000);
         connection.setRequestProperty("Accept","application/json");
         try {
             if(connection.getResponseCode()!=200)throw new Exception("Source API unavailable");
@@ -33,7 +33,7 @@ final class CinemaRemoteSources {
     }
     static synchronized ArrayList<Sources.Candidate> load(String titleId,String episode) {
         if(!titleId.matches("ch:[A-Za-z0-9:_-]{1,157}")||!episode.matches("|S[0-9]{1,3}E[0-9]{1,4}"))return null;
-        if(System.currentTimeMillis()-checkedAt>CONFIG_TTL || checkedAt==0){
+        if(System.currentTimeMillis()-checkedAt>(enabled?CONFIG_TTL:15000L) || checkedAt==0){
             try {enabled=fetch("/config").getJSONObject("capabilities").optBoolean("sourceDiscovery",false);}
             catch(Exception unavailable){enabled=false;}
             checkedAt=System.currentTimeMillis();

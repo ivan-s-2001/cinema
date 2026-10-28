@@ -15,6 +15,16 @@ export function tvMetadata(row, episodeRows=[]) {
   if(title.releaseDate)meta.released=instant(title.releaseDate);
   if(title.externalIds.imdb)meta.imdb_id=title.externalIds.imdb;
   if(title.ageRating!==null)meta.app_extras={certificationLocal:String(title.ageRating)};
+  if(title.logo)meta.logo=title.logo;
+  if(title.status)meta.status=title.status;
+  if(title.countries.length)meta.country=title.countries.join(', ');
+  if(title.languages.length)meta.language=title.languages.join(', ');
+  for(const [field,target]of [['cast','cast'],['directors','director'],['writers','writer']]){
+    if(title[field].length){
+      meta[target]=title[field].map(person=>person.name);
+      meta.app_extras={...meta.app_extras,[field]:title[field].map(({name,character,photo})=>({name,character,photo}))};
+    }
+  }
   const ratings=title.ratings.map(r=>({source:r.source.toLowerCase(),label:ratingLabels[r.source]||r.source,value:r.value,scale:r.scale}));
   if(ratings.length)meta.cinemaRatings=ratings;
   const imdb=title.ratings.find(r=>r.source==='imdb'&&r.scale===10);

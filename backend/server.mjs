@@ -6,6 +6,7 @@ import { handleDiscovery } from './discovery.mjs';
 import { handleSearch } from './search.mjs';
 import { createCatalogV2 } from './catalog-v2.mjs';
 import { startRefreshScheduler } from './refresh-scheduler.mjs';
+import {createImageProxy} from './image-proxy.mjs';
 
 const host='127.0.0.1',port=Number(process.env.CINEMA_API_PORT||8091);
 if(!Number.isInteger(port)||port<1024||port>65535)throw new Error('Invalid CINEMA_API_PORT');
@@ -40,8 +41,10 @@ async function query(sql,params=[]){
  finally{conn.release();}
 }
 const handleCatalogV2=createCatalogV2(pool);
+const handleImages=createImageProxy();
 const server=http.createServer(async(req,res)=>{
  try{
+  if(await handleImages(req,res,new URL(req.url,'http://localhost')))return;
   if(await handleCatalogV2(req,res,new URL(req.url,'http://localhost')))return;
   if(await handleAdmin(req,res,pool))return;
   if(await handleAccountRequest(req,res,new URL(req.url,'http://localhost'),pool))return;

@@ -82,7 +82,7 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         SentryInitializer.start(this, sentrySettingsDataStore)
-        PluginRuntimeHooks.onApplicationCreate(this)
+        if (com.nuvio.tv.core.build.AppFeaturePolicy.pluginsEnabled) PluginRuntimeHooks.onApplicationCreate(this)
         androidTvChannelSyncService.start()
         serverUserStateProjection.start()
         // Load locale synchronously so it's available before Activity.attachBaseContext.
@@ -93,18 +93,22 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
     }
 
     override fun newImageLoader(context: android.content.Context): ImageLoader {
+        val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val memoryInfo = ActivityManager.MemoryInfo().also(activityManager::getMemoryInfo)
+        val lowRam = activityManager.isLowRamDevice || memoryInfo.totalMem <= 2L * 1024 * 1024 * 1024
+        val imageCacheMb = (activityManager.memoryClass / 8).coerceIn(8, if (lowRam) 16 else 32)
         val imageOkHttpClient by lazy {
             val imageDispatcher = okhttp3.Dispatcher().apply {
-                maxRequests = 32
-                maxRequestsPerHost = 16
+                maxRequests = 4
+                maxRequestsPerHost = 4
             }
             OkHttpClient.Builder()
                 .dispatcher(imageDispatcher)
                 .dns(IPv4FirstDns())
                 .socketFactory(NoDelaySocketFactory)
                 .connectTimeout(4, TimeUnit.SECONDS)
-                .readTimeout(5, TimeUnit.SECONDS)
-                .callTimeout(8, TimeUnit.SECONDS)
+                .readTimeout(12, TimeUnit.SECONDS)
+                .callTimeout(20, TimeUnit.SECONDS)
                 .addInterceptor { chain ->
                     try {
                         chain.proceed(chain.request())
@@ -143,22 +147,8 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
                 )
             }
             .memoryCache {
-                val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-                val memoryInfo = ActivityManager.MemoryInfo()
-                activityManager.getMemoryInfo(memoryInfo)
-                val totalRamMb = memoryInfo.totalMem / (1024 * 1024)
-                // Low-RAM devices (≤2GB): use 0.15 — larger cache reduces GC pressure
-                // from rapid bitmap eviction during scrolling.
-                // Mid-range devices (≤3GB): use 0.20 for decent image caching.
-                // Normal devices (>3GB): use 0.25 for snappy image loading.
-                // - allowHardware(false) keeps bitmaps on heap instead of GPU memory
-                val cachePercent = when {
-                    totalRamMb <= 2048 -> 0.15
-                    totalRamMb <= 3072 -> 0.20
-                    else -> 0.25
-                }
                 MemoryCache.Builder()
-                    .maxSizePercent(context, cachePercent)
+                    .maxSizeBytes(imageCacheMb.toLong() * 1024 * 1024)
                     .build()
             }
             .diskCache {
@@ -171,7 +161,7 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
             .precision(coil3.size.Precision.INEXACT)
             .allowHardware(false)
             .allowRgb565(imagePerformancePreferences.rgb565Enabled)
-            .bitmapFactoryMaxParallelism(4)
+            .bitmapFactoryMaxParallelism(if (lowRam) 1 else 2)
             .build()
     }
 }

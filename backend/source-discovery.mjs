@@ -5,6 +5,19 @@ const MAX_BODY = 1024 * 1024;
 const MAX_RESULTS = 60;
 const CACHE_MS = 180000;
 const keyFor = (id, episode) => id + '|' + episode;
+const normalized=value=>String(value||'').toLowerCase().replaceAll('ё','е').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+const solrPhrase=value=>'"'+value.replace(/([+\-&|!(){}\[\]^"~*?:\\/])/g,'\\$1')+'"';
+export function matchKinopoisk(title,docs){
+  const names=new Set([title.title,title.originalTitle,...(title.aliases||[])].map(normalized).filter(Boolean));
+  const matches=docs.filter(row=>/^[0-9]{1,12}$/.test(String(row.id))&&
+    Number.isInteger(title.year)&&Math.abs(Number(row.year)-title.year)<=1&&
+    (row.serial===true||row.serial==='true')===(title.type==='series')&&
+    [row.name_rus,row.name_eng,row.name_original].some(name=>names.has(normalized(name))))
+    .map(row=>({id:String(row.id),score:(normalized(row.name_rus)===normalized(title.title)?4:1)+(Number(row.year)===title.year?1:0)}));
+  const best=Math.max(0,...matches.map(row=>row.score));
+  const ids=new Set(matches.filter(row=>row.score===best).map(row=>row.id));
+  return ids.size===1?[...ids][0]:null;
+}
 function validSource(raw) {
   if (typeof raw !== 'string' || raw.length > 2048) return false;
   if (/^magnet:\?xt=urn:btih:[a-zA-Z0-9]{32,40}(?:&|$)/.test(raw)) return true;
@@ -26,7 +39,30 @@ function parseCandidate(row) {
   return {hash,torrent_download_link:link,resolution,name,translate_info:voice,languages_parser:languages,seeds,episodes_map_auto:episodeMap};
 }
 export function createSourceDiscovery({ fetcher=fetch, enabled=false, clock=Date.now }={}) {
-  const cache=new Map(), pending=new Map();
+  const cache=new Map(), pending=new Map(),identities=new Map();
+  async function loadForTitle(title,episode=''){
+    const known=title.externalIds?.kinopoisk;
+    if(known)return load(known,episode);
+    if(!enabled)return {status:'disabled',candidates:[]};
+    const names=[...new Set([title.title,title.originalTitle,...(title.aliases||[])].filter(v=>typeof v==='string'&&v.trim().length>=2&&v.length<=120))].slice(0,3);
+    if(!names.length||!Number.isInteger(title.year))return {status:'ready',candidates:[]};
+    const key=JSON.stringify([title.id,title.year,names]),saved=identities.get(key);
+    let kp=saved?.expires>clock()?saved.id:undefined;
+    if(kp===undefined){
+      const query='('+names.flatMap(name=>['name_rus','name_eng','name_original'].map(field=>field+':'+solrPhrase(name))).join(' OR ')+') AND year:['+(title.year-1)+' TO '+(title.year+1)+'] AND serial:'+(title.type==='series');
+      const url=new URL('https://zsolr3.zonasearch.com/solr/movie/select');
+      url.search=new URLSearchParams({wt:'json',q:query,rows:'20',fl:'id,serial,year,name_rus,name_eng,name_original'});
+      const response=await fetcher(url,{redirect:'error',signal:AbortSignal.timeout(6000),headers:{accept:'application/json'}});
+      if(!response.ok)throw Error('Identity provider unavailable');
+      if(Number(response.headers?.get?.('content-length')||0)>MAX_BODY)throw Error('Identity response too large');
+      const body=Buffer.from(await response.arrayBuffer());if(body.length>MAX_BODY)throw Error('Identity response too large');
+      const docs=JSON.parse(body.toString('utf8'))?.response?.docs;
+      kp=matchKinopoisk(title,Array.isArray(docs)?docs:[]);
+      identities.set(key,{id:kp,expires:clock()+(kp?86400000:600000)});
+      while(identities.size>256)identities.delete(identities.keys().next().value);
+    }
+    return kp?load(kp,episode):{status:'ready',candidates:[]};
+  }
   async function load(kinopoiskId, episode='') {
     if (!enabled) return { status:'disabled', candidates:[] };
     if (!/^[0-9]{1,12}$/.test(String(kinopoiskId)) || (episode&&!/^S[0-9]{1,3}E[0-9]{1,4}$/.test(episode)))
@@ -67,5 +103,5 @@ export function createSourceDiscovery({ fetcher=fetch, enabled=false, clock=Date
     pending.set(key,work);
     try{return await work;}finally{pending.delete(key);}
   }
-  return {load,enabled};
+  return {load,loadForTitle,enabled};
 }
