@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS sync_items (
  is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
  PRIMARY KEY (account_id,profile_index,entity_type,item_key),
+ INDEX sync_items_snapshot (account_id,profile_index,entity_type,is_deleted,updated_at),
  FOREIGN KEY (account_id,profile_index) REFERENCES profiles(account_id,profile_index) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
