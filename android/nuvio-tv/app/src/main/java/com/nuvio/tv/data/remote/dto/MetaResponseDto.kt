@@ -17,6 +17,7 @@ data class MetaDto(
     @Json(name = "posterShape") val posterShape: String? = null,
     @Json(name = "background") val background: String? = null,
     @Json(name = "logo") val logo: String? = null,
+    @Json(name = "logoCaption") val logoCaption: String? = null,
     @Json(name = "landscapePoster") val landscapePoster: String? = null,
     @Json(name = "description") val description: String? = null,
     @Json(name = "releaseInfo") val releaseInfo: String? = null,

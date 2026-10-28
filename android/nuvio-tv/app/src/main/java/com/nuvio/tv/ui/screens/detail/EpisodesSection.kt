@@ -354,10 +354,10 @@ fun SeasonTabs(
                     },
                 shape = CardDefaults.shape(shape = tabShape),
                 colors = CardDefaults.colors(
-                    containerColor = if (isSelected) NuvioTheme.colors.SurfaceVariant else NuvioTheme.colors.BackgroundCard,
+                    containerColor = if (isSelected) NuvioTheme.colors.Secondary.copy(alpha = 0.28f) else NuvioTheme.colors.BackgroundCard,
                     focusedContainerColor = NuvioTheme.colors.Secondary
                 ),
-                border = tabBorder,
+                border = if (isSelected) CardDefaults.border(border = androidx.tv.material3.Border(BorderStroke(2.dp, NuvioTheme.colors.Secondary)), focusedBorder = androidx.tv.material3.Border(BorderStroke(2.dp, NuvioTheme.colors.Secondary))) else tabBorder,
                 scale = tabScale
             ) {
                 Text(
@@ -365,7 +365,7 @@ fun SeasonTabs(
                     style = tabTextStyle,
                     color = when {
                         isFocused -> NuvioTheme.colors.OnSecondary
-                        isSelected -> NuvioTheme.colors.TextPrimary
+                        isSelected -> NuvioTheme.colors.Secondary
                         else -> textSecondary
                     },
                     modifier = Modifier.padding(vertical = 10.dp, horizontal = 20.dp)

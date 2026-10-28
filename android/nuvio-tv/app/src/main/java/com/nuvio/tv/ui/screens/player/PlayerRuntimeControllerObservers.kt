@@ -789,6 +789,7 @@ internal fun PlayerRuntimeController.maybeScheduleStallWatchdog() {
     stallWatchdogJob = scope.launch {
         var lastBufferedPosition = player.bufferedPosition
         var lastAdvanceAtMs = System.currentTimeMillis()
+        val cinemaWaitStartedAt = lastAdvanceAtMs
 
         while (isActive) {
             delay(PlayerRuntimeController.STALL_WATCHDOG_POLL_INTERVAL_MS)
@@ -800,12 +801,22 @@ internal fun PlayerRuntimeController.maybeScheduleStallWatchdog() {
 
             val nowMs = System.currentTimeMillis()
             val bufferedNow = livePlayer.bufferedPosition
+            if (CinemaPlaybackPolicy.isProvider(currentStreamUrl) && CinemaPlaybackPolicy.timedOut(
+                    nowMs - cinemaWaitStartedAt, nowMs - lastAdvanceAtMs, hasRenderedFirstFrame, !livePlayer.playWhenReady)) {
+                livePlayer.pause()
+                _uiState.update { it.copy(error = "Источник не передаёт видео. Попробуйте другое качество или озвучку.",
+                    isBuffering = false, showLoadingOverlay = false, showControls = true) }
+                return@launch
+            }
             if (bufferedNow > lastBufferedPosition) {
                 // Real progress — reset the stall timer.
                 lastBufferedPosition = bufferedNow
                 lastAdvanceAtMs = nowMs
                 continue
             }
+
+            // Torrent sources have a bounded wait; seeking through a stalled source cannot create data.
+            if (CinemaPlaybackPolicy.isProvider(currentStreamUrl)) continue
 
             val stalledForMs = nowMs - lastAdvanceAtMs
             when (
@@ -826,7 +837,7 @@ internal fun PlayerRuntimeController.maybeScheduleStallWatchdog() {
                             "during STATE_BUFFERING (playhead=${livePlayer.currentPosition.coerceAtLeast(0L)}); " +
                             "skipping self-seek because duration is unknown"
                     )
-                    return@launch
+                    if (!CinemaPlaybackPolicy.isProvider(currentStreamUrl)) return@launch
                 }
                 PlayerStallWatchdogPolicy.Decision.SkipBufferedNotAhead -> {
                     Log.w(
@@ -835,7 +846,7 @@ internal fun PlayerRuntimeController.maybeScheduleStallWatchdog() {
                             "during STATE_BUFFERING (playhead=${livePlayer.currentPosition.coerceAtLeast(0L)}); " +
                             "skipping self-seek because buffered position is not ahead"
                     )
-                    return@launch
+                    if (!CinemaPlaybackPolicy.isProvider(currentStreamUrl)) return@launch
                 }
                 PlayerStallWatchdogPolicy.Decision.SkipTargetNotForward -> {
                     Log.w(

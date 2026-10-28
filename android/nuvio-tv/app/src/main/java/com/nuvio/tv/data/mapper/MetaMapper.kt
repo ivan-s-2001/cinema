@@ -31,6 +31,7 @@ fun MetaDto.toDomain(episodeLabel: String = "Episode"): Meta {
         posterShape = PosterShape.fromString(posterShape),
         background = background,
         logo = logo,
+        logoCaption = logoCaption,
         imdbId = imdbId,
         slug = slug,
         released = released,

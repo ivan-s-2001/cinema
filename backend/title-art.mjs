@@ -14,10 +14,18 @@ export function titleArt(title){
  return {body,etag:'"'+createHash('sha256').update(body).digest('hex').slice(0,32)+'"'};
 }
 
-export function providerLogo(images={}){
+export function providerLogoAsset(images={}){
  const path=value=>{const candidate=typeof value==='string'?value:typeof value==='object'&&value?(value.url||value.file_path||value.path):null;return typeof candidate==='string'&&candidate.length<=2048?candidate:null;};
- const primary=path(images.logo);if(primary)return primary;
- const logos=Array.isArray(images.logos)?images.logos:[];
- const rank=value=>({ru:0,en:1}[value?.iso_639_1||value?.language]??2);
- return logos.map((value,index)=>({value,index})).sort((a,b)=>rank(a.value)-rank(b.value)||a.index-b.index).map(entry=>path(entry.value)).find(Boolean)||null;
+ const locale=value=>{const code=typeof value==='string'?value.toLowerCase().split(/[-_]/)[0]:null;return code==='ru'||code==='en'?code:code? 'other':null;};
+ const candidates=[];
+ const add=(raw,fallbackLanguage=null)=>{
+   const url=path(raw);if(!url)return;
+   const language=locale(raw&&typeof raw==='object'?(raw.iso_639_1||raw.language||fallbackLanguage):fallbackLanguage);
+   if(language==='other')return;
+   candidates.push({url,language});
+ };
+ add(images.logo,images.logoLanguage||images.logo_language);
+ for(const raw of Array.isArray(images.logos)?images.logos:[])add(raw);
+ return candidates.sort((a,b)=>({ru:0,en:1}[a.language]??2)-({ru:0,en:1}[b.language]??2))[0]||null;
 }
+export const providerLogo=images=>providerLogoAsset(images)?.url||null;

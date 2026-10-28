@@ -16,7 +16,7 @@ final class CinemaCatalog {
     CinemaCatalog(Context context){this.context=context;this.base=CinemaServer.base(context);snapshot=new CinemaSnapshot(context);}
     static JSONObject manifest() throws JSONException {
         JSONArray rows=new JSONArray();for(String[] row:ROWS)rows.put(new JSONObject().put("id",row[0]).put("name",row[1]).put("type",row[2]).put("pageSize",24).put("showInHome",Boolean.parseBoolean(row[3])).put("extra",new JSONArray().put(new JSONObject().put("name","skip")).put(new JSONObject().put("name","search"))));
-        return new JSONObject().put("id","app.cinemahall.catalog").put("name","CinemaHall").put("version","0.7.3")
+        return new JSONObject().put("id","app.cinemahall.catalog").put("name","CinemaHall").put("version","0.7.4")
             .put("description","Каталог, метаданные и источники CinemaHall").put("types",new JSONArray(Arrays.asList("movie","series")))
             .put("idPrefixes",new JSONArray(Arrays.asList("ch:"))).put("resources",new JSONArray(Arrays.asList("catalog","meta","stream","subtitles"))).put("catalogs",rows);
     }
@@ -82,6 +82,7 @@ final class CinemaCatalog {
             // CinemaHall's own UI uses qualities[]; the native Nuvio adapter uses streams[].
             return new Reply(new JSONObject().put("streams",streams).put("qualities",qualities)
                 .put("automatic",streams.length()>0).put("availableReleases",candidates.size())
+                .put("discoveryComplete",CinemaRemoteSources.complete(titleId,episode))
                 .put("recommendedQuality",preferred.isEmpty()?"":preferred.get(0).quality)
                 .put("recommendedVoice",preferred.isEmpty()?"":preferred.get(0).translation)
                 .toString());
@@ -140,10 +141,12 @@ final class CinemaCatalog {
             : Sources.ordered(available,parts[4],parts[5],"1080p");
         // last segment is video container hint; supplied by our own stream URL only.
         Exception failure=null;
-        for(Sources.Candidate candidate:candidates.subList(0,Math.min(automatic?8:4,candidates.size()))){String hash="";
+        long deadline=System.currentTimeMillis()+45000L;
+        for(Sources.Candidate candidate:candidates.subList(0,Math.min(4,candidates.size()))){String hash="";
             try{
+                if(System.currentTimeMillis()>=deadline)break;
                 JSONObject added=Net.json(Net.ENGINE+"/torrents",new JSONObject().put("action","add").put("link",candidate.link).put("save_to_db",false));hash=added.getString("hash");JSONArray files=added.optJSONArray("file_stats");
-                for(int i=0;(files==null||files.length()==0)&&i<30;i++){Thread.sleep(400);files=Net.json(Net.ENGINE+"/torrents",new JSONObject().put("action","get").put("hash",hash)).optJSONArray("file_stats");}
+                for(int i=0;(files==null||files.length()==0)&&i<20&&System.currentTimeMillis()<deadline;i++){Thread.sleep(400);files=Net.json(Net.ENGINE+"/torrents",new JSONObject().put("action","get").put("hash",hash)).optJSONArray("file_stats");}
                 JSONObject selected=null;long size=-1;
                 if(files!=null)for(int i=0;i<files.length();i++){
                     JSONObject file=files.getJSONObject(i);String path=file.optString("path");if(!Logic.isVideo(path)||path.toLowerCase(Locale.ROOT).contains("sample"))continue;
@@ -151,10 +154,14 @@ final class CinemaCatalog {
                     else if(parts[3].equals(Logic.episodeKey(path))||(!candidate.episodeFile(parts[3]).isEmpty()&&path.endsWith(candidate.episodeFile(parts[3])))){selected=file;break;}
                 }
                 if(selected==null)throw new Exception("Episode not found");
+                String streamUrl=Net.ENGINE+"/stream/video?link="+Net.enc(hash)+"&index="+selected.getInt("id")+"&play";
+                int remaining=(int)Math.min(8000L,deadline-System.currentTimeMillis());
+                if(remaining<500)throw new Exception("Video preparation timed out");
+                Net.verifyStreamBytes(streamUrl,remaining);
                 Sources.recordOutcome(candidate,true);
-                return new Reply("",Net.ENGINE+"/stream/video?link="+Net.enc(hash)+"&index="+selected.getInt("id")+"&play");
+                return new Reply("",streamUrl);
             }catch(Exception error){failure=error;Sources.recordOutcome(candidate,false);if(!hash.isEmpty())try{Net.json(Net.ENGINE+"/torrents",new JSONObject().put("action","rem").put("hash",hash));}catch(Exception ignored){}}
         }
-        throw new Exception("No playable source",failure);
+        throw new Exception("Источники не передают данные. Выберите другое качество или озвучку.",failure);
     }
 }

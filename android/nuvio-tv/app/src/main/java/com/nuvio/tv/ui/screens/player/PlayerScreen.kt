@@ -62,6 +62,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.AspectRatio
@@ -1345,6 +1346,7 @@ fun PlayerScreen(
         if (uiState.error != null) {
             ErrorOverlay(
                 message = uiState.error!!,
+                onChooseSource = { viewModel.onEvent(PlayerEvent.OnShowSourcesPanel) },
                 showSwitchToMpvAction = false,
                 onSwitchToMpv = { viewModel.onEvent(PlayerEvent.OnSwitchToMpvPlayer) },
                 showReportAction = false,
@@ -1771,32 +1773,6 @@ fun PlayerScreen(
                 )
             }
         }
-
-        // Audio track dialog
-        AudioSelectionOverlay(
-            visible = uiState.showAudioOverlay,
-            tracks = uiState.serverAudioTracks.ifEmpty { uiState.audioTracks },
-            selectedIndex = uiState.serverAudioTracks.firstOrNull { it.isSelected }?.index ?: uiState.selectedAudioTrackIndex,
-            audioDelayMs = uiState.audioDelayMs,
-            audioAmplificationDb = uiState.audioAmplificationDb,
-            isAmplificationAvailable = uiState.isAudioAmplificationAvailable,
-            persistAmplification = uiState.persistAudioAmplification,
-            centerMixLevelDb = uiState.centerMixLevelDb,
-            isCenterMixAvailable = uiState.isCenterMixAvailable,
-            onTrackSelected = { viewModel.onEvent(PlayerEvent.OnSelectAudioTrack(it)) },
-            onAudioDelayChange = { viewModel.onEvent(PlayerEvent.OnSetAudioDelayMs(it)) },
-            onAmplificationChange = { viewModel.onEvent(PlayerEvent.OnSetAudioAmplificationDb(it)) },
-            onPersistAmplificationChange = {
-                viewModel.onEvent(PlayerEvent.OnSetPersistAudioAmplification(it))
-            },
-            onCenterMixLevelChange = {
-                viewModel.onEvent(PlayerEvent.OnSetCenterMixLevelDb(it))
-            },
-            onDismiss = { viewModel.onEvent(PlayerEvent.OnDismissTransientOverlay) },
-            modifier = Modifier
-                .fillMaxSize()
-                .zIndex(2.6f)
-        )
 
         SubtitleSelectionOverlay(
             visible = uiState.showSubtitleOverlay,
@@ -2609,11 +2585,37 @@ private fun PlayerControlsOverlay(
                     ControlButton(icon = Icons.Default.SwapHoriz, iconPainter = customSourcePainter,
                         contentDescription = "Качество и озвучка", visibleLabel = "Качество и озвучка", onClick = onShowSourcesPanel,
                         upFocusRequester = progressUpTarget, onDownKey = onHideControls, onFocused = onResetHideTimer)
+                    if (uiState.subtitleTracks.isNotEmpty() || uiState.addonSubtitles.isNotEmpty()) {
+                        ControlButton(icon = Icons.Default.ClosedCaption, contentDescription = "Субтитры",
+                            onClick = { viewModel.onEvent(PlayerEvent.OnShowSubtitleOverlay) },
+                            upFocusRequester = progressUpTarget, onDownKey = onHideControls, onFocused = onResetHideTimer)
+                    }
+                    if (uiState.nextEpisode?.hasAired == true) {
+                        ControlButton(icon = Icons.Default.SkipNext, contentDescription = "Следующая серия",
+                            onClick = { viewModel.onEvent(PlayerEvent.OnPlayNextEpisode) },
+                            upFocusRequester = progressUpTarget, onDownKey = onHideControls, onFocused = onResetHideTimer)
+                    }
+                    ControlButton(icon = Icons.Default.MoreHoriz, contentDescription = "Ещё",
+                        onClick = { viewModel.onEvent(PlayerEvent.OnShowMoreDialog) },
+                        upFocusRequester = progressUpTarget, onDownKey = onHideControls, onFocused = onResetHideTimer)
                 }
 
                 // Right side - Time display only
                 PlayerControlsTimeTextHost(viewModel = viewModel)
             }
+            }
+        }
+    }
+
+    if (uiState.showMoreDialog) {
+        Dialog(onDismissRequest = { viewModel.onEvent(PlayerEvent.OnDismissMoreDialog) }) {
+            Column(modifier = Modifier.width(300.dp).background(NuvioTheme.colors.BackgroundElevated, RoundedCornerShape(16.dp)).padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Дополнительно", style = MaterialTheme.typography.titleLarge, color = Color.White)
+                if (uiState.showAspectRatioIndicator) Text(uiState.aspectRatioIndicatorText, color = Color.White.copy(alpha = 0.8f))
+                DialogButton(text = "Скорость воспроизведения", onClick = { viewModel.onEvent(PlayerEvent.OnShowSpeedDialog) }, isPrimary = false)
+                DialogButton(text = "Формат изображения", onClick = { viewModel.onEvent(PlayerEvent.OnToggleAspectRatio) }, isPrimary = false)
+                DialogButton(text = "Закрыть", onClick = { viewModel.onEvent(PlayerEvent.OnDismissMoreDialog) }, isPrimary = false)
             }
         }
     }
@@ -2732,7 +2734,7 @@ private fun ControlButton(
         enabled = enabled,
         modifier = Modifier
             .then(if (visibleLabel == null) Modifier.size(NuvioTheme.spacing.xxxl)
-                  else Modifier.width(198.dp).height(NuvioTheme.spacing.xxxl))
+                  else Modifier.width(if (visibleLabel == "Серии") 100.dp else 184.dp).height(NuvioTheme.spacing.xxxl))
             .then(
                 if (focusRequester != null) Modifier.focusRequester(focusRequester)
                 else Modifier
@@ -3440,6 +3442,7 @@ private fun LoadingIssueReportAction(
 @Composable
 private fun ErrorOverlay(
     message: String,
+    onChooseSource: (() -> Unit)? = null,
     showSwitchToMpvAction: Boolean = false,
     onSwitchToMpv: (() -> Unit)? = null,
     showReportAction: Boolean,
@@ -3453,13 +3456,15 @@ private fun ErrorOverlay(
     val reportFocusRequester = remember { FocusRequester() }
     val mpvFocusRequester = remember { FocusRequester() }
     val onSwitchMpvAction = onSwitchToMpv.takeIf { showSwitchToMpvAction }
-    val targetFocusRequester = if (onSwitchMpvAction != null) mpvFocusRequester else exitFocusRequester
+    val chooseFocusRequester = remember { FocusRequester() }
+    var chooseFocused by remember { mutableStateOf(false) }
+    val targetFocusRequester = if (onChooseSource != null) chooseFocusRequester else if (onSwitchMpvAction != null) mpvFocusRequester else exitFocusRequester
 
     var targetButtonPlaced by remember(onSwitchMpvAction != null) { mutableStateOf(false) }
     var mpvFocused by remember(onSwitchMpvAction != null) { mutableStateOf(false) }
     var reportFocused by remember(onSwitchMpvAction != null) { mutableStateOf(false) }
     var exitFocused by remember(onSwitchMpvAction != null) { mutableStateOf(false) }
-    val hasOverlayFocus = mpvFocused || reportFocused || exitFocused
+    val hasOverlayFocus = chooseFocused || mpvFocused || reportFocused || exitFocused
 
     LaunchedEffect(targetButtonPlaced, onSwitchMpvAction != null) {
         if (!targetButtonPlaced) return@LaunchedEffect
@@ -3537,6 +3542,11 @@ private fun ErrorOverlay(
                 horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.lg),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                if (onChooseSource != null) {
+                    PlayerOverlayButton(text = "Качество и озвучка", onClick = onChooseSource, primary = true,
+                        modifier = Modifier.focusRequester(chooseFocusRequester).onPlaced { targetButtonPlaced = true }
+                            .onFocusChanged { chooseFocused = it.isFocused })
+                }
                 if (onSwitchMpvAction != null) {
                     PlayerOverlayButton(
                         text = stringResource(R.string.player_switch_to_mpv),

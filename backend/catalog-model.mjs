@@ -1,5 +1,5 @@
 import {proxyTmdb} from './image-proxy.mjs';
-import {titleArtUrl,providerLogo} from './title-art.mjs';
+import {titleArtUrl,providerLogoAsset} from './title-art.mjs';
 // Public metadata DTOs. Never expose provider payloads or curator data.
 export function object(value) {
   if (typeof value === 'string') { try { value = JSON.parse(value); } catch { return {}; } }
@@ -47,12 +47,17 @@ function ratings(value) {
       ? [{ source, value: number, scale, votes: integer(data.votes), fetchedAt: date(data.fetchedAt) }] : [];
   });
 }
+function logoFields(row,p){
+ const asset=providerLogoAsset(object(p.images)),original=imageFor(asset?.url,'logo');
+ const russian=text(p.titleRu)||(/[А-Яа-яЁё]/.test(row.title||'')?text(row.title):null);
+ return {logo:original||titleArtUrl(row.id),logoLanguage:original?asset.language:'ru',logoCaption:original&&asset.language!=='ru'?russian:null};
+}
 export function titleCard(row, now) {
   const p = object(row.payload);
   return { id: row.id, type: row.kind, title: text(row.title) || 'Без названия',
     description:text(row.description)?.slice(0,400)||null,genres:labels(p.genres).slice(0,8),runtimeMinutes:integer(p.runtimeMinutes,1,100000),
     originalTitle: text(p.originalTitle), year: integer(row.year, 1888, 2100),
-    logo:imageFor(providerLogo(object(p.images)),'logo')||titleArtUrl(row.id),
+    ...logoFields(row,p),
     poster: imageFor(row.poster,'poster'), backdrop: imageFor(row.backdrop,'backdrop'), ratings: ratings(p.ratings),
     ageRating: typeof p.ageRating === 'number' || typeof p.ageRating === 'string' ? p.ageRating : null,
     releaseState: releaseState(p, row.year, now), availability: {status:row.source_count>0&&new Date(row.source_expires_at)>new Date()?'available':row.source_checked_at?'unavailable':'unknown',checkedAt:date(row.source_checked_at),expiresAt:date(row.source_expires_at)},
@@ -77,7 +82,7 @@ export function titleDetail(row) {
     cast: (list(p.cast).length?list(p.cast):list(details.cast)).map(credit).filter(c => c.name).slice(0,100),
     directors: (list(p.directors).length?list(p.directors):list(details.directors)).map(credit).filter(c => c.name).slice(0,50),
     writers: (list(p.writers).length?list(p.writers):list(details.writers)).map(credit).filter(c => c.name).slice(0,50),
-    logo:imageFor(providerLogo(object(p.images)),'logo')||titleArtUrl(row.id), metadataState: row.description && image(row.poster) ? 'ready' : 'partial' };
+    ...logoFields(row,p), metadataState: row.description && image(row.poster) ? 'ready' : 'partial' };
 }
 export const seasonId = (titleId, season) => `${titleId}:s${season}`;
 export const episodeId = (titleId, season, number) => `${titleId}:${season}:${number}`;

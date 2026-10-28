@@ -15,7 +15,7 @@ export function tvMetadata(row, episodeRows=[]) {
   if(title.releaseDate)meta.released=instant(title.releaseDate);
   if(title.externalIds.imdb)meta.imdb_id=title.externalIds.imdb;
   if(title.ageRating!==null)meta.app_extras={certificationLocal:String(title.ageRating)};
-  if(title.logo)meta.logo=title.logo;
+  if(title.logo){meta.logo=title.logo;meta.logoLanguage=title.logoLanguage;meta.logoCaption=title.logoCaption;}
   if(title.status)meta.status=title.status;
   if(title.countries.length)meta.country=title.countries.join(', ');
   if(title.languages.length)meta.language=title.languages.join(', ');
@@ -34,7 +34,7 @@ export function tvMetadata(row, episodeRows=[]) {
     const seasonAir=object(row.payload).seasonAirAt;
     if(seasonAir&&seasonAir>new Date().toISOString().slice(0,10))video.available=false;
     if(ep.description)video.overview=ep.description;
-    if(ep.still||title.backdrop||title.poster)video.thumbnail=ep.still||title.backdrop||title.poster;
+    if(ep.still)video.thumbnail=ep.still;
     if(ep.airAt)video.released=instant(ep.airAt);
     return video;
   });
@@ -43,5 +43,5 @@ export function tvMetadata(row, episodeRows=[]) {
 
 export function tvPreview(row){
   const card=titleCard(row);
-  return {id:card.id,type:card.type,name:card.title,logo:card.logo,poster:card.poster||'',background:card.backdrop||'',description:card.description||'',releaseInfo:card.year?String(card.year):'',genres:card.genres,cinemaRatings:card.ratings.map(r=>({...r,label:ratingLabels[r.source]||r.source}))};
+  return {id:card.id,type:card.type,name:card.title,logo:card.logo,logoLanguage:card.logoLanguage,logoCaption:card.logoCaption,poster:card.poster||'',background:card.backdrop||'',description:card.description||'',releaseInfo:card.year?String(card.year):'',genres:card.genres,cinemaRatings:card.ratings.map(r=>({...r,label:ratingLabels[r.source]||r.source}))};
 }

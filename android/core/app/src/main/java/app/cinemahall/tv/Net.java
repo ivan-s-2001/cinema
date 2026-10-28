@@ -43,6 +43,17 @@ final class Net {
             }
         } finally { c.disconnect(); }
     }
+    static void verifyStreamBytes(String url,int timeoutMs) throws Exception {
+        HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();
+        c.setConnectTimeout(Math.min(1500,timeoutMs));c.setReadTimeout(timeoutMs);
+        c.setRequestProperty("Range","bytes=0-16383");
+        try {
+            int status=c.getResponseCode();if(status!=200&&status!=206)throw new IOException("Video source HTTP "+status);
+            try(InputStream input=c.getInputStream()){
+                byte[] first=new byte[4096];if(input.read(first)<=0)throw new EOFException("Video source returned no bytes");
+            }
+        } finally { c.disconnect(); }
+    }
     static JSONObject json(String url, JSONObject body) throws Exception {
         byte[] bytes = request(url, body, 8 * 1024 * 1024);
         return bytes.length == 0 ? new JSONObject() : new JSONObject(new String(bytes, StandardCharsets.UTF_8));

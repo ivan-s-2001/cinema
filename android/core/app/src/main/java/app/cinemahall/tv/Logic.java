@@ -154,6 +154,11 @@ public final class Logic {
     public static String voiceKey(String label){
         String key=Normalizer.normalize(label==null?"":label,Normalizer.Form.NFKC)
             .toLowerCase(Locale.ROOT).replace('ё','е').replaceAll("[^\\p{L}\\p{N}]+"," ").trim().replaceAll(" +"," ");
+        String studio="";int studios=0;
+        for(String[] alias:new String[][]{{"lost\\s*film","lostfilm"},{"nova\\s*film","novafilm"},{"(?:ren\\s*tv|рен\\s*тв)","ren tv"},{"sony\\s*sci\\s*fi","sony sci fi"},{"cold\\s*film","coldfilm"}}){
+            if(Pattern.compile(alias[0]).matcher(key).find()){studio=alias[1];studios++;}
+        }
+        if(studios==1)return studio;
         if(key.equals("дубляж"))return "дублированный";
         if(key.equals("original")||key.equals("оригинальный"))return "оригинал";
         return key.isEmpty()?"не указано":key;

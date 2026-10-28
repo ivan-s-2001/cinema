@@ -1719,6 +1719,25 @@ class MetaDetailsViewModel @Inject constructor(
         }
     }
 
+    init {
+        viewModelScope.launch {
+            _uiState.map { it.meta?.id to it.selectedSeason }.distinctUntilChanged().collectLatest { (id, season) ->
+                if (id?.startsWith("ch:") != true || season < 1) return@collectLatest
+                try {
+                    val images = com.nuvio.tv.data.remote.CinemaSeasonArtwork.load(id, season)
+                    _uiState.update { state ->
+                        val current = state.meta
+                        if (current == null || current.id != id) state else {
+                            val updated = current.copy(videos = current.videos.map { com.nuvio.tv.data.remote.CinemaSeasonArtwork.merge(it, images) })
+                            state.copy(meta = updated, episodesForSeason = getEpisodesForSeason(updated, state.selectedSeason))
+                        }
+                    }
+                } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
+                catch (failure: Exception) { android.util.Log.w("CinemaHall", "Season artwork unavailable: $season", failure) }
+            }
+        }
+    }
+
     private fun selectSeason(season: Int) {
         val meta = _uiState.value.meta ?: return
         suppressSeasonAutoSwitch = true

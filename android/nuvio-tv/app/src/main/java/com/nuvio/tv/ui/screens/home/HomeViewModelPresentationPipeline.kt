@@ -1021,6 +1021,7 @@ private fun HomeViewModel.updateCatalogItemWithMeta(itemId: String, meta: Meta) 
     fun mergeItem(currentItem: MetaPreview): MetaPreview = currentItem.copy(
         background = meta.backdropUrl ?: currentItem.backdropUrl,
         logo = meta.logo ?: currentItem.logo,
+        logoCaption = meta.logoCaption,
         description = meta.description ?: currentItem.description,
         imdbRating = meta.imdbRating ?: currentItem.imdbRating,
         cinemaRatings = meta.cinemaRatings.ifEmpty { currentItem.cinemaRatings },

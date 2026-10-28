@@ -138,6 +138,8 @@ internal fun PlayerRuntimeController.showSourcesPanel() {
     _uiState.update {
         it.copy(
             showSourcesPanel = true,
+            error = null,
+            showLoadingOverlay = false,
             showControls = true,
             showAudioOverlay = false,
             showSubtitleOverlay = false,
@@ -1072,6 +1074,19 @@ internal fun PlayerRuntimeController.selectEpisodesSeason(season: Int) {
             episodes = episodesForSeason
         )
     }
+    val titleId = contentId?.takeIf { it.startsWith("ch:") }
+        ?: currentVideoId?.replace(Regex(":\\d+:\\d+$"), "")?.takeIf { it.startsWith("ch:") }
+    if (titleId != null && season > 0) scope.launch {
+        try {
+            val images = com.nuvio.tv.data.remote.CinemaSeasonArtwork.load(titleId, season)
+            _uiState.update { state ->
+                val merged = state.episodesAll.map { com.nuvio.tv.data.remote.CinemaSeasonArtwork.merge(it, images) }
+                state.copy(episodesAll = merged, episodes = merged.filter { it.season == state.episodesSelectedSeason }.sortedBy { it.episode })
+            }
+        } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
+        catch (failure: Exception) { android.util.Log.w("CinemaHall", "Player season artwork unavailable: $season", failure) }
+    }
+
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -1189,6 +1204,7 @@ internal fun PlayerRuntimeController.loadEpisodesIfNeeded() {
                         episodesError = null
                     )
                 }
+                selectEpisodesSeason(selectedSeason)
             }
 
             is NetworkResult.Error -> {

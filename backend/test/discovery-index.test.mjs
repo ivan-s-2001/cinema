@@ -43,3 +43,39 @@ test('release order joins movie and TV namespaces without cross-matching numeric
  const marvel=watchOrdersFor(24428).find(o=>o.id==='infinity-saga');assert.equal(marvel.tmdb[0],1726);assert.equal(marvel.order,'Порядок выхода');
  const minions=watchOrdersFor(1315772).find(o=>o.id==='despicable-me');assert.equal(minions.tmdb[0],20352);
 });
+
+test('narrative cycles distinguish prequels, sequels and spin-off branches without reordering release positions',async()=>{
+ const {availableConnections}=await import('../watch-orders.mjs');
+ const order=watchOrdersFor(585).find(o=>o.id==='monsters');
+ const rows=[{id:'inc',kind:'movie',title:'Корпорация монстров',payload:{ids:{tmdb:585}}},{id:'university',kind:'movie',title:'Университет монстров',payload:{ids:{tmdb:62211}}}];
+ const items=orderedWatchItems(order,rows,r=>({id:r.id,releaseInfo:r.id==='inc'?'2001':'2013'}));
+ assert.deepEqual(items.map(i=>i.id),['inc','university']);
+ assert.deepEqual(items.map(i=>i.cycleRoles),[['original'],['prequel']]);
+ assert.equal(items[1].releaseInfo,'2013 · Приквел');
+ assert.deepEqual(availableConnections(order,rows).map(r=>[r.fromTitleId,r.toTitleId,r.type]),[['university','inc','prequel']]);
+ assert.deepEqual(availableConnections(order,rows.slice(0,1)),[]);
+ const shrek=watchOrdersFor(315162).find(o=>o.id==='shrek');
+ const wish=shrek.parts.find(p=>p.id===315162);assert.deepEqual(wish.roles,['spin_off']);
+ assert.ok(shrek.connections.some(c=>c.from.id===315162&&c.to.id===417859&&c.type==='sequel'));
+});
+
+test('an Avengers sequel cycle is separate from the shared Marvel universe',()=>{
+ const groups=watchOrdersFor(299534);
+ assert.equal(groups[0].id,'avengers');assert.equal(groups[0].scope,'narrative');
+ assert.deepEqual(groups[0].parts.map(p=>p.id),[24428,99861,299536,299534]);
+ assert.equal(groups.find(o=>o.id==='infinity-saga').scope,'universe');
+ assert.equal(groups.find(o=>o.id==='infinity-saga').connections.length,0);
+ assert.deepEqual(watchOrdersFor(299537).find(o=>o.id==='captain-marvel').parts.map(p=>p.id),[299537,609681]);
+});
+
+test('every declared relation has two distinct members in the same cycle and keeps movie/TV identity separate',async()=>{
+ const {watchOrders}=await import('../watch-orders.mjs');
+ for(const order of watchOrders){
+  const keys=order.parts.map(p=>p.type+':'+p.id),members=new Set(keys);assert.equal(members.size,keys.length,order.id);
+  for(const part of order.parts)assert.ok(part.roles.length>0,order.id);
+  for(const link of order.connections){
+   const from=link.from.type+':'+link.from.id,to=link.to.type+':'+link.to.id;
+   assert.notEqual(from,to,order.id);assert.ok(members.has(from),order.id);assert.ok(members.has(to),order.id);
+  }
+ }
+});

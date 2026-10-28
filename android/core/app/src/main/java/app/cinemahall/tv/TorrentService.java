@@ -43,7 +43,7 @@ public final class TorrentService extends Service {
             if (stopping) return;
             if (!connected) throw new Exception("TorrServer не запустился за отведённое время");
             JSONObject sets = Net.action("/settings", "get");
-            sets.put("CacheSize", 96 * 1024 * 1024).put("PreloadCache", 25).put("ReaderReadAHead", 75)
+            sets.put("CacheSize", 96 * 1024 * 1024).put("PreloadCache", 5).put("ReaderReadAHead", 75)
                 .put("ConnectionsLimit", 25).put("UseDisk", false).put("EnableDLNA", false)
                 .put("EnableBonjour", false);
             // Preserve user-configured Torznab/RuTor search. RuTor is disabled by default:

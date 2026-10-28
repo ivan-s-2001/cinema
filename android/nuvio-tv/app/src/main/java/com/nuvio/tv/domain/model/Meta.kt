@@ -46,6 +46,7 @@ data class Meta(
     val hasLogo: Boolean? = null,
     val hasLinks: Boolean? = null,
     val hasVideos: Boolean? = null,
+    val logoCaption: String? = null,
     val cinemaRatings: List<CinemaRating> = emptyList(),
     val cinemaRelated: List<MetaPreview> = emptyList(),
     val cinemaWatchOrders: List<CinemaWatchOrder> = emptyList()

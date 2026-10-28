@@ -1022,7 +1022,9 @@ internal fun CinemaHallQualityVoicePicker(
             .toList()
             .sortedWith(compareBy({ order.indexOf(it.first).let { rank -> if (rank < 0) 99 else rank } }, { it.first }))
     }
-    var quality by remember(groups) { mutableStateOf(groups.firstOrNull()?.first.orEmpty()) }
+    var quality by remember { mutableStateOf(groups.firstOrNull()?.first.orEmpty()) }
+    LaunchedEffect(groups) { if (groups.none { it.first == quality }) quality = groups.firstOrNull()?.first.orEmpty() }
+    val voiceCount = remember(groups) { groups.sumOf { cinemaVoiceChoices(it.second).size } }
     val voices = groups.firstOrNull { it.first == quality }?.second.orEmpty()
         .let(::cinemaVoiceChoices)
     Column(
@@ -1030,7 +1032,7 @@ internal fun CinemaHallQualityVoicePicker(
         verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.lg)
     ) {
         Text(
-            text = "Качество",
+            text = "Качество · найдено вариантов озвучки: $voiceCount",
             style = MaterialTheme.typography.titleMedium,
             color = NuvioTheme.colors.TextPrimary
         )

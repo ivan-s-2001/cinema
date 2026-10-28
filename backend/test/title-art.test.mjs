@@ -26,3 +26,12 @@ test('short title images crop their transparent canvas and malformed provider de
  const art=titleArt('Дюна').body;const width=Number(/width="(\d+)"/.exec(art)[1]);assert.ok(width<800);
  assert.equal(providerLogo({logo:{url:42},logos:[{language:'ru',url:'correct.png'}]}),'correct.png');
 });
+
+
+test('Russian logo wins; English logo has a small Russian caption and beats unknown-language artwork',()=>{
+ const row={id:'ch:movie:1',kind:'movie',title:'Русское название',payload:{titleRu:'Русское название',images:{logo:'https://image.tmdb.org/t/p/original/unknown.png',logos:[{language:'en',file_path:'/english.png'}]}}};
+ let detail=titleDetail(row);assert.ok(detail.logo.endsWith('/english.png'));assert.equal(detail.logoLanguage,'en');assert.equal(detail.logoCaption,'Русское название');
+ row.payload.images.logos.push({language:'ru',file_path:'/russian.png'});
+ detail=titleDetail(row);assert.ok(detail.logo.endsWith('/russian.png'));assert.equal(detail.logoLanguage,'ru');assert.equal(detail.logoCaption,null);
+ row.payload.images={};detail=titleDetail(row);assert.equal(detail.logoLanguage,'ru');assert.equal(detail.logoCaption,null);
+});

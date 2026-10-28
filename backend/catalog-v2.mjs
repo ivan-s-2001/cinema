@@ -6,7 +6,7 @@ import { tvMetadata, tvPreview } from './tv-meta.mjs';
 import {collections, rowSpec, availableWhere} from './collections.mjs';
 import {createMetadataLibrary} from './metadata-library.mjs';
 import {object,imageFor} from './catalog-model.mjs';
-import {watchOrdersFor,orderedWatchItems,orderParts} from './watch-orders.mjs';
+import {watchOrdersFor,orderedWatchItems,orderParts,availableConnections} from './watch-orders.mjs';
 
 const prefix = '/api/v2';
 const columns = 'id,kind,title,year,description,poster,backdrop,payload,updated_at,source_count,source_checked_at,source_expires_at,catalog_rating,catalog_popularity,source_kp';
@@ -114,7 +114,7 @@ export function createCatalogV2(pool,{sourceDiscovery=createSourceDiscovery({ena
       }
       const found=await pool.query(`SELECT ${columns} FROM titles WHERE ${publicWhere} AND ${availableWhere} AND ${releasedWhere} AND (${clauses.join(' OR ')})`,values);
       const items=orderedWatchItems(order,found,tvPreview);
-      result.push({id:order.id,name:order.name,order:order.order,source:order.source,totalParts:parts.length,availableParts:items.length,items});
+      result.push({id:order.id,name:order.name,order:order.order,scope:order.scope,source:order.source,totalParts:parts.length,availableParts:items.length,items,connections:availableConnections(order,found)});
     }
     return result;
   }
@@ -122,22 +122,25 @@ export function createCatalogV2(pool,{sourceDiscovery=createSourceDiscovery({ena
     const genres=titleDetail(row).genres.slice(0,6).map(g=>g.toLowerCase());
     const expressions=genres.map(()=>"CASE WHEN JSON_CONTAINS(LOWER(COALESCE(JSON_EXTRACT(payload,'$.genres'),'[]')),JSON_QUOTE(?)) THEN 3 ELSE 0 END");
     expressions.push('(SELECT COUNT(*) FROM title_cast tc WHERE tc.title_id=titles.id AND tc.person_id IN (SELECT person_id FROM title_cast WHERE title_id=?))*2');
-    return pool.query(`SELECT ${columns},(${expressions.join('+')}) AS related_rank FROM titles WHERE id<>? AND kind=? AND ${publicWhere} AND ${availableWhere} AND ${releasedWhere} AND catalog_rating>=6 HAVING related_rank>0 ORDER BY related_rank DESC,catalog_rating DESC,catalog_popularity DESC,id LIMIT 12`,[...genres,row.id,row.id,row.kind]);
+    const excluded=[...new Set(watchOrdersFor(object(row.payload).ids?.tmdb||object(row.payload).metadataTmdbId,row.kind).filter(o=>o.scope==='narrative').flatMap(o=>o.parts.filter(p=>p.type===row.kind).map(p=>p.id)))];
+    const excludeSql=excluded.length?` AND COALESCE(CAST(COALESCE(JSON_VALUE(payload,'$.ids.tmdb'),JSON_VALUE(payload,'$.metadataTmdbId')) AS UNSIGNED),0) NOT IN (${excluded.map(()=>'?').join(',')})`:'';
+    return pool.query(`SELECT ${columns},(${expressions.join('+')}) AS related_rank FROM titles WHERE id<>? AND kind=? AND ${publicWhere} AND ${availableWhere} AND ${releasedWhere} AND catalog_rating>=6${excludeSql} HAVING related_rank>0 ORDER BY related_rank DESC,catalog_rating DESC,catalog_popularity DESC,id LIMIT 12`,[...genres,row.id,row.id,row.kind,...excluded]);
   }
   return async function handle(req,res,url) {
     if(url.pathname!==prefix&&!url.pathname.startsWith(prefix+'/')) return false;
     const requestId=randomUUID();
     const cacheKey=url.pathname+url.search;
+    const cacheable=!url.pathname.endsWith('/source-candidates');
     function sendBytes(status,bytes) {
-      res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':status===200?'public, max-age=15':'no-store','x-content-type-options':'nosniff','x-request-id':requestId,'content-length':Buffer.byteLength(bytes),...(status===405?{allow:'GET, HEAD'}:{})});
+      res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':status===200&&cacheable?'public, max-age=15':'no-store','x-content-type-options':'nosniff','x-request-id':requestId,'content-length':Buffer.byteLength(bytes),...(status===405?{allow:'GET, HEAD'}:{})});
       res.end(req.method==='HEAD'?undefined:bytes);
     }
-    function send(status,body){const bytes=JSON.stringify(body);if(status===200)remember(cacheKey,bytes);sendBytes(status,bytes);}
+    function send(status,body){const bytes=JSON.stringify(body);if(status===200&&cacheable)remember(cacheKey,bytes);sendBytes(status,bytes);}
     const fail=(status,code,message)=>send(status,{error:{code,message,retryable:status===503,requestId}});
     try {
       if(!['GET','HEAD'].includes(req.method)){fail(405,'method_not_allowed','GET or HEAD required');return true;}
       const saved=cache.get(cacheKey);
-      if(saved&&saved.until>Date.now()){sendBytes(200,saved.bytes);return true;}
+      if(cacheable&&saved&&saved.until>Date.now()){sendBytes(200,saved.bytes);return true;}
       const path=url.pathname.slice(prefix.length);
       const logo=/^\/titles\/([A-Za-z0-9:_-]+)\/logo\.svg$/.exec(path);
       if(logo){
@@ -188,10 +191,12 @@ export function createCatalogV2(pool,{sourceDiscovery=createSourceDiscovery({ena
         const page=await browse(url.searchParams,null,pool,person[1]);
         send(200,{person:{...people[0],photo:imageFor(people[0].photo,'person')},...page});return true;
       }
+      const relations=/^\/titles\/([A-Za-z0-9:_-]+)\/relations$/.exec(path);
+      if(relations){const row=await find(relations[1]);if(!row){fail(404,'not_found','Title not found');return true;}const groups=await cycles(row);send(200,{titleId:row.id,cycles:groups.filter(g=>g.scope==='narrative'),universes:groups.filter(g=>g.scope==='universe')});return true;}
       const cycle=/^\/titles\/([A-Za-z0-9:_-]+)\/watch-orders$/.exec(path);
-      if(cycle){const row=await find(cycle[1]);if(!row){fail(404,'not_found','Title not found');return true;}send(200,{items:await cycles(row)});return true;}
+      if(cycle){const row=await find(cycle[1]);if(!row){fail(404,'not_found','Title not found');return true;}send(200,{items:(await cycles(row)).filter(group=>group.scope==='narrative')});return true;}
       const similar=/^\/titles\/([A-Za-z0-9:_-]+)\/related$/.exec(path);
-      if(similar){const row=await find(similar[1]);if(!row){fail(404,'not_found','Title not found');return true;}send(200,{items:(await related(row)).map(titleCard),nextCursor:null});return true;}
+      if(similar){const row=await find(similar[1]);if(!row){fail(404,'not_found','Title not found');return true;}send(200,{items:(await related(row)).map(r=>titleCard(r)),nextCursor:null});return true;}
       const title=/^\/titles\/([A-Za-z0-9:_-]+)(?:\/(seasons|playback-options|source-candidates|tv-meta))?$/.exec(path);
       if(title){
         let row=await find(title[1]);if(!row){fail(404,'not_found','Title not found');return true;}
@@ -202,7 +207,7 @@ export function createCatalogV2(pool,{sourceDiscovery=createSourceDiscovery({ena
           if(episodes.length>10000){fail(503,'tv_metadata_too_large','Use paginated episode routes');return true;}
           const result=tvMetadata(row,episodes);
           result.meta.cinemaRelated=(await related(row)).map(tvPreview);
-          result.meta.cinemaWatchOrders=await cycles(row);
+          result.meta.cinemaWatchOrders=(await cycles(row)).filter(group=>group.scope==='narrative');
           if(Buffer.byteLength(JSON.stringify(result))>512*1024)for(const video of result.meta.videos||[]){delete video.overview;}
           if(Buffer.byteLength(JSON.stringify(result))>2*1024*1024){fail(503,'tv_metadata_too_large','Use paginated episode routes');return true;}
           send(200,result);return true;
@@ -212,9 +217,11 @@ export function createCatalogV2(pool,{sourceDiscovery=createSourceDiscovery({ena
           const detail=titleDetail(row), kp=row.source_kp||detail.externalIds.kinopoisk;
           if(!kp&&!sourceDiscovery.loadForTitle){fail(404,'source_identity_missing','Kinopoisk identity is unavailable');return true;}
           const ep=url.searchParams.get('episode')||'';
-          if([...url.searchParams.keys()].some(key=>key!=='episode')||(ep&&!/^S[0-9]{1,3}E[0-9]{1,4}$/.test(ep)))throw new InputError('Invalid episode');
+          if([...url.searchParams.keys()].some(key=>!['episode','after'].includes(key))||(ep&&!/^S[0-9]{1,3}E[0-9]{1,4}$/.test(ep)))throw new InputError('Invalid episode');
+          const after=number(url.searchParams,'after',0,0,600);
           const result=kp?await sourceDiscovery.load(kp,ep):await sourceDiscovery.loadForTitle(detail,ep);
-          send(200,{titleId:row.id,episode:ep,engine:'local',status:result.status,candidates:result.candidates});return true;
+          const page=result.candidates.slice(after,after+60);
+          send(200,{titleId:row.id,episode:ep,engine:'local',status:result.status,candidates:page,discoveryComplete:result.complete!==false,availableReleases:result.candidates.length,nextOffset:after+60<result.candidates.length?after+60:null});return true;
         }
         if(title[2]==='playback-options'){
           const detail=titleDetail(row);
@@ -230,6 +237,7 @@ export function createCatalogV2(pool,{sourceDiscovery=createSourceDiscovery({ena
         const row=await find(season[1]);if(!row||row.kind!=='series'){fail(404,'not_found','Series not found');return true;}
         const allowed=new Set(['limit','after']);for(const [key]of url.searchParams)if(!allowed.has(key))throw new InputError('Unknown parameter: '+key);
         const limit=number(url.searchParams,'limit',40,1,100),after=number(url.searchParams,'after',0,0,9999);
+        await metadataLibrary.ensureSeason?.(row,Number(season[2]));
         const items=await pool.query('SELECT * FROM episodes WHERE title_id=? AND season_number=? AND episode_number>? ORDER BY episode_number LIMIT ?',[row.id,Number(season[2]),after,limit+1]);
         if(!items.length){const count=await pool.query('SELECT COUNT(*) AS n FROM episodes WHERE title_id=? AND season_number=?',[row.id,Number(season[2])]);if(!Number(count[0].n)){fail(404,'not_found','Season not found');return true;}}
         send(200,{items:items.slice(0,limit).map(r=>episode(r)),nextAfter:items.length>limit?items[limit-1].episode_number:null});return true;

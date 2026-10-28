@@ -1,4 +1,4 @@
-import {providerLogo} from './title-art.mjs';
+import {providerLogo,providerLogoAsset} from './title-art.mjs';
 import {createHash} from 'node:crypto';
 import {object,text,imageFor,date} from './catalog-model.mjs';
 import {createMetadataProvider} from './metadata-provider.mjs';
@@ -25,7 +25,7 @@ export function createMetadataLibrary(pool,{provider=createMetadataProvider(),cl
   const pending=new Map(),retry=new Map();let background=Promise.resolve(),queued=0,closed=false;
   const detailPending=new Set(),logoPending=new Set();let logoQueued=0;
   function queueLogo(row,payload,tmdb){
-    if(imageFor(providerLogo(object(payload.images)),'logo')||Date.parse(payload.logoCheckedAt||'')>clock()-7*86400000||closed||logoQueued>=8||logoPending.has(row.id))return;
+    if((payload.logoSelectionVersion===2&&Date.parse(payload.logoCheckedAt||'')>clock()-7*86400000)||closed||logoQueued>=8||logoPending.has(row.id))return;
     logoQueued++;logoPending.add(row.id);
     background=background.catch(()=>{}).then(async()=>{
       if(closed)return;
@@ -33,9 +33,9 @@ export function createMetadataLibrary(pool,{provider=createMetadataProvider(),cl
         const response=await provider.get('/titles/by/tmdb/'+tmdb+'?include=images');
         const source=response.data;
         if(String(source?.id?.tmdb)!==tmdb||source?.type!==(row.kind==='series'?'tv':'movie'))throw Error('Logo identity mismatch');
-        const raw=providerLogo(source.images||{}),logo=imageFor(raw?.startsWith('/')?'https://image.tmdb.org/t/p/original'+raw:raw,'logo');
-        if(logo)await pool.query("UPDATE titles SET payload=JSON_SET(COALESCE(payload,JSON_OBJECT()),'$.images',JSON_MERGE_PATCH(COALESCE(JSON_EXTRACT(payload,'$.images'),JSON_OBJECT()),JSON_OBJECT('logo',?)),'$.logoCheckedAt',?) WHERE id=?",[logo,new Date(clock()).toISOString(),row.id]);
-        else await pool.query("UPDATE titles SET payload=JSON_SET(COALESCE(payload,JSON_OBJECT()),'$.logoCheckedAt',?) WHERE id=?",[new Date(clock()).toISOString(),row.id]);
+        const asset=providerLogoAsset(source.images||{}),raw=asset?.url,logo=imageFor(raw?.startsWith('/')?'https://image.tmdb.org/t/p/original'+raw:raw,'logo');
+        if(logo)await pool.query("UPDATE titles SET payload=JSON_SET(COALESCE(payload,JSON_OBJECT()),'$.images',JSON_MERGE_PATCH(COALESCE(JSON_EXTRACT(payload,'$.images'),JSON_OBJECT()),JSON_OBJECT('logo',?,'logoLanguage',?)),'$.logoCheckedAt',?,'$.logoSelectionVersion',2) WHERE id=?",[logo,asset.language,new Date(clock()).toISOString(),row.id]);
+        else await pool.query("UPDATE titles SET payload=JSON_SET(COALESCE(payload,JSON_OBJECT()),'$.logoCheckedAt',?,'$.logoSelectionVersion',2) WHERE id=?",[new Date(clock()).toISOString(),row.id]);
       }catch(error){console.warn('Logo refresh',row.id,error.message);}
     }).finally(()=>{logoQueued--;logoPending.delete(row.id);});
   }
@@ -140,6 +140,27 @@ export function createMetadataLibrary(pool,{provider=createMetadataProvider(),cl
       while(retry.size>256)retry.delete(retry.keys().next().value);
     })();pending.set(row.id,work);try{await work;}finally{pending.delete(row.id);}
   }
+  const seasonPending=new Map();
+  async function ensureSeason(row,number){
+    if(!provider.enabled||closed||row.kind!=='series'||!Number.isInteger(number)||number<1||number>999)return;
+    const key=row.id+':'+number;if(seasonPending.has(key))return seasonPending.get(key);
+    if((retry.get(key)||0)>clock())return;
+    const work=(async()=>{
+      let payload=object(row.payload),tmdb=String(payload.ids?.tmdb||payload.metadataTmdbId||'');
+      if(!/^\d{1,12}$/.test(tmdb)){
+        await ensure(row);const rows=await pool.query('SELECT payload FROM titles WHERE id=?',[row.id]);
+        payload=object(rows[0]?.payload);tmdb=String(payload.ids?.tmdb||payload.metadataTmdbId||'');
+      }
+      if(!/^\d{1,12}$/.test(tmdb))return;
+      if(Date.parse(payload.seasonArtworkAt?.['s'+number]||'')>clock()-6*3600000)return;
+      const known=await pool.query('SELECT COUNT(*) AS n FROM episodes WHERE title_id=? AND season_number=?',[row.id,number]);
+      if(!Number(known[0]?.n))return;
+      // On-demand season work joins the provider queue ahead of the next
+      // background season, rather than waiting for every previous season.
+      await seasonDetails(row,tmdb,{number});
+      await pool.query("UPDATE titles SET payload=JSON_SET(COALESCE(payload,JSON_OBJECT()),'$.seasonArtworkAt',JSON_MERGE_PATCH(COALESCE(JSON_EXTRACT(payload,'$.seasonArtworkAt'),JSON_OBJECT()),JSON_OBJECT(?,?))) WHERE id=?",['s'+number,new Date(clock()).toISOString(),row.id]);
+    })();seasonPending.set(key,work);try{await work;}catch(error){retry.set(key,clock()+60000);while(retry.size>256)retry.delete(retry.keys().next().value);console.warn('Season artwork refresh',row.id,number,error.message);}finally{seasonPending.delete(key);}
+  }
   async function indexExisting(row){
     const payload=object(row.payload),raw=Array.isArray(payload.cast)&&payload.cast.length?payload.cast:payload.details?.cast;
     if(!Array.isArray(raw)||!raw.length)return;
@@ -150,5 +171,5 @@ export function createMetadataLibrary(pool,{provider=createMetadataProvider(),cl
     }
     if(cast.length)await pool.query("UPDATE titles SET payload=JSON_SET(COALESCE(payload,JSON_OBJECT()),'$.cast',JSON_QUERY(?,'$')) WHERE id=?",[JSON.stringify(cast),row.id]);
   }
-  return {ensure,indexExisting,async idle(){await background;},async close(){closed=true;await Promise.allSettled([...pending.values(),background]);}};
+  return {ensure,ensureSeason,indexExisting,async idle(){await background;},async close(){closed=true;await Promise.allSettled([...pending.values(),...seasonPending.values(),background]);}};
 }

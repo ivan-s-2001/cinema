@@ -18,8 +18,8 @@ final class CinemaRemoteSources {
         @Override protected boolean removeEldestEntry(java.util.Map.Entry<String,CachedSources> entry){return size()>8;}
     };
     private static final class CachedSources {
-        final ArrayList<Sources.Candidate> items;final long until;
-        CachedSources(ArrayList<Sources.Candidate> items){this.items=new ArrayList<>(items);until=System.currentTimeMillis()+120000L;}
+        final ArrayList<Sources.Candidate> items;final long until;final boolean complete;
+        CachedSources(ArrayList<Sources.Candidate> items,boolean complete){this.items=new ArrayList<>(items);this.complete=complete;until=System.currentTimeMillis()+(complete?120000L:1200L);}
     }
     private static final long CONFIG_TTL=10*60_000L;
     private CinemaRemoteSources() {}
@@ -39,6 +39,7 @@ final class CinemaRemoteSources {
             }
         }finally{connection.disconnect();}
     }
+    static synchronized boolean complete(String titleId,String episode){CachedSources value=cache.get(titleId+"|"+episode);return value==null||value.complete;}
     static synchronized ArrayList<Sources.Candidate> load(String titleId,String episode) {
         if(!titleId.matches("ch:[A-Za-z0-9:_-]{1,157}")||!episode.matches("|S[0-9]{1,3}E[0-9]{1,4}"))return null;
         String cacheKey=titleId+"|"+episode;
@@ -53,13 +54,19 @@ final class CinemaRemoteSources {
         try {
             JSONObject response=fetch("/titles/"+titleId+"/source-candidates"+(episode.isEmpty()?"":"?episode="+episode));
             if(!"ready".equals(response.optString("status")))return null;
-            JSONArray items=response.getJSONArray("candidates");
-            ArrayList<Sources.Candidate> candidates=new ArrayList<>();
-            for(int i=0;i<items.length()&&i<60;i++){
-                JSONObject item=items.optJSONObject(i);
-                if(item!=null&&Logic.validLink(item.optString("torrent_download_link")))candidates.add(new Sources.Candidate(item));
+            ArrayList<Sources.Candidate> candidates=new ArrayList<>();java.util.HashSet<String> seen=new java.util.HashSet<>();
+            boolean complete=response.optBoolean("discoveryComplete",true);
+            for(int page=0;page<10;page++){
+                JSONArray items=response.getJSONArray("candidates");
+                for(int i=0;i<items.length()&&candidates.size()<600;i++){
+                    JSONObject item=items.optJSONObject(i);
+                    if(item!=null&&Logic.validLink(item.optString("torrent_download_link"))){String identity=item.optString("hash");if(identity.isEmpty())identity=item.optString("torrent_download_link");if(seen.add(identity))candidates.add(new Sources.Candidate(item));}
+                }
+                complete=response.optBoolean("discoveryComplete",true);
+                if(response.isNull("nextOffset")||!response.has("nextOffset"))break;
+                response=fetch("/titles/"+titleId+"/source-candidates?"+(episode.isEmpty()?"":"episode="+episode+"&")+"after="+response.getInt("nextOffset"));
             }
-            if(!candidates.isEmpty())cache.put(cacheKey,new CachedSources(candidates));
+            cache.put(cacheKey,new CachedSources(candidates,complete));
             return candidates;
         }catch(Exception unavailable){return null;}
     }

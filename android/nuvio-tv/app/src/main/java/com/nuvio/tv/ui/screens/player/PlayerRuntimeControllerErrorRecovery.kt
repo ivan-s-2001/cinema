@@ -39,6 +39,9 @@ internal fun PlayerRuntimeController.attemptStartupRecovery(
         return false
     }
     if (hasRenderedFirstFrame) return false
+    // The local provider has already tried alternative distributions and read
+    // actual bytes. Repeating the exhausted request delays a useful error.
+    if (CinemaPlaybackPolicy.isProvider(currentStreamUrl) && error.errorCode in 2000..2999) return false
     if (!isRetryablePlaybackError(error)) return false
     if (startupRetryCount >= MAX_STARTUP_AUTO_RETRIES) return false
 

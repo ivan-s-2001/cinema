@@ -409,17 +409,17 @@ private fun HeroTitleContent(
         var logoLoadFailed by remember(preview.logo) { mutableStateOf(false) }
         val showLogo = !preview.logo.isNullOrBlank() && !logoLoadFailed
         if (showLogo) {
-            AsyncImage(
-                model = logoModel,
-                contentDescription = preview.title,
-                onError = { logoLoadFailed = true },
-                modifier = Modifier
-                    .height(100.dp)
-                    .widthIn(min = 100.dp, max = 220.dp)
-                    .fillMaxWidth(),
-                contentScale = ContentScale.Fit,
-                alignment = Alignment.CenterStart
-            )
+            Column(modifier = Modifier.widthIn(min = 100.dp, max = 220.dp).fillMaxWidth()) {
+                AsyncImage(
+                    model = logoModel,
+                    contentDescription = preview.title,
+                    onError = { logoLoadFailed = true },
+                    modifier = Modifier.height(100.dp).fillMaxWidth(),
+                    contentScale = ContentScale.Fit,
+                    alignment = if (preview.logoCaption.isNullOrBlank()) Alignment.CenterStart else Alignment.Center
+                )
+                com.nuvio.tv.ui.components.CinemaLogoCaption(preview.logoCaption)
+            }
         } else if (preview.title.isNotBlank()) {
             Text(
                 text = preview.title,

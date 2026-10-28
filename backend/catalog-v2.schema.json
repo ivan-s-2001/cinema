@@ -158,6 +158,19 @@
             "string",
             "null"
           ]
+        },
+        "logoLanguage": {
+          "enum": [
+            "ru",
+            "en",
+            null
+          ]
+        },
+        "logoCaption": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -388,6 +401,19 @@
           "enum": [
             "ready",
             "partial"
+          ]
+        },
+        "logoLanguage": {
+          "enum": [
+            "ru",
+            "en",
+            null
+          ]
+        },
+        "logoCaption": {
+          "type": [
+            "string",
+            "null"
           ]
         }
       },
@@ -948,6 +974,20 @@
           "items": {
             "$ref": "#/$defs/SourceCandidate"
           }
+        },
+        "discoveryComplete": {
+          "type": "boolean"
+        },
+        "availableReleases": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "nextOffset": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
         }
       },
       "required": [
@@ -1255,6 +1295,48 @@
                     "items": {
                       "$ref": "#/$defs/TvPreview"
                     }
+                  },
+                  "scope": {
+                    "enum": [
+                      "narrative",
+                      "universe"
+                    ]
+                  },
+                  "connections": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "fromTitleId": {
+                          "type": "string"
+                        },
+                        "toTitleId": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "enum": [
+                            "original",
+                            "sequel",
+                            "prequel",
+                            "spin_off",
+                            "alternate_sequel",
+                            "reboot",
+                            "interquel",
+                            "universe"
+                          ]
+                        },
+                        "source": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "fromTitleId",
+                        "toTitleId",
+                        "type",
+                        "source"
+                      ],
+                      "additionalProperties": false
+                    }
                   }
                 },
                 "required": [
@@ -1263,10 +1345,25 @@
                   "order",
                   "items",
                   "totalParts",
-                  "availableParts"
+                  "availableParts",
+                  "scope",
+                  "connections"
                 ],
                 "additionalProperties": false
               }
+            },
+            "logoLanguage": {
+              "enum": [
+                "ru",
+                "en",
+                null
+              ]
+            },
+            "logoCaption": {
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
           "required": [
@@ -1337,6 +1434,37 @@
             "string",
             "null"
           ]
+        },
+        "cycleRoles": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "original",
+              "sequel",
+              "prequel",
+              "spin_off",
+              "alternate_sequel",
+              "reboot",
+              "interquel",
+              "universe"
+            ]
+          }
+        },
+        "cycleRoleLabel": {
+          "type": "string"
+        },
+        "logoLanguage": {
+          "enum": [
+            "ru",
+            "en",
+            null
+          ]
+        },
+        "logoCaption": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -1373,6 +1501,114 @@
         "genres",
         "countries",
         "years"
+      ],
+      "additionalProperties": false
+    },
+    "NarrativeCycle": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "order": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "totalParts": {
+          "type": "integer"
+        },
+        "availableParts": {
+          "type": "integer"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TvPreview"
+          }
+        },
+        "scope": {
+          "enum": [
+            "narrative",
+            "universe"
+          ]
+        },
+        "connections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "fromTitleId": {
+                "type": "string"
+              },
+              "toTitleId": {
+                "type": "string"
+              },
+              "type": {
+                "enum": [
+                  "original",
+                  "sequel",
+                  "prequel",
+                  "spin_off",
+                  "alternate_sequel",
+                  "reboot",
+                  "interquel",
+                  "universe"
+                ]
+              },
+              "source": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "fromTitleId",
+              "toTitleId",
+              "type",
+              "source"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "order",
+        "items",
+        "totalParts",
+        "availableParts",
+        "scope",
+        "connections"
+      ],
+      "additionalProperties": false
+    },
+    "Relations": {
+      "type": "object",
+      "properties": {
+        "titleId": {
+          "type": "string"
+        },
+        "cycles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NarrativeCycle"
+          }
+        },
+        "universes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NarrativeCycle"
+          }
+        }
+      },
+      "required": [
+        "titleId",
+        "cycles",
+        "universes"
       ],
       "additionalProperties": false
     }

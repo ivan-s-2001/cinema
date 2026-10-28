@@ -135,8 +135,8 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1075
-        versionName = "0.7.3-tv"
+        versionCode = 1076
+        versionName = "0.7.4-tv"
 
         buildConfigField("String", "PARENTAL_GUIDE_API_URL", "\"${localProperties.getProperty("PARENTAL_GUIDE_API_URL", "")}\"")
         buildConfigField("String", "INTRODB_API_URL", "\"${localProperties.getProperty("INTRODB_API_URL", "")}\"")

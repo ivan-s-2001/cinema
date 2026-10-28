@@ -212,6 +212,17 @@ test('MariaDB catalogue integration',{skip:!process.env.CATALOG_TEST_PORT},async
       const detail=await get('/titles/ch:snapshot:movie:tmdb:550/tv-meta','TvMetadata');
       assert.equal(detail.meta.app_extras.cast[0].personId,person.id);
       const filmography=await get('/people/'+person.id+'/filmography?sort=year');assert.equal(filmography.items.length,2);
+      // A later season can be hydrated directly without reloading every earlier season.
+      await pool.query("INSERT INTO episodes(title_id,season_number,episode_number)VALUES(?,3,1)",[series.id]);
+      let seasonCalls=0;
+      const onDemand=createMetadataLibrary(pool,{provider:{enabled:true,async get(path){
+        assert.ok(path.endsWith('/seasons/3/episodes'));seasonCalls++;return {data:[{episode_number:1,still_path:'/season3.jpg',name:'Third season'}]};
+      }}});
+      await Promise.all([onDemand.ensureSeason(series,3),onDemand.ensureSeason(series,3)]);
+      const later=(await pool.query('SELECT still FROM episodes WHERE title_id=? AND season_number=3',[series.id]))[0];
+      assert.ok(later.still.includes('/season3.jpg'));assert.equal(seasonCalls,1);
+      await onDemand.ensureSeason((await pool.query('SELECT * FROM titles WHERE id=?',[series.id]))[0],3);assert.equal(seasonCalls,1);
+      await onDemand.close();
       await library.close();
     });
     await t.test('unknown, expired and unavailable titles never enter browse or search',async()=>{
@@ -245,15 +256,37 @@ test('MariaDB catalogue integration',{skip:!process.env.CATALOG_TEST_PORT},async
     });
     await t.test('watch order combines related series by release date, keeping unrelated numeric movie IDs out',async()=>{
       for(const [id,kind,tmdb,year]of [['ch:game','series',1399,2011],['ch:house','series',94997,2022],['ch:wrong-cycle','movie',1399,2010]]){
-        await pool.query("INSERT INTO titles(id,kind,title,year,payload,source_count,source_expires_at,catalog_rating)VALUES(?,?,?,?,?,1,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 6 HOUR),8)",[id,kind,id,year,JSON.stringify({status:'Released',ids:{tmdb}})]);
+        await pool.query("INSERT INTO titles(id,kind,title,year,payload,source_count,source_expires_at,catalog_rating)VALUES(?,?,?,?,?,1,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 6 HOUR),8)",[id,kind,id,year,JSON.stringify({status:'Released',genres:['Фэнтези'],ids:{tmdb}})]);
       }
       try{
         const a=await get('/titles/ch:house/watch-orders'),b=await get('/titles/ch:game/watch-orders');
         assert.deepEqual(a.items[0].items.map(i=>i.id),['ch:game','ch:house']);
         assert.deepEqual(b.items[0].items.map(i=>i.id),['ch:game','ch:house']);
         assert.equal(a.items[0].order,'Порядок выхода сериалов');
+        assert.deepEqual(a.items[0].items.find(i=>i.id==='ch:house').cycleRoles,['prequel','spin_off']);
+        assert.ok(a.items[0].items.find(i=>i.id==='ch:house').releaseInfo.includes('Приквел'));
+        const linked=await get('/titles/ch:game/relations','Relations');
+        assert.equal(linked.cycles.length,1);assert.equal(linked.universes.length,0);
+        assert.ok(linked.cycles[0].connections.some(c=>c.fromTitleId==='ch:house'&&c.toTitleId==='ch:game'&&c.type==='prequel'));
+        await pool.query("INSERT INTO titles(id,kind,title,year,payload,source_count,source_expires_at,catalog_rating)VALUES('ch:other-fantasy','series','Other fantasy',2020,?,1,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 6 HOUR),8)",[JSON.stringify({status:'Released',genres:['Фэнтези']})]);
+        const similar=await get('/titles/ch:game/related','Page');
+        assert.ok(!similar.items.some(i=>i.id==='ch:house'));assert.ok(similar.items.some(i=>i.id==='ch:other-fantasy'));
+        const tv=await get('/titles/ch:game/tv-meta','TvMetadata');
+        assert.equal(tv.meta.cinemaWatchOrders[0].scope,'narrative');
+        assert.ok(!tv.meta.cinemaRelated.some(i=>i.id==='ch:house'));
         assert.equal((await get('/titles/ch:wrong-cycle/watch-orders')).items.length,0);
-      }finally{await pool.query("DELETE FROM titles WHERE id IN ('ch:game','ch:house','ch:wrong-cycle')");}
+      }finally{await pool.query("DELETE FROM titles WHERE id IN ('ch:game','ch:house','ch:wrong-cycle','ch:other-fantasy')");}
+    });
+    await t.test('Avengers detail exposes actual sequels and the relation endpoint separates the wider universe',async()=>{
+      const values=[['ch:avengers',24428,2012],['ch:ultron',99861,2015],['ch:iron',1726,2008]];
+      for(const [id,tmdb,year]of values)await pool.query("INSERT INTO titles(id,kind,title,year,payload,source_count,source_expires_at,catalog_rating)VALUES(?,'movie',?,?,?,1,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 6 HOUR),8)",[id,id,year,JSON.stringify({status:'Released',ids:{tmdb}})]);
+      try{
+        const result=await get('/titles/ch:avengers/relations','Relations');
+        assert.equal(result.cycles[0].id,'avengers');assert.deepEqual(result.cycles[0].items.map(i=>i.id),['ch:avengers','ch:ultron']);
+        assert.ok(result.universes.some(g=>g.items.some(i=>i.id==='ch:iron')));
+        const tv=await get('/titles/ch:avengers/tv-meta','TvMetadata');
+        assert.equal(tv.meta.cinemaWatchOrders.length,1);assert.equal(tv.meta.cinemaWatchOrders[0].id,'avengers');
+      }finally{await pool.query("DELETE FROM titles WHERE id IN ('ch:avengers','ch:ultron','ch:iron')");}
     });
     await t.test('invalid filters, cursor and methods return typed errors',async()=>{
       for(const q of ['limit=0','limit=abc','limit=61','yearFrom=NaN','yearFrom=2026&yearTo=2000','sort=sql','extra=1','cursor=abc'])await get('/discover?'+q,'Error',400);

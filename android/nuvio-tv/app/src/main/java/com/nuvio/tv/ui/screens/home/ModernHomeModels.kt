@@ -67,6 +67,7 @@ data class HeroPreview(
     /** Same idea for the logo URL. */
     val frozenLogoUrl: String? = null,
     val kinopoiskRatingText: String? = null,
+    val logoCaption: String? = null,
     val cinemaRatings: List<com.nuvio.tv.domain.model.CinemaRating> = emptyList()
 )
 
@@ -484,6 +485,7 @@ internal fun buildCatalogItem(
     val heroPreview = HeroPreview(
         title = item.name,
         logo = item.logo,
+        logoCaption = item.logoCaption,
         description = item.description,
         contentTypeText = when (item.apiType.lowercase()) {
             "movie" -> strTypeMovie.ifBlank { item.apiType.replaceFirstChar { ch -> ch.uppercase() } }

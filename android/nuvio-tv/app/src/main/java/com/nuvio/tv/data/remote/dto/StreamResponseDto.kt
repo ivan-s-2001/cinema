@@ -5,7 +5,8 @@ import com.squareup.moshi.JsonClass
 
 @JsonClass(generateAdapter = true)
 data class StreamResponseDto(
-    @Json(name = "streams") val streams: List<StreamDto>? = null
+    @Json(name = "streams") val streams: List<StreamDto>? = null,
+    @Json(name = "discoveryComplete") val discoveryComplete: Boolean = true
 )
 
 @JsonClass(generateAdapter = true)
