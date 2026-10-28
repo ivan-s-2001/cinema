@@ -18,7 +18,7 @@ Supported Supabase-compatible routes are `/auth/v1/signup`, `/auth/v1/token?gran
 
 ## Data model and sync
 
-Accounts own up to six profiles. Each profile has playback progress, watched episodes, library items, add-ons, plugins, collections, and settings. Progress, watched, and library changes have a monotonic event cursor, idempotent mutation IDs, and delete tombstones so devices can reconcile offline changes without restoring removed items. Foreign keys cascade account deletion through sessions, profiles, sync state, and settings.
+Accounts own up to six profiles. Each profile has playback progress, watched episodes, library items, add-ons, plugins, collections, and settings. Progress, watched, and library changes have a monotonic event cursor and delete tombstones. Repeated snapshots do not create duplicate events, so devices can reconcile offline changes without restoring removed items. Foreign keys cascade account deletion through sessions, profiles, sync state, and settings.
 
 For clients that do not use the Supabase-compatible routes, direct API routes are also available: `/api/v1/auth/register|login|me|logout`, `/api/v1/profiles`, `/api/v1/profiles/:id`, and `/api/v1/profiles/:id/sync`.
 
