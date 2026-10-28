@@ -29,6 +29,8 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: backend/package-lock.json
+      - name: Check rebuild script syntax
+        run: bash -n backend/ops/rebuild-api.sh
       - run: npm ci --ignore-scripts --no-audit --no-fund
         working-directory: backend
       - run: npm test
