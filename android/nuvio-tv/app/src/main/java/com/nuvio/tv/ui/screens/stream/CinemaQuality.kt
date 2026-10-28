@@ -16,6 +16,10 @@ internal fun cinemaTechnologyLabel(stream: Stream): String? = stream.technologyH
 /** Playback starts automatically; quality and voice choices are an explicit secondary action. */
 internal fun cinemaRequiresInitialSelection(requestedManual: Boolean): Boolean = requestedManual
 
+/** CinemaHall always remembers the last selected studio across episodes. */
+internal fun cinemaShouldReuseBingeGroup(videoId: String, prefer: Boolean, reuse: Boolean): Boolean =
+    videoId.startsWith("ch:") || (prefer && reuse)
+
 /** Keep an earlier voice when available, otherwise let the provider choose the best release. */
 internal fun cinemaPreferredAutoPlayStream(streams: List<Stream>, selectedGroup: String?): Stream? =
     cinemaContinuationStream(streams, selectedGroup)
