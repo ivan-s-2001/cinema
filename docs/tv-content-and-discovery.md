@@ -78,3 +78,6 @@ Every explicit CinemaHall film/episode launch opens quality and voice selection 
 In-player automatic continuation uses the chosen quality/voice binge group. If that combination is missing for the next episode, it opens the picker instead of silently changing the studio or quality. Filename-only fallback follows the same rule. Manual episode selection in the player already opens quality/voice choices.
 
 TV version: 0.7.5-tv, versionCode 1077. Server file/track indexing remains the separate architecture work described in the research document; this change establishes the requested launch behavior.
+
+
+Source/voice/quality switches within the current episode capture the live absolute position before releasing either player. This transfer takes precedence over stored resume progress and completion thresholds, including near the credits. ExoPlayer and MPV start the replacement at that position; a shorter replacement duration bounds the target at its end. A second switch during preparation retains the pending position. Switching episodes clears the source-transfer position and uses that episode's own progress. Files with different edits or introductions still use absolute time; content-based alignment between different cuts is not claimed.

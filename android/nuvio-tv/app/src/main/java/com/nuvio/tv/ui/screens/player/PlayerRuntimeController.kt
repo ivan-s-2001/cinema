@@ -651,6 +651,7 @@ class PlayerRuntimeController(
             }
         }
     internal var pendingResumeProgress: WatchProgress? = null
+    internal var pendingSourceSwitchPositionMs: Long? = null
     internal var hasRetriedCurrentStreamAfter416: Boolean = false
     internal var isReleasingPlayer: Boolean = false
     internal var cachedDecoderPriority: Int = 1

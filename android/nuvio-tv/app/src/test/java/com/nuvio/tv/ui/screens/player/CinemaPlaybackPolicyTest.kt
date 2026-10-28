@@ -15,4 +15,14 @@ class CinemaPlaybackPolicyTest {
         assertFalse(CinemaPlaybackPolicy.timedOut(80_000, 80_000, false, true))
         assertFalse(CinemaPlaybackPolicy.timedOut(80_000, 100, true, false))
     }
+    @Test fun sourceChangesUseTheLiveTimelineRatherThanStaleSavedProgress() {
+        assertEquals(1_234_567L, cinemaSourceSwitchPosition(1_234_567L, true, 600_000L, 1_234_000L))
+        assertEquals(1_234_567L, cinemaSourceSwitchPosition(0L, false, 1_234_567L, 0L))
+        assertEquals(500_000L, cinemaSourceSwitchPosition(null, false, null, 500_000L))
+        assertEquals(0L, cinemaSourceSwitchPosition(0L, true, 600_000L, 600_000L))
+        assertEquals(3_590_000L, cinemaSourceSwitchTarget(3_590_000L, 3_600_000L))
+        assertEquals(899_999L, cinemaSourceSwitchTarget(1_000_000L, 900_000L))
+        assertEquals(1_000_000L, cinemaSourceSwitchTarget(1_000_000L, -1L))
+    }
+
 }

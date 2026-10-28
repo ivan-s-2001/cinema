@@ -946,6 +946,9 @@ internal fun PlayerRuntimeController.switchToSourceStream(
         return
     }
 
+    val sourcePosition = cinemaSourceSwitchPosition(currentPlaybackPositionMs(), hasRenderedFirstFrame,
+        pendingSourceSwitchPositionMs ?: _uiState.value.pendingSeekPosition, _uiState.value.currentPosition)
+
     // Stop any active torrent before switching to HTTP stream
     stopTorrentStream()
 
@@ -960,6 +963,10 @@ internal fun PlayerRuntimeController.switchToSourceStream(
 
     resetLoadingOverlayForNewStream()
     releasePlayer(flushPlaybackState = false)
+    pendingResumeProgress = null
+    pendingSourceSwitchPositionMs = sourcePosition
+    _uiState.update { it.copy(pendingSeekPosition = sourcePosition, currentPosition = sourcePosition) }
+
 
     applySelectedStreamState(
         stream = stream,
@@ -1039,7 +1046,8 @@ internal fun PlayerRuntimeController.switchToSourceStream(
         initializePlayer(playbackUrl, playbackHeaders)
     }
 
-    loadSavedProgressFor(currentSeason, currentEpisode)
+    // The live position above is newer than an asynchronous database or server resume snapshot.
+
 }
 
 internal fun PlayerRuntimeController.dismissEpisodesPanel() {
@@ -1094,6 +1102,9 @@ private fun PlayerRuntimeController.switchToTorrentSourceStream(
     stream: Stream
 ) {
     val infoHash = stream.getEffectiveInfoHash() ?: return
+    val sourcePosition = cinemaSourceSwitchPosition(currentPlaybackPositionMs(), hasRenderedFirstFrame,
+        pendingSourceSwitchPositionMs ?: _uiState.value.pendingSeekPosition, _uiState.value.currentPosition)
+
     sourceStreamsScope?.cancel()
     sourceStreamsScope = null
     sourceStreamsJob = null
@@ -1103,6 +1114,10 @@ private fun PlayerRuntimeController.switchToTorrentSourceStream(
     flushPlaybackSnapshotForSwitchOrExit()
     resetLoadingOverlayForNewStream()
     releasePlayer(flushPlaybackState = false)
+    pendingResumeProgress = null
+    pendingSourceSwitchPositionMs = sourcePosition
+    _uiState.update { it.copy(pendingSeekPosition = sourcePosition, currentPosition = sourcePosition) }
+
     hasRetriedCurrentStreamAfter416 = false
     errorRetryCount = 0
     subtitleDisabledByPersistedPreference = false
@@ -1134,7 +1149,7 @@ private fun PlayerRuntimeController.switchToTorrentSourceStream(
     currentFilename = stream.behaviorHints?.filename
     showStreamSourceIndicator(stream)
     resetPostPlayOverlayState(clearEpisode = false)
-    launchTorrentSourceStream(stream, infoHash, loadSavedProgress = true)
+    launchTorrentSourceStream(stream, infoHash, loadSavedProgress = false)
     persistTorrentStreamForReuse(stream)
 }
 
@@ -1442,6 +1457,7 @@ internal fun PlayerRuntimeController.switchToEpisodeStream(
     forcedTargetVideo: Video? = null,
     isAutoPlay: Boolean = false
 ) {
+    pendingSourceSwitchPositionMs = null
     if (openExternalStreamInBrowser(stream = stream, fromEpisodePanel = true)) {
         return
     }

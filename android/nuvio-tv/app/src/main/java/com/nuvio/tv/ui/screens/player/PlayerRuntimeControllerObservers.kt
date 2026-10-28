@@ -682,6 +682,11 @@ internal fun PlayerRuntimeController.fetchSkipIntervals(id: String?, season: Int
 }
 
 internal fun PlayerRuntimeController.tryApplyPendingResumeProgress(player: Player) {
+    pendingSourceSwitchPositionMs?.let { position ->
+        if (player.isCurrentMediaItemSeekable) player.seekTo(cinemaSourceSwitchTarget(position, player.duration))
+        clearPendingInitialResumePosition()
+        return
+    }
     val saved = pendingResumeProgress ?: return
     if (!player.isCurrentMediaItemSeekable) {
         pendingResumeProgress = null
@@ -703,6 +708,7 @@ internal fun PlayerRuntimeController.tryApplyPendingResumeProgress(player: Playe
 }
 
 internal fun PlayerRuntimeController.resolvePendingInitialResumePosition(): Long {
+    pendingSourceSwitchPositionMs?.let { return it.coerceAtLeast(0L) }
     val saved = pendingResumeProgress ?: return 0L
     val target = when {
         saved.duration > 0L -> saved.resolveResumePosition(saved.duration)
@@ -716,6 +722,7 @@ internal fun PlayerRuntimeController.resolvePendingInitialResumePosition(): Long
 }
 
 internal fun PlayerRuntimeController.clearPendingInitialResumePosition() {
+    pendingSourceSwitchPositionMs = null
     pendingResumeProgress = null
     _uiState.update { it.copy(pendingSeekPosition = null) }
 }

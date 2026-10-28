@@ -8,3 +8,11 @@ internal object CinemaPlaybackPolicy {
     fun timedOut(waitingMs: Long, stalledMs: Long, started: Boolean, paused: Boolean): Boolean =
         !paused && if (started) stalledMs >= 30_000 else waitingMs >= 60_000
 }
+
+
+/** A source change is an absolute timeline transfer, even in the credits or before the first frame. */
+internal fun cinemaSourceSwitchPosition(live: Long?, rendered: Boolean, pending: Long?, timeline: Long): Long =
+    (if (rendered && live != null && live >= 0L) live else pending ?: timeline).coerceAtLeast(0L)
+
+internal fun cinemaSourceSwitchTarget(position: Long, duration: Long): Long =
+    position.coerceAtLeast(0L).let { if (duration > 0L) it.coerceAtMost((duration - 1L).coerceAtLeast(0L)) else it }
