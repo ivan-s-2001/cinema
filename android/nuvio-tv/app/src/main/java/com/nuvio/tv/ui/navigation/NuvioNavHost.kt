@@ -373,6 +373,7 @@ private fun PlaybackNavHost(
                         navController.popBackStack()
                     }
                 },
+                onNavigateToCinemaPerson = { personId -> childNav.navigate(Screen.CinemaPerson.createRoute(personId)) },
                 onNavigateToCastDetail = { personId, personName, preferCrew ->
                     childNav.navigate(Screen.CastDetail.createRoute(personId, personName, preferCrew))
                 },
@@ -1451,6 +1452,13 @@ private fun PlaybackNavHost(
             )
         }
 
+        composable(Screen.CinemaPerson.route, arguments = listOf(navArgument("personId") { type = NavType.StringType })) { entry ->
+            com.nuvio.tv.ui.screens.person.CinemaPersonScreen(
+                personId = entry.arguments?.getString("personId").orEmpty(),
+                onBack = { navController.popBackStack() },
+                onOpenFilm = { id, type -> navController.navigate(Screen.Detail.createRoute(id, type, "http://127.0.0.1:18991")) }
+            )
+        }
         composable(
             route = Screen.TmdbEntityBrowse.route,
             arguments = listOf(

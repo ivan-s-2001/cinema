@@ -26,14 +26,15 @@ final class CinemaRemoteSources {
     static JSONObject fetch(String path) throws Exception {
         HttpURLConnection connection=(HttpURLConnection)new URL(BASE+path).openConnection();
         connection.setInstanceFollowRedirects(false);
-        connection.setConnectTimeout(5000);connection.setReadTimeout(path.contains("source-candidates")?20000:10000);
+        connection.setConnectTimeout(5000);connection.setReadTimeout(path.contains("source-candidates")?20000:path.contains("tv-meta")?30000:10000);
         connection.setRequestProperty("Accept","application/json");
         try {
             if(connection.getResponseCode()!=200)throw new Exception("Source API unavailable");
-            if(connection.getContentLengthLong()>512*1024)throw new Exception("Source response oversized");
+            int budget=path.contains("tv-meta")?2*1024*1024:512*1024;
+            if(connection.getContentLengthLong()>budget)throw new Exception("Source response oversized");
             try(InputStream in=connection.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){
                 byte[] block=new byte[8192];int n;
-                while((n=in.read(block))!=-1){if(Thread.currentThread().isInterrupted())throw new InterruptedException();if(out.size()+n>512*1024)throw new Exception("Source response oversized");out.write(block,0,n);}
+                while((n=in.read(block))!=-1){if(Thread.currentThread().isInterrupted())throw new InterruptedException();if(out.size()+n>budget)throw new Exception("Source response oversized");out.write(block,0,n);}
                 return new JSONObject(out.toString(StandardCharsets.UTF_8.name()));
             }
         }finally{connection.disconnect();}

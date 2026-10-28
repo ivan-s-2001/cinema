@@ -6,6 +6,10 @@ import { handleDiscovery } from './discovery.mjs';
 import { handleSearch } from './search.mjs';
 import { createCatalogV2 } from './catalog-v2.mjs';
 import { startRefreshScheduler } from './refresh-scheduler.mjs';
+import {spawn} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+import {startDiscoveryScheduler} from './discovery-index.mjs';
+import {createMetadataLibrary} from './metadata-library.mjs';
 import {createImageProxy} from './image-proxy.mjs';
 
 const host='127.0.0.1',port=Number(process.env.CINEMA_API_PORT||8091);
@@ -40,7 +44,9 @@ async function query(sql,params=[]){
  try{return await conn.query(sql,params);}
  finally{conn.release();}
 }
-const handleCatalogV2=createCatalogV2(pool);
+const metadataLibrary=createMetadataLibrary(pool);
+const handleCatalogV2=createCatalogV2(pool,{metadataLibrary});
+let stopDiscovery=()=>{};
 const handleImages=createImageProxy();
 const server=http.createServer(async(req,res)=>{
  try{
@@ -96,6 +102,7 @@ server.listen(port,host,()=>{
  if(process.env.CINEMA_DISABLE_SCHEDULERS!=='1'){
   if(process.env.ADMIN_SESSION_SECRET&&process.env.ADMIN_PASSWORD_SCRYPT)startAdminScheduler(pool);
   if(process.env.CINEMA_REFRESH_ENABLED==='1')startRefreshScheduler(pool);
+  stopDiscovery=startDiscoveryScheduler({spawnChild:()=>spawn(process.execPath,[fileURLToPath(new URL('./prepare-discovery.mjs',import.meta.url))],{stdio:['ignore','inherit','inherit'],env:process.env})});
  }
 });
-process.on('SIGTERM',()=>server.close(()=>pool.end()));
+process.on('SIGTERM',()=>{stopDiscovery();server.close(async()=>{await metadataLibrary.close();await pool.end();});});

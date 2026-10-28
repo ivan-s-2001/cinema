@@ -1,6 +1,7 @@
 package com.nuvio.tv.ui.screens.stream
 
 import com.nuvio.tv.domain.model.Stream
+import com.nuvio.tv.data.mapper.toDomain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -18,5 +19,13 @@ class CinemaQualityTest {
         assertEquals("CinemaHall · 720p", cinemaPreferredStream(choices, "1080p")?.name)
         assertEquals("CinemaHall · 720p", cinemaPreferredStream(choices, "480p")?.name)
         assertNull(cinemaPreferredStream(listOf(stream("4K", "Other")), "BEST"))
+    }
+    @Test fun `release technology survives mapping and distinguishes identical voices`() {
+        val dto = com.nuvio.tv.data.remote.dto.StreamDto(name = "CinemaHall · 4K", title = "Дубляж", technologyHints = listOf("HDR10+", "Dolby Atmos", "invalid"))
+        val mapped = dto.toDomain("CinemaHall", null)
+        assertEquals(listOf("HDR10+", "Dolby Atmos"), mapped.technologyHints)
+        val other = mapped.copy(technologyHints = listOf("Dolby Vision"))
+        assertEquals(2, cinemaVoiceChoices(listOf(mapped, other)).size)
+        assertEquals("HDR10+ · Dolby Atmos", cinemaTechnologyLabel(mapped))
     }
 }

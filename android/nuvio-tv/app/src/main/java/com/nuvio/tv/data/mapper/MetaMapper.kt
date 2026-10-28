@@ -22,6 +22,8 @@ fun MetaDto.toDomain(episodeLabel: String = "Episode"): Meta {
 
     return Meta(
         id = id,
+        cinemaRelated = cinemaRelated.mapNotNull { it.toDomainOrNull(type, "http://127.0.0.1:18991") },
+        cinemaWatchOrders = cinemaWatchOrders.map { cycle -> com.nuvio.tv.domain.model.CinemaWatchOrder(cycle.id, cycle.name, cycle.order, cycle.totalParts, cycle.availableParts, cycle.items.mapNotNull { it.toDomainOrNull(type, "http://127.0.0.1:18991") }) },
         type = ContentType.fromString(type),
         rawType = type,
         name = name,

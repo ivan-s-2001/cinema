@@ -8,7 +8,7 @@ public final class ProviderCheck {
         JSONObject manifest=CinemaCatalog.manifest();
         if(!manifest.getString("id").equals("app.cinemahall.catalog"))throw new AssertionError("Provider identity");
         JSONArray catalogs=manifest.getJSONArray("catalogs");
-        if(catalogs.length()!=8)throw new AssertionError("All our shelves must be registered");
+        if(catalogs.length()!=20)throw new AssertionError("All our shelves must be registered");
         for(int i=0;i<catalogs.length();i++){
             JSONObject row=catalogs.getJSONObject(i);
             if(row.getJSONArray("extra").length()!=2)throw new AssertionError("Search and paging must be declared");

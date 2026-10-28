@@ -351,7 +351,7 @@ class MetaDetailsViewModel @Inject constructor(
             is MetaDetailsEvent.OnCommentsEpisodeSelected -> selectCommentsEpisode(event.video)
             MetaDetailsEvent.OnPlayClick -> { /* Start playback */ }
             MetaDetailsEvent.OnToggleLibrary -> toggleLibrary()
-            MetaDetailsEvent.OnRetry -> loadMeta()
+            MetaDetailsEvent.OnRetry -> { metaRepository.clearCache(); loadMeta() }
             MetaDetailsEvent.OnRetryComments -> _uiState.value.meta?.let { loadComments(it, forceRefresh = true) }
             MetaDetailsEvent.OnLoadMoreComments -> loadMoreComments()
             is MetaDetailsEvent.OnCommentSelected -> openCommentOverlay(event.review)
@@ -1276,6 +1276,11 @@ class MetaDetailsViewModel @Inject constructor(
     }
 
     private fun loadMoreLikeThisAsync(meta: Meta) {
+        if (meta.id.startsWith("ch:")) {
+            moreLikeThisJob?.cancel()
+            _uiState.update { it.copy(moreLikeThis = meta.cinemaRelated, moreLikeThisSource = null) }
+            return
+        }
         moreLikeThisJob?.cancel()
         moreLikeThisJob = viewModelScope.launch {
             val source = when {

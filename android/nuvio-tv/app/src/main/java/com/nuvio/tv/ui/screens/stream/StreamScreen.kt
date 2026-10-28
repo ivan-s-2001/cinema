@@ -1024,7 +1024,7 @@ internal fun CinemaHallQualityVoicePicker(
     }
     var quality by remember(groups) { mutableStateOf(groups.firstOrNull()?.first.orEmpty()) }
     val voices = groups.firstOrNull { it.first == quality }?.second.orEmpty()
-        .distinctBy { it.title.orEmpty().trim().lowercase() }
+        .let(::cinemaVoiceChoices)
     Column(
         modifier = modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.lg)
@@ -1081,12 +1081,13 @@ internal fun CinemaHallQualityVoicePicker(
                     )),
                     shape = CardDefaults.shape(shape = RoundedCornerShape(NuvioTheme.radii.sm))
                 ) {
-                    Text(
-                        text = stream.title?.takeIf { it.isNotBlank() } ?: "Озвучка не указана",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = NuvioTheme.colors.TextPrimary,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)
-                    )
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(text = stream.title?.takeIf { it.isNotBlank() } ?: "Озвучка не указана",
+                            style = MaterialTheme.typography.bodyLarge, color = NuvioTheme.colors.TextPrimary)
+                        cinemaTechnologyLabel(stream)?.let { label ->
+                            Text(text = label, style = MaterialTheme.typography.labelMedium, color = NuvioTheme.colors.Secondary)
+                        }
+                    }
                 }
             }
         }

@@ -32,6 +32,8 @@ fun StreamDto.toDomain(addonName: String, addonLogo: String?): Stream = Stream(
     addonLogo = addonLogo,
     sources = sources,
     clientResolve = clientResolve?.toDomain(),
+    technologyHints = technologyHints.filter { it in setOf("Dolby Vision", "HDR10+", "HDR", "HLG", "HEVC", "H.264", "AV1", "Dolby Atmos", "DTS:X", "DTS-HD", "TrueHD", "DD+", "WEB-DL", "Blu-ray") }.distinct(),
+    hintsVerified = hintsVerified,
     subtitles = subtitles.orEmpty().mapNotNull { dto ->
         val url = dto.url.takeIf { it.isNotBlank() } ?: return@mapNotNull null
         Subtitle(

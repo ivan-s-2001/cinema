@@ -46,7 +46,9 @@ data class Meta(
     val hasLogo: Boolean? = null,
     val hasLinks: Boolean? = null,
     val hasVideos: Boolean? = null,
-    val cinemaRatings: List<CinemaRating> = emptyList()
+    val cinemaRatings: List<CinemaRating> = emptyList(),
+    val cinemaRelated: List<MetaPreview> = emptyList(),
+    val cinemaWatchOrders: List<CinemaWatchOrder> = emptyList()
 ) {
     val apiType: String
         get() = type.toApiString(rawType)
@@ -178,7 +180,8 @@ data class MetaCastMember(
     val name: String,
     val character: String? = null,
     val photo: String? = null,
-    val tmdbId: Int? = null
+    val tmdbId: Int? = null,
+    val cinemaPersonId: String? = null
 )
 
 @Immutable
@@ -241,3 +244,5 @@ data class MetaReleaseDate(
     val releaseDate: String? = null,
     val type: Int? = null
 )
+@Immutable
+data class CinemaWatchOrder(val id: String, val name: String, val order: String, val totalParts: Int, val availableParts: Int, val items: List<MetaPreview>)

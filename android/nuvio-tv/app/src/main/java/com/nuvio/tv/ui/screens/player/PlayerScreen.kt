@@ -2858,7 +2858,7 @@ private fun PlayerControlsOverlay(
                     horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val hasEpisodeContext = uiState.currentSeason != null && uiState.currentEpisode != null
+                    val hasEpisodeContext = uiState.currentSeason != null || uiState.contentType in listOf("series", "tv")
                     val hasSubtitleControl = uiState.subtitleTracks.isNotEmpty() || uiState.addonSubtitles.isNotEmpty()
                     val hasAudioControl = uiState.audioTracks.isNotEmpty()
                     val showNextEpisodeButton = uiState.nextEpisode?.hasAired == true &&

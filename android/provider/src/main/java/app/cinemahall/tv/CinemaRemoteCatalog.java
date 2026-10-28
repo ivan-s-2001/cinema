@@ -82,7 +82,7 @@ final class CinemaRemoteCatalog {
         }catch(Exception unavailable){return fromCache(cached);}
         return fromCache(cached);
     }
-    private static JSONObject fromCache(Page page){try{return page==null?null:new JSONObject(page.json);}catch(Exception invalid){return null;}}
+    private static JSONObject fromCache(Page page){try{return page==null||page.expiresAt<=System.currentTimeMillis()?null:new JSONObject(page.json);}catch(Exception invalid){return null;}}
     static JSONObject compact(JSONObject row) throws Exception {
         JSONObject result=new JSONObject().put("id",row.getString("id")).put("type",row.getString("type"))
             .put("name",row.optString("title")).put("poster",row.optString("poster"))
@@ -101,7 +101,7 @@ final class CinemaRemoteCatalog {
         if(!validId(id))return null;
         JSONObject cached=details.get(id);
         Long loaded=detailLoaded.get(id);
-        if(cached!=null&&loaded!=null&&System.currentTimeMillis()-loaded<5*60_000L)return copy(cached);
+        if(cached!=null&&loaded!=null&&System.currentTimeMillis()-loaded<(cached.optJSONArray("videos")!=null&&cached.optJSONArray("videos").length()==0?0L:60000L))return copy(cached);
         if(!active())return cached==null?null:copy(cached);
         try{
             JSONObject ready=CinemaRemoteSources.fetch("/titles/"+id+"/tv-meta");

@@ -52,7 +52,7 @@ export function titleCard(row, now) {
     originalTitle: text(p.originalTitle), year: integer(row.year, 1888, 2100),
     poster: imageFor(row.poster,'poster'), backdrop: imageFor(row.backdrop,'backdrop'), ratings: ratings(p.ratings),
     ageRating: typeof p.ageRating === 'number' || typeof p.ageRating === 'string' ? p.ageRating : null,
-    releaseState: releaseState(p, row.year, now), availability: { status: 'unknown', checkedAt: null, expiresAt: null },
+    releaseState: releaseState(p, row.year, now), availability: {status:row.source_count>0&&new Date(row.source_expires_at)>new Date()?'available':row.source_checked_at?'unavailable':'unknown',checkedAt:date(row.source_checked_at),expiresAt:date(row.source_expires_at)},
     updatedAt: date(row.updated_at) };
 }
 function credit(value) {
@@ -85,5 +85,5 @@ export function episode(row, now = new Date()) {
     title: text(row.title), description: text(p.description || p.overview), still: imageFor(row.still,'backdrop'),
     airAt: air, runtimeMinutes: integer(p.runtimeMinutes,1,100000),
     releaseState: !air ? 'unknown' : air.slice(0,10) > now.toISOString().slice(0,10) ? 'upcoming' : 'released',
-    availability: { status: 'unknown', checkedAt: null, expiresAt: null } };
+    availability: {status:row.source_count>0&&new Date(row.source_expires_at)>new Date()?'available':row.source_checked_at?'unavailable':'unknown',checkedAt:date(row.source_checked_at),expiresAt:date(row.source_expires_at)} };
 }

@@ -24,6 +24,8 @@ data class MetaDto(
     @Json(name = "status") val status: String? = null,
     @Json(name = "imdbRating") val imdbRating: String? = null,
     @Json(name = "cinemaRatings") val cinemaRatings: List<CinemaRatingDto>? = null,
+    @Json(name = "cinemaRelated") val cinemaRelated: List<MetaPreviewDto> = emptyList(),
+    @Json(name = "cinemaWatchOrders") val cinemaWatchOrders: List<CinemaWatchOrderDto> = emptyList(),
     @Json(name = "imdb_id") val imdbId: String? = null,
     @Json(name = "slug") val slug: String? = null,
     @Json(name = "genres") val genres: List<String>? = null,
@@ -80,7 +82,8 @@ data class AppExtrasCastMemberDto(
     @Json(name = "name") val name: String,
     @Json(name = "character") val character: String? = null,
     @Json(name = "photo") val photo: String? = null,
-    @Json(name = "tmdbId") val tmdbId: Int? = null
+    @Json(name = "tmdbId") val tmdbId: Int? = null,
+    @Json(name = "personId") val personId: String? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -143,3 +146,6 @@ data class MetaReleaseDateDto(
     @Json(name = "release_date") val releaseDate: String? = null,
     @Json(name = "type") val type: Int? = null
 )
+
+@JsonClass(generateAdapter = true)
+data class CinemaWatchOrderDto(val id: String, val name: String, val order: String, val totalParts: Int, val availableParts: Int, val items: List<MetaPreviewDto>)

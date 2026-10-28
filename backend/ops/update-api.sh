@@ -41,6 +41,10 @@ git -c safe.directory="$repo" -C "$repo" archive "$1" backend | tar -x -C "$rele
 cd "$release/backend"
 npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 node --check server.mjs
+echo 'Preparing verified watchable shelves, actor credits and episode inventories.'
+systemd-run --quiet --wait --pipe --collect --unit="cinemahall-discovery-$stamp" --uid=cinemahall --working-directory="$release/backend" \
+  --property=EnvironmentFile=/etc/cinemahall/database.env --property=RuntimeMaxSec=1800 \
+  "$node_bin" prepare-discovery.mjs --full
 "$node_bin" --input-type=module -e 'import {publicImageIPv4} from "./image-transport.mjs";const hints=process.argv[1];if(hints&&(!hints.split(",").every(publicImageIPv4)||hints.split(",").length>3))throw Error("Invalid public image route hints")' "$hints"
 "$node_bin" - "$backup/previous.service" "$backup/new.service" "$release" "$node_bin" <<'NODE'
 const fs=require('fs');const [previous,next,release,node]=process.argv.slice(2);let unit=fs.readFileSync(previous,'utf8');

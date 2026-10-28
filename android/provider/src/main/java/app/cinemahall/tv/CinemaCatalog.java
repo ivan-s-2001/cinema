@@ -7,7 +7,7 @@ import java.net.URLDecoder;
 
 /** Own catalogue/metadata/search/streams behind the clients' normal add-on contract. */
 final class CinemaCatalog {
-    static final String[][] ROWS={{"popular","Фильмы","movie"},{"series","Сериалы","series"},{"new","Новые фильмы","movie"},{"new_series","Новые сериалы","series"},{"top","Высокие оценки · фильмы","movie"},{"top_series","Высокие оценки · сериалы","series"},{"animation","Мультфильмы","movie"},{"scifi","Фантастика","movie"}};
+    static final String[][] ROWS={{"popular","Популярные фильмы","movie","true"},{"series","Популярные сериалы","series","true"},{"new","Новинки кино","movie","true"},{"new_series","Новые сериалы","series","true"},{"thriller","Популярные триллеры","movie","true"},{"comedy","Комедии на вечер","movie","true"},{"scifi","Популярная фантастика","movie","true"},{"animation","Анимация с хорошими оценками","movie","true"},{"top","Высокие оценки: фильмы","movie","true"},{"top_series","Высокие оценки: сериалы","series","true"},{"new_thriller","Новинки жанра: триллеры","movie","false"},{"new_comedy","Новинки жанра: комедии","movie","false"},{"new_scifi","Новинки жанра: фантастика","movie","false"},{"drama","Популярные драмы","movie","false"},{"new_drama","Новинки жанра: драмы","movie","false"},{"crime","Популярные криминальное кино","movie","false"},{"new_crime","Новинки жанра: криминальное кино","movie","false"},{"adventure","Популярные приключения","movie","false"},{"new_adventure","Новинки жанра: приключения","movie","false"},{"new_animation","Новинки жанра: мультфильмы","movie","false"}};
     private final Context context;
     private final String base,playToken=UUID.randomUUID().toString();
     private final CinemaSnapshot snapshot;
@@ -15,7 +15,7 @@ final class CinemaCatalog {
     static final class Reply {final String body,location;Reply(String body){this.body=body;this.location=null;}Reply(String body,String location){this.body=body;this.location=location;}}
     CinemaCatalog(Context context){this.context=context;this.base=CinemaServer.base(context);snapshot=new CinemaSnapshot(context);}
     static JSONObject manifest() throws JSONException {
-        JSONArray rows=new JSONArray();for(String[] row:ROWS)rows.put(new JSONObject().put("id",row[0]).put("name",row[1]).put("type",row[2]).put("pageSize",24).put("showInHome",true).put("extra",new JSONArray().put(new JSONObject().put("name","skip")).put(new JSONObject().put("name","search"))));
+        JSONArray rows=new JSONArray();for(String[] row:ROWS)rows.put(new JSONObject().put("id",row[0]).put("name",row[1]).put("type",row[2]).put("pageSize",24).put("showInHome",Boolean.parseBoolean(row[3])).put("extra",new JSONArray().put(new JSONObject().put("name","skip")).put(new JSONObject().put("name","search"))));
         return new JSONObject().put("id","app.cinemahall.catalog").put("name","CinemaHall").put("version","0.7.1")
             .put("description","Каталог, метаданные и источники CinemaHall").put("types",new JSONArray(Arrays.asList("movie","series")))
             .put("idPrefixes",new JSONArray(Arrays.asList("ch:"))).put("resources",new JSONArray(Arrays.asList("catalog","meta","stream","subtitles"))).put("catalogs",rows);
@@ -33,7 +33,7 @@ final class CinemaCatalog {
             int skip=0;try{skip=Integer.parseInt(args.getOrDefault("skip","0"));}catch(NumberFormatException invalid){throw new Exception("Invalid page");}
             if(skip<0||skip>100000)throw new Exception("Invalid page");String search=args.getOrDefault("search","");if(search.length()>160)throw new Exception("Query too long");
             JSONObject data=remote.catalog(parts[1],id,search,skip);
-            if(data==null)data=snapshot.catalog(parts[1],id,search,skip);
+
             if(data==null)throw new Exception("Сервер каталога временно недоступен");
             return new Reply(data.toString());
         }

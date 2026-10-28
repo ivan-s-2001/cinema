@@ -134,9 +134,10 @@ else
 fi
 mariadb "$stage" < schema.sql
 # Fresh schema.sql already contains the index from migration 001.
-for migration in migrations/00[2345]_*.sql; do mariadb "$stage" < "$migration"; done
+for migration in migrations/00[23456]_*.sql; do mariadb "$stage" < "$migration"; done
 job import /usr/bin/env "DB_NAME=$stage" DB_HOST=127.0.0.1 DB_PORT=3306 "$node_bin" import-snapshot.mjs "$data"
 job check /usr/bin/env "DB_NAME=$stage" DB_HOST=127.0.0.1 DB_PORT=3306 "$node_bin" backfill-catalog-identity.mjs
+job discovery /usr/bin/env "DB_NAME=$stage" "$node_bin" prepare-discovery.mjs --full
 job counts /usr/bin/env "DB_NAME=$stage" "$node_bin" --input-type=module -e '
 import mariadb from "mariadb";
 const db=await mariadb.createConnection({host:"127.0.0.1",user:process.env.DB_USER||"cinemahall",password:process.env.DB_PASSWORD,database:process.env.DB_NAME,bigIntAsNumber:true});
@@ -153,7 +154,7 @@ probe() {
   if (( ready == 0 )); then cat "$backup/$label-health-error.log" >&2; return 1; fi
   curl --fail --silent --show-error --max-time 15 "$base/api/v2/config" > "$backup/$label-config.json"
   curl --fail --silent --show-error --max-time 60 --output "$backup/$label-home.json" --write-out "$label /home: %{time_total}s\n" "$base/api/v2/home"
-  "$node_bin" -e 'const fs=require("fs");const c=JSON.parse(fs.readFileSync(process.argv[1]));const h=JSON.parse(fs.readFileSync(process.argv[2]));if(c.apiVersion!==2||h.rows.length!==8||!h.rows.some(r=>r.items.length))process.exit(1)' "$backup/$label-config.json" "$backup/$label-home.json"
+  "$node_bin" -e 'const fs=require("fs");const c=JSON.parse(fs.readFileSync(process.argv[1]));const h=JSON.parse(fs.readFileSync(process.argv[2]));if(c.apiVersion!==2||h.rows.length!==10||!h.rows.some(r=>r.items.length))process.exit(1)' "$backup/$label-config.json" "$backup/$label-home.json"
 }
 
 # Exercise the actual server and its production-sized pool against the staged
@@ -168,7 +169,7 @@ systemd-run --quiet --collect --unit="$smoke_unit" --uid=cinemahall \
 probe http://127.0.0.1:18091 staged
 systemctl stop "$smoke_unit"
 smoke_running=0
-echo 'Staged API health, config and all eight home rows passed.'
+echo 'Staged API health, config and all ten home rows passed.'
 
 echo 'Replacing CinemaHall database and service.'
 cutover=1

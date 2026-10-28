@@ -11,3 +11,8 @@ internal fun cinemaPreferredStream(streams: List<Stream>, preferredQuality: Stri
         choices.firstOrNull { it.name?.removePrefix("CinemaHall · ")?.trim() == quality }
     } ?: choices.firstOrNull()
 }
+
+internal fun cinemaVoiceChoices(streams: List<Stream>): List<Stream> = streams.distinctBy {
+    it.title.orEmpty().trim().lowercase() to it.technologyHints.sorted()
+}
+internal fun cinemaTechnologyLabel(stream: Stream): String? = stream.technologyHints.takeIf { it.isNotEmpty() }?.joinToString(" · ")

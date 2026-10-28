@@ -7,14 +7,22 @@
       "properties": {
         "status": {
           "enum": [
-            "unknown"
+            "unknown",
+            "available",
+            "unavailable"
           ]
         },
         "checkedAt": {
-          "type": "null"
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "expiresAt": {
-          "type": "null"
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -1026,6 +1034,10 @@
                           "string",
                           "null"
                         ]
+                      },
+                      "personId": {
+                        "type": "string",
+                        "pattern": "^person:[a-f0-9]{32}$"
                       }
                     },
                     "required": [
@@ -1055,6 +1067,10 @@
                           "string",
                           "null"
                         ]
+                      },
+                      "personId": {
+                        "type": "string",
+                        "pattern": "^person:[a-f0-9]{32}$"
                       }
                     },
                     "required": [
@@ -1084,6 +1100,10 @@
                           "string",
                           "null"
                         ]
+                      },
+                      "personId": {
+                        "type": "string",
+                        "pattern": "^person:[a-f0-9]{32}$"
                       }
                     },
                     "required": [
@@ -1127,7 +1147,7 @@
             },
             "videos": {
               "type": "array",
-              "maxItems": 2000,
+              "maxItems": 10000,
               "items": {
                 "type": "object",
                 "properties": {
@@ -1193,6 +1213,54 @@
               "items": {
                 "type": "string"
               }
+            },
+            "cinemaRelated": {
+              "type": "array",
+              "maxItems": 12,
+              "items": {
+                "$ref": "#/$defs/TvPreview"
+              }
+            },
+            "cinemaWatchOrders": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "order": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "totalParts": {
+                    "type": "integer"
+                  },
+                  "availableParts": {
+                    "type": "integer"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/TvPreview"
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "order",
+                  "items",
+                  "totalParts",
+                  "availableParts"
+                ],
+                "additionalProperties": false
+              }
             }
           },
           "required": [
@@ -1211,6 +1279,59 @@
       "required": [
         "title",
         "meta"
+      ],
+      "additionalProperties": false
+    },
+    "TvPreview": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9:_-]{1,160}$"
+        },
+        "type": {
+          "enum": [
+            "movie",
+            "series"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "poster": {
+          "type": "string"
+        },
+        "background": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "releaseInfo": {
+          "type": "string"
+        },
+        "genres": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cinemaRatings": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "watchOrderPosition": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "name",
+        "poster"
       ],
       "additionalProperties": false
     }

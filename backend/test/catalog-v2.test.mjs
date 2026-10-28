@@ -16,6 +16,8 @@ import { titleCard, titleDetail, releaseState, imageFor } from '../catalog-model
 import { canonicalId, saveExternalIds, recordRefresh, refreshDelayMs } from '../catalog-identity.mjs';
 import { handleSearch } from '../search.mjs';
 import { tvMetadata } from '../tv-meta.mjs';
+import {createMetadataLibrary} from '../metadata-library.mjs';
+import {collections} from '../collections.mjs';
 import {identityReport} from '../identity-report.mjs';
 
 const contract=JSON.parse(await readFile(new URL('../catalog-v2.schema.json',import.meta.url),'utf8'));
@@ -68,7 +70,7 @@ test('server TV metadata preserves ratings, episode identity and timestamps with
 });
 test('oversized TV episode lists fall back explicitly instead of returning incomplete metadata',async()=>{
   const row={id:'ch:series:large',kind:'series',title:'Large',payload:{}};
-  const handle=createCatalogV2({query:async(sql)=>sql.includes('FROM titles')?[row]:Array(2001).fill({})});
+  const handle=createCatalogV2({query:async(sql)=>sql.includes('FROM titles')?[row]:Array(10001).fill({})});
   let status,body;
   await handle({method:'GET'},{writeHead(s){status=s;},end(b){body=b;}},new URL('https://example.org/api/v2/titles/ch:series:large/tv-meta'));
   assert.equal(status,503);const value=JSON.parse(body);validate('Error',value);assert.equal(value.error.code,'tv_metadata_too_large');
@@ -98,7 +100,7 @@ test('concurrent cold home requests share one connection and release it after su
   }
   const success=await batch(createCatalogV2(pool));
   for(const response of success){assert.equal(response.status,200);validate('Home',response.body);}
-  assert.deepEqual({acquisitions,releases,queries,peak},{acquisitions:1,releases:1,queries:8,peak:1});
+  assert.deepEqual({acquisitions,releases,queries,peak},{acquisitions:1,releases:1,queries:10,peak:1});
   const recovering=createCatalogV2(pool);fail=true;
   for(const response of await batch(recovering))assert.equal(response.status,503);
   assert.equal(releases,2);fail=false;
@@ -117,18 +119,22 @@ test('MariaDB catalogue integration',{skip:!process.env.CATALOG_TEST_PORT},async
     await pool.query(await readFile(new URL('../schema.sql',import.meta.url),'utf8'));
     const migration=await readFile(new URL('../migrations/005_catalog_identity_refresh.sql',import.meta.url),'utf8');
     await pool.query(migration);await pool.query(migration);
+    await pool.query(await readFile(new URL('../migrations/006_discovery_people.sql',import.meta.url),'utf8'));
     const titles=[
-      ['ch:snapshot:movie:tmdb:550','movie','Бойцовский клуб',1999,{titleEn:'Fight Club',originalTitle:'Fight Club',aliases:['Fight Club','Клуб бойцов'],ids:{tmdb:'550',kinopoisk:'361',imdb:'tt0137523'},status:'Released',genres:['Драма'],countries:['США'],curator:{note:'PRIVATE'},apiKey:'PRIVATE'}],
+      ['ch:snapshot:movie:tmdb:550','movie','Бойцовский клуб',1999,{titleEn:'Fight Club',originalTitle:'Fight Club',aliases:['Fight Club','Клуб бойцов'],ids:{tmdb:'550',kinopoisk:'361',imdb:'tt0137523'},ratings:{imdb:8.8},status:'Released',genres:['Драма'],countries:['США'],curator:{note:'PRIVATE'},apiKey:'PRIVATE'}],
       ['ch:movie:percent','movie','100%_! тест',2000,{status:'Released',aliases:['Literal%_!']}],
       ['ch:movie:next','movie','Анонс',2043,{status:'Released',releaseDate:'2043-01-01'}],
       ['ch:movie:hidden','movie','Скрытый',2000,{status:'Released',publicationState:'hidden'}],
-      ['ch:series:42','series','Сериал',2020,{status:'Ended'}],
+      ['ch:series:42','series','Сериал',2020,{status:'Ended',ids:{tmdb:'42'}}],
       ['ch:movie:null','movie','Неизвестная дата',null,{}],
       ['ch:movie:animation','movie','Анимация',2021,{status:'Released',genres:['Мультфильм'],ratings:{kinopoisk:{value:8.4}}}],
       ['ch:movie:scifi','movie','Космос',2022,{status:'Released',genres:['Фантастика'],ratings:{kinopoisk:8.1}}],
       ['ch:movie:low','movie','Малая оценка',2023,{status:'Released',ratings:{kinopoisk:5.1}}],
     ];
-    for(const [id,kind,title,year,payload]of titles)await pool.query('INSERT INTO titles(id,kind,title,year,poster,description,payload)VALUES(?,?,?,?,?,?,?)',[id,kind,title,year,'https://example.org/poster.jpg','Description',JSON.stringify(payload)]);
+    for(const [id,kind,title,year,payload]of titles){
+      const rating=Number(payload.ratings?.kinopoisk?.value||payload.ratings?.kinopoisk||payload.ratings?.imdb||7);
+      await pool.query('INSERT INTO titles(id,kind,title,year,poster,description,payload,source_count,source_checked_at,source_expires_at,catalog_rating,catalog_popularity)VALUES(?,?,?,?,?,?,?,1,UTC_TIMESTAMP(3),DATE_ADD(UTC_TIMESTAMP(3),INTERVAL 6 HOUR),?,100)',[id,kind,title,year,'https://example.org/poster.jpg','Description',JSON.stringify(payload),rating]);
+    }
     for(const [sn,en,air]of [[0,1,'2020-01-01'],[1,1,'2020-01-01'],[1,3,'2020-01-08'],[2,1,'2043-01-01']])await pool.query('INSERT INTO episodes(title_id,season_number,episode_number,title,air_date)VALUES(?,?,?,?,?)',['ch:series:42',sn,en,'Episode '+en,air]);
     const handle=createCatalogV2(pool);
     server=http.createServer(async(req,res)=>{if(!await handle(req,res,new URL(req.url,'http://localhost'))){res.writeHead(404);res.end();}});
@@ -142,12 +148,36 @@ test('MariaDB catalogue integration',{skip:!process.env.CATALOG_TEST_PORT},async
     await t.test('config and home publish only released nonhidden records',async()=>{
       await get('/config','Config');const [home]=await Promise.all(Array.from({length:8},()=>get('/home','Home')));
       assert.equal((await pool.query('SELECT 1 AS ok'))[0].ok,1);
-      assert.deepEqual(home.rows.map(r=>r.id),['popular','series','new','new_series','top','top_series','animation','scifi']);
+      assert.deepEqual(home.rows.map(r=>r.id),collections.filter(r=>r.home).map(r=>r.id));
       const ids=home.rows.flatMap(r=>r.items.map(i=>i.id));
       assert.ok(ids.includes('ch:snapshot:movie:tmdb:550'));assert.ok(!ids.includes('ch:movie:next'));assert.ok(!ids.includes('ch:movie:hidden'));assert.ok(!ids.includes('ch:movie:null'));
       assert.deepEqual(home.rows.find(r=>r.id==='animation').items.map(i=>i.id),['ch:movie:animation']);
       assert.deepEqual(home.rows.find(r=>r.id==='scifi').items.map(i=>i.id),['ch:movie:scifi']);
-      assert.deepEqual(home.rows.find(r=>r.id==='top').items.map(i=>i.id),['ch:movie:animation','ch:movie:scifi']);
+      assert.deepEqual(home.rows.find(r=>r.id==='top').items.map(i=>i.id),['ch:snapshot:movie:tmdb:550','ch:movie:animation','ch:movie:scifi']);
+    });
+    await t.test('metadata hydration persists cast, filmography and complete season numbering',async()=>{
+      const provider={enabled:true,async get(path){
+        if(path.includes('credits'))return {data:[{id:99,name_ru:'Актёр',profession:'actor',profile_path:'/actor.jpg',character_ru:'Герой'}]};
+        if(path.endsWith('/seasons'))return {data:[{season_number:1,episode_count:3},{season_number:2,episode_count:2}]};
+        return {data:[]};
+      }};
+      const library=createMetadataLibrary(pool,{provider});
+      const movie=(await pool.query('SELECT * FROM titles WHERE id=?',['ch:snapshot:movie:tmdb:550']))[0];
+      await pool.query("INSERT INTO titles(id,kind,title,year,payload,source_count,source_expires_at,catalog_rating)VALUES('ch:series:hydration','series','Hydrated',2020,?,1,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 6 HOUR),7)",[JSON.stringify({status:'Ended',ids:{tmdb:'43'}})]);
+      const series=(await pool.query('SELECT * FROM titles WHERE id=?',['ch:series:hydration']))[0];
+      await Promise.all([library.ensure(movie),library.ensure(movie)]);await library.ensure(series);await library.idle();
+      const person=(await pool.query('SELECT * FROM people'))[0];assert.ok(person.id.startsWith('person:'));assert.equal(person.name,'Актёр');
+      const cast=await pool.query('SELECT title_id FROM title_cast WHERE person_id=?',[person.id]);assert.equal(cast.length,2);
+      const inventory=await pool.query('SELECT season_number,episode_number FROM episodes WHERE title_id=? AND season_number>0 ORDER BY season_number,episode_number',['ch:series:hydration']);
+      assert.equal(inventory.length,5);assert.deepEqual(inventory.map(r=>[r.season_number,r.episode_number]),[[1,1],[1,2],[1,3],[2,1],[2,2]]);
+      const detail=await get('/titles/ch:snapshot:movie:tmdb:550/tv-meta','TvMetadata');
+      assert.equal(detail.meta.app_extras.cast[0].personId,person.id);
+      const filmography=await get('/people/'+person.id+'/filmography?sort=year');assert.equal(filmography.items.length,2);
+      await library.close();
+    });
+    await t.test('unknown, expired and unavailable titles never enter browse or search',async()=>{
+      for(const [id,count,expiry]of [['ch:no-sources',0,'2099-01-01'],['ch:expired',8,'2000-01-01']])await pool.query("INSERT INTO titles(id,kind,title,year,poster,payload,source_count,source_expires_at,catalog_rating)VALUES(?,'movie',?,2020,'https://example.org/p.jpg',?, ?,?,9)",[id,'Невидимый '+id,JSON.stringify({status:'Released'}),count,expiry]);
+      const result=await get('/search?q='+encodeURIComponent('Невидимый'),'Page');assert.equal(result.items.length,0);
     });
     await t.test('search aliases are case insensitive and wildcards are literal',async()=>{
       for(const q of ['fight club','FIGHT CLUB','клуб БОЙЦОВ']){const result=await get('/search?q='+encodeURIComponent(q),'Page');assert.deepEqual(result.items.map(r=>r.id),['ch:snapshot:movie:tmdb:550']);}
@@ -167,7 +197,7 @@ test('MariaDB catalogue integration',{skip:!process.env.CATALOG_TEST_PORT},async
       for(const sort of ['title','year']){
         let path='/discover?limit=2&sort='+sort,all=[];
         for(let i=0;i<10&&path;i++){const page=await get(path,'Page');all.push(...page.items.map(r=>r.id));path=page.nextCursor?'/discover?limit=2&sort='+sort+'&cursor='+page.nextCursor:null;}
-        assert.equal(all.length,8);assert.equal(new Set(all).size,8);
+        assert.equal(all.length,7);assert.equal(new Set(all).size,7);
       }
       const first=await get('/discover?limit=1','Page');await get('/discover?type=movie&cursor='+first.nextCursor,'Error',400);
       const home=await get('/rows/popular/items?limit=1','Page');assert.ok(home.nextCursor);await get('/rows/popular/items?limit=1&cursor='+home.nextCursor,'Page');

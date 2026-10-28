@@ -43,7 +43,8 @@ internal fun mapPeople(
             name = name,
             character = if (forceRole) roleFallback else person.character?.takeIf { it.isNotBlank() } ?: roleFallback,
             photo = person.photo?.takeIf { it.isNotBlank() },
-            tmdbId = person.tmdbId
+            tmdbId = person.tmdbId,
+            cinemaPersonId = person.personId?.takeIf { it.matches(Regex("person:[a-f0-9]{32}")) }
         )
     }
 }
