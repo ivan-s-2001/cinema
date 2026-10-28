@@ -1427,18 +1427,6 @@ fun PlayerScreen(
             )
         }
 
-        // Aspect ratio indicator (floating pill)
-        AnimatedVisibility(
-            visible = uiState.showAspectRatioIndicator,
-            enter = fadeIn(animationSpec = tween(200)),
-            exit = fadeOut(animationSpec = tween(200)),
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 80.dp)
-        ) {
-            AspectRatioIndicator(text = uiState.aspectRatioIndicatorText)
-        }
-
         AnimatedVisibility(
             visible = uiState.showStreamSourceIndicator,
             enter = fadeIn(animationSpec = tween(NuvioMotion.tokens.durations.fast)),
@@ -3153,52 +3141,6 @@ private fun SubtitleTimingDialogHost(
         onCaptureNow = onCaptureNow,
         onCueSelected = onCueSelected
     )
-}
-
-@Composable
-private fun AspectRatioIndicator(text: String) {
-
-    // Floating pill indicator for aspect ratio changes
-    Row(
-        modifier = Modifier
-            .background(
-                color = Color.Black.copy(alpha = 0.85f),
-                shape = RoundedCornerShape(NuvioTheme.spacing.xl)
-            )
-            .padding(horizontal = 20.dp, vertical = NuvioTheme.spacing.md),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Icon background circle
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .background(
-                    color = Color(0xFF3B3B3B),
-                    shape = CircleShape
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                painter = customAspectPainter,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.width(NuvioTheme.spacing.md))
-
-        // Text
-        Text(
-            text = text,
-            style = MaterialTheme.typography.titleMedium.copy(
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold
-            ),
-            color = Color.White
-        )
-    }
 }
 
 @Composable

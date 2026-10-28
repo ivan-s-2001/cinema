@@ -71,6 +71,9 @@ probe(){
   "$node_bin" -e 'const fs=require("fs");const f=JSON.parse(fs.readFileSync(process.argv[1]));if(!Array.isArray(f.genres)||!f.genres.length||!Array.isArray(f.countries)||!Array.isArray(f.years)||!f.years.length)throw Error("Catalogue filters unavailable");console.log("Filters: "+f.genres.length+" genres, "+f.countries.length+" countries, "+f.years.length+" years")' "$backup/$label-facets.json"
   echo "$label: checking real poster bytes"
   curl --fail-with-body --silent --show-error --max-time 30 "$base$image" > "$backup/$label-poster.jpg"
+  echo "$label: checking title image fallback"
+  curl --fail-with-body --silent --show-error --max-time 20 "$base/api/v2/titles/ch:snapshot:tv:tmdb:1668/logo.svg" > "$backup/$label-title.svg"
+  "$node_bin" -e 'const fs=require("fs");const svg=fs.readFileSync(process.argv[1],"utf8");if(!svg.startsWith("<svg")||svg.includes("<script"))throw Error("Invalid title artwork")' "$backup/$label-title.svg"
   echo "$label: checking episode selection and actor filmography"
   curl --fail-with-body --silent --show-error --max-time 90 "$base/api/v2/titles/ch:snapshot:tv:tmdb:1668/tv-meta" > "$backup/$label-tv-meta.json"
   local artwork

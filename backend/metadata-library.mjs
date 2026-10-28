@@ -1,3 +1,4 @@
+import {providerLogo} from './title-art.mjs';
 import {createHash} from 'node:crypto';
 import {object,text,imageFor,date} from './catalog-model.mjs';
 import {createMetadataProvider} from './metadata-provider.mjs';
@@ -22,7 +23,22 @@ export function seasonInventory(raw){
 }
 export function createMetadataLibrary(pool,{provider=createMetadataProvider(),clock=Date.now}={}){
   const pending=new Map(),retry=new Map();let background=Promise.resolve(),queued=0,closed=false;
-  const detailPending=new Set();
+  const detailPending=new Set(),logoPending=new Set();let logoQueued=0;
+  function queueLogo(row,payload,tmdb){
+    if(imageFor(providerLogo(object(payload.images)),'logo')||Date.parse(payload.logoCheckedAt||'')>clock()-7*86400000||closed||logoQueued>=8||logoPending.has(row.id))return;
+    logoQueued++;logoPending.add(row.id);
+    background=background.catch(()=>{}).then(async()=>{
+      if(closed)return;
+      try{
+        const response=await provider.get('/titles/by/tmdb/'+tmdb+'?include=images');
+        const source=response.data;
+        if(String(source?.id?.tmdb)!==tmdb||source?.type!==(row.kind==='series'?'tv':'movie'))throw Error('Logo identity mismatch');
+        const raw=providerLogo(source.images||{}),logo=imageFor(raw?.startsWith('/')?'https://image.tmdb.org/t/p/original'+raw:raw,'logo');
+        if(logo)await pool.query("UPDATE titles SET payload=JSON_SET(COALESCE(payload,JSON_OBJECT()),'$.images',JSON_MERGE_PATCH(COALESCE(JSON_EXTRACT(payload,'$.images'),JSON_OBJECT()),JSON_OBJECT('logo',?)),'$.logoCheckedAt',?) WHERE id=?",[logo,new Date(clock()).toISOString(),row.id]);
+        else await pool.query("UPDATE titles SET payload=JSON_SET(COALESCE(payload,JSON_OBJECT()),'$.logoCheckedAt',?) WHERE id=?",[new Date(clock()).toISOString(),row.id]);
+      }catch(error){console.warn('Logo refresh',row.id,error.message);}
+    }).finally(()=>{logoQueued--;logoPending.delete(row.id);});
+  }
   async function credits(row,payload,tmdb){
     if(payload.creditsCheckedAt&&Date.parse(payload.creditsCheckedAt)>clock()-7*86400000)return;
     const response=await provider.get('/titles/by/tmdb/'+tmdb+'/credits?type='+(row.kind==='series'?'tv':'movie'));
@@ -120,6 +136,7 @@ export function createMetadataLibrary(pool,{provider=createMetadataProvider(),cl
       }
       try{await credits(row,payload,tmdb);}catch(error){console.warn('Credits refresh',row.id,error.message);retry.set(row.id,clock()+60000);}
       if(row.kind==='series')try{await episodes(row,payload,tmdb);}catch(error){console.warn('Episode inventory refresh',row.id,error.message);retry.set(row.id,clock()+60000);}
+      queueLogo(row,payload,tmdb);
       while(retry.size>256)retry.delete(retry.keys().next().value);
     })();pending.set(row.id,work);try{await work;}finally{pending.delete(row.id);}
   }

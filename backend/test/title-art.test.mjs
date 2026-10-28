@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {titleArt} from '../title-art.mjs';
+import {titleArt,providerLogo} from '../title-art.mjs';
 import {titleDetail} from '../catalog-model.mjs';
 test('every title has image artwork; original provider logos are preferred and proxied at logo size',()=>{
  const missing=titleDetail({id:'ch:movie:1',kind:'movie',title:'A title',payload:{}});
@@ -15,4 +15,9 @@ test('generated title artwork is bounded, transparent, deterministic and escapes
  assert.ok(art.body.includes('&lt;'));assert.ok(!art.body.includes('<image'));assert.ok(!art.body.includes('<rect'));
  assert.equal(titleArt(input).etag,art.etag);assert.notEqual(titleArt('Other').etag,art.etag);
  assert.ok(Buffer.byteLength(titleArt('Длинное название '.repeat(1000)).body)<12000);
+});
+
+test('logo alternatives prefer Russian artwork and keep a stable fallback language',()=>{
+ assert.equal(providerLogo({logos:[{language:'en',url:'en.png'},{iso_639_1:'ru',file_path:'/ru.png'}]}),'/ru.png');
+ assert.equal(providerLogo({logo:'primary.png',logos:['other.png']}),'primary.png');
 });

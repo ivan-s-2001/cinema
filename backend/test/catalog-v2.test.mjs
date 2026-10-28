@@ -177,6 +177,7 @@ test('MariaDB catalogue integration',{skip:!process.env.CATALOG_TEST_PORT},async
     });
     await t.test('metadata hydration persists cast, filmography and complete season numbering',async()=>{
       const provider={enabled:true,async get(path){
+        if(path.includes('?include=images')){const id=path.match(/tmdb\/(\d+)/)[1];return {data:{id:{tmdb:id},type:id==='43'?'tv':'movie',images:{logo:'https://image.tmdb.org/t/p/original/logo.png'}}};}
         if(path.includes('credits'))return {data:[{id:99,name_ru:'Актёр',profession:'actor',profile_path:'/actor.jpg',character_ru:'Герой'}]};
         if(path.endsWith('/seasons'))return {data:[{season_number:1,episode_count:3},{season_number:2,episode_count:2}]};
         return {data:[{episode_number:1,name:'Episode name',still_path:'/episode.jpg',air_date:'2020-01-01',overview:'Episode story'}]};
@@ -189,6 +190,7 @@ test('MariaDB catalogue integration',{skip:!process.env.CATALOG_TEST_PORT},async
       const firstArtwork=await pool.query('SELECT still,title FROM episodes WHERE title_id=? AND season_number=1 AND episode_number=1',[series.id]);
       assert.ok(firstArtwork[0].still.includes('/episode.jpg'));assert.equal(firstArtwork[0].title,'Episode name');
       await library.idle();
+      const logo=(await pool.query("SELECT JSON_VALUE(payload,'$.images.logo') AS logo FROM titles WHERE id=?",[movie.id]))[0].logo;assert.ok(logo.includes('/w500/logo.png'));
       await pool.query("UPDATE episodes SET payload=JSON_SET(COALESCE(payload,JSON_OBJECT()),'$.seasonAirAt','2030-01-01') WHERE title_id=? AND season_number=1 AND episode_number=1",[series.id]);
       const incomplete=createMetadataLibrary(pool,{provider:{enabled:true,async get(path){
         if(path.includes('credits'))return {data:[]};
