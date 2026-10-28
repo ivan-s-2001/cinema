@@ -89,7 +89,7 @@ fun CinemaPersonScreen(personId: String, onBack: () -> Unit, onOpenFilm: (String
             items(data?.items.orEmpty(), key = { it.id }) { film ->
                 Card(onClick = { onOpenFilm(film.id, film.type) }) {
                     Column {
-                        AsyncImage(model = film.poster, contentDescription = film.title, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxWidth().height(180.dp))
+                        AsyncImage(model = film.poster, contentDescription = film.title, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f))
                         Text(film.title, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(8.dp), color = NuvioTheme.colors.TextPrimary)
                         Text(film.year, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), color = NuvioTheme.colors.TextSecondary)
                     }

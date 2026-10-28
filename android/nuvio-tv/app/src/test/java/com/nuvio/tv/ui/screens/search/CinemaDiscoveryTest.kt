@@ -26,6 +26,12 @@ class CinemaDiscoveryTest {
         assertFalse(path.contains("comedy"))
         assertTrue(cinemaDiscoverPath("", "", "", "", "", "popular", null, "comedy").startsWith("/rows/comedy/items?"))
     }
+    @Test fun yearFilterAcceptsNumericYearsReturnedByTheApi() {
+        val facets = cinemaFacets("""{"genres":["Драма"],"countries":["США"],"years":[2026,2025]}""")
+        assertEquals(listOf("2026", "2025"), facets["years"])
+        assertEquals(listOf("Драма"), facets["genres"])
+        assertEquals(listOf("США"), facets["countries"])
+    }
     @Test fun emptyFiltersDoNotRestrictTheCatalogue() {
         assertEquals("/discover?limit=30&sort=popular", cinemaDiscoverPath("", "", "", "", "", "popular", null))
     }

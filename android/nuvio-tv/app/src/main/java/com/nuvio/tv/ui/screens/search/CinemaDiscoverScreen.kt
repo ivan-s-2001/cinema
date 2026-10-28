@@ -26,6 +26,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import kotlinx.serialization.json.*
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
@@ -56,7 +57,14 @@ internal fun cinemaDiscoverPath(query: String, type: String, genre: String, year
     if (cursor != null) args["cursor"] = cursor
     return (scopedShelf?.let { "/rows/$it/items?" } ?: "/discover?") + args.entries.joinToString("&") { it.key + "=" + URLEncoder.encode(it.value, "UTF-8") }
 }
-private fun JSONObject.options(key: String): List<String> = optJSONArray(key)?.let { values -> (0 until values.length()).map { values.getString(it) } }.orEmpty()
+internal fun cinemaFacets(document: String): Map<String, List<String>> {
+    val root = Json.parseToJsonElement(document).jsonObject
+    return listOf("genres", "countries", "years").associateWith { key ->
+        (root[key] as? JsonArray)?.mapNotNull { value ->
+            (value as? JsonPrimitive)?.takeUnless { it is JsonNull }?.content
+        }.orEmpty()
+    }
+}
 private data class DiscoveryFilm(val id: String, val type: String, val title: String, val poster: String, val subtitle: String)
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -71,7 +79,7 @@ fun CinemaDiscoverScreen(onNavigateToDetail: (String, String, String) -> Unit) {
     var shelf by rememberSaveable { mutableStateOf("") }
     var shelves by remember { mutableStateOf(emptyList<Triple<String, String, String>>()) }
     var dialog by remember { mutableStateOf<String?>(null) }
-    var facets by remember { mutableStateOf(JSONObject()) }
+    var facets by remember { mutableStateOf(emptyMap<String, List<String>>()) }
     var facetError by remember { mutableStateOf(false) }
     var facetRetry by remember { mutableIntStateOf(0) }
     var films by remember { mutableStateOf(emptyList<DiscoveryFilm>()) }
@@ -91,7 +99,7 @@ fun CinemaDiscoverScreen(onNavigateToDetail: (String, String, String) -> Unit) {
     }
     LaunchedEffect(type, facetRetry) {
         facetError = false
-        try { facets = catalogueJson("/facets" + if (type.isEmpty()) "" else "?type=$type") }
+        try { facets = cinemaFacets(catalogueJson("/facets" + if (type.isEmpty()) "" else "?type=$type").toString()) }
         catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
         catch (_: Exception) { facetError = true }
     }
@@ -162,7 +170,7 @@ fun CinemaDiscoverScreen(onNavigateToDetail: (String, String, String) -> Unit) {
             "type" -> listOf("" to "Все типы", "movie" to "Фильмы", "series" to "Сериалы")
             "shelf" -> listOf("" to "Вся база") + shelves.filter { type.isEmpty() || it.third == type }.map { it.first to it.second }
             "sort" -> listOf("popular" to "По популярности", "rating" to "По оценке", "year" to "Сначала новые", "title" to "По названию")
-            else -> listOf("" to "Все") + facets.options(when (field) { "genre" -> "genres"; "country" -> "countries"; else -> "years" }).map { it to it }
+            else -> listOf("" to "Все") + facets[when (field) { "genre" -> "genres"; "country" -> "countries"; else -> "years" }].orEmpty().map { it to it }
         }
         Dialog(onDismissRequest = { dialog = null }) {
             var needle by remember(field) { mutableStateOf("") }
