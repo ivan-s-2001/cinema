@@ -897,7 +897,7 @@ class SearchViewModel @Inject constructor(
     }
 
     private suspend fun searchAddons(): List<Addon> =
-        addonRepository.getInstalledAddons().first().enabledAddons() + serverCatalog.searchAddons.first()
+        addonRepository.getInstalledAddons().first().enabledAddons()
 
     private suspend fun loadDiscoverCatalogs() {
         if (_uiState.value.discoverLocation == DiscoverLocation.OFF) return
