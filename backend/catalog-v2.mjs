@@ -117,8 +117,7 @@ export function createCatalogV2(pool,{sourceDiscovery=createSourceDiscovery({ena
         send(200,{apiVersion:2,capabilities:{home:true,search:true,discover:true,seasons:true,episodes:true,playbackStrategy:'local',serverPlaybackOptions:false,sourceDiscovery:sourceDiscovery.enabled,profileSync:false},limits:{pageSize:60},rows});return true;
       }
       if(path==='/home') {
-        const result=[];
-        for(const shelf of rows)result.push({...shelf,...await browse(new URLSearchParams('limit=12'),shelf)});
+        const result=await Promise.all(rows.map(async shelf=>({...shelf,...await browse(new URLSearchParams('limit=12'),shelf)})));
         send(200,{rows:result});return true;
       }
       const shelf=/^\/rows\/([a-z_]+)\/items$/.exec(path);
