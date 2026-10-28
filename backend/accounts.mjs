@@ -811,6 +811,27 @@ export async function handleAccountRequest(req, res, url, pool) {
       sendNoContent(res);
       return true;
     }
+    if (route === '/rest/v1/addons' || route === '/rest/v1/plugins') {
+      requireApiKey(req);
+      if (req.method !== 'GET') {
+        send(res, 405, { code: '405', message: 'GET required' });
+        return true;
+      }
+      const account = await requireAccount(req, pool);
+      const profileIndex = validProfileIndex(url.searchParams.get('profile_id') || 1);
+      if (url.searchParams.get('user_id') && url.searchParams.get('user_id') !== account.id) {
+        send(res, 200, []);
+        return true;
+      }
+      await requireProfile(account.id, profileIndex, pool);
+      const entityType = route.endsWith('/addons') ? 'addon' : 'plugin';
+      const rows = await pool.query(
+        'SELECT payload FROM sync_items WHERE account_id=? AND profile_index=? AND entity_type=? AND is_deleted=FALSE ORDER BY updated_at,item_key',
+        [account.id, profileIndex, entityType]
+      );
+      send(res, 200, rows.map(row => decodeJson(row.payload) || {}));
+      return true;
+    }
     if (route.startsWith('/rest/v1/rpc/')) {
       requireApiKey(req);
       const account = await requireAccount(req, pool);
