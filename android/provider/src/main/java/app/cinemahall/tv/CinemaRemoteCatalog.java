@@ -26,12 +26,13 @@ final class CinemaRemoteCatalog {
         }
         return enabled;
     }
+    private static JSONObject copy(JSONObject value){try{return new JSONObject(value.toString());}catch(Exception invalid){return null;}}
     static boolean validId(String id){return id!=null&&id.matches("ch:[A-Za-z0-9:_-]{1,157}");}
     synchronized JSONObject catalog(String type,String rowId,String search,int skip){
         if(!active()||!rowId.equals(type.equals("series")?"series":"movies")||skip<0||skip>240||skip%24!=0)return null;
         String query=search==null?"":search.trim();if(query.length()>120)return null;
         String key=type+"|"+rowId+"|"+query+"|"+skip;
-        if(pages.containsKey(key))return new JSONObject(pages.get(key));
+        if(pages.containsKey(key))try{return new JSONObject(pages.get(key));}catch(Exception invalid){pages.remove(key);return null;}
         try{
             String cursor="",path;
             for(int index=0;index<=skip/24;index++){
@@ -60,7 +61,7 @@ final class CinemaRemoteCatalog {
     }
     synchronized JSONObject detail(String id){
         if(!validId(id))return null;
-        JSONObject cached=details.get(id);if(cached!=null)return new JSONObject(cached.toString());
+        JSONObject cached=details.get(id);if(cached!=null)return copy(cached);
         if(!active())return null;
         try{
             JSONObject row=CinemaRemoteSources.fetch("/titles/"+id).getJSONObject("title");

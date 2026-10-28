@@ -5,6 +5,7 @@ import { handleAccountRequest } from './accounts.mjs';
 import { handleDiscovery } from './discovery.mjs';
 import { handleSearch } from './search.mjs';
 import { createCatalogV2 } from './catalog-v2.mjs';
+import { startRefreshScheduler } from './refresh-scheduler.mjs';
 
 const pool=mariadb.createPool({
   host:'127.0.0.1', port:3306,
@@ -89,5 +90,6 @@ server.headersTimeout=8000;
 server.listen(port,host,()=>{
  console.log('CinemaHall API listening on '+host+':'+port);
  if(process.env.ADMIN_SESSION_SECRET&&process.env.ADMIN_PASSWORD_SCRYPT)startAdminScheduler(pool);
+ if(process.env.CINEMA_REFRESH_ENABLED==='1')startRefreshScheduler(pool);
 });
 process.on('SIGTERM',()=>server.close(()=>pool.end()));
