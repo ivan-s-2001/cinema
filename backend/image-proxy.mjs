@@ -1,11 +1,12 @@
 import {createImageTransport} from './image-transport.mjs';
+import {createImageDiskCache,imageMime} from './image-disk-cache.mjs';
 const origin='https://cinemahome.duckdns.org';
 const route=/^\/api\/v2\/images\/tmdb\/(w185|w342|w1280)\/([A-Za-z0-9_-]{1,160}\.(?:jpg|jpeg|png|webp))$/;
 export function proxyTmdb(url){
   const match=/^\/t\/p\/(w185|w342|w1280)\/([A-Za-z0-9_-]{1,160}\.(?:jpg|jpeg|png|webp))$/.exec(url.pathname);
   return match?origin+'/api/v2/images/tmdb/'+match[1]+'/'+match[2]:url.href;
 }
-export function createImageProxy({fetcher=createImageTransport(),clock=Date.now,budget=16*1024*1024}={}){
+export function createImageProxy({fetcher=createImageTransport(),clock=Date.now,budget=16*1024*1024,diskCache=createImageDiskCache()}={}){
   const cache=new Map(),pending=new Map(),queue=[];let bytes=0,active=0;
   const hosts=['https://image.tmdb.org','https://tmdb-image-prod.b-cdn.net'];
   const unavailable=new Map();let preferred=hosts[0];
@@ -14,11 +15,18 @@ export function createImageProxy({fetcher=createImageTransport(),clock=Date.now,
     else active++;
     try{return await work();}finally{const next=queue.shift();if(next)next();else active--;}
   }
+  function remember(path,item){
+    if(cache.has(path)){bytes-=cache.get(path).body.length;cache.delete(path);}
+    if(item.body.length<=budget){cache.set(path,item);bytes+=item.body.length;}
+    while(bytes>budget||cache.size>128){const key=cache.keys().next().value;bytes-=cache.get(key).body.length;cache.delete(key);}
+  }
   async function load(path,match){
     const saved=cache.get(path);
     if(saved&&saved.until>clock()){cache.delete(path);cache.set(path,saved);return saved;}
     if(pending.has(path))return pending.get(path);
     const work=slot(async()=>{
+      const persisted=await diskCache?.get(path);
+      if(persisted){remember(path,persisted);return persisted;}
       let body,type,lastError,missing=false;
       const verifiedHost=await fetcher.preferredHost?.();
       if(hosts.includes(verifiedHost))preferred=verifiedHost;
@@ -35,10 +43,7 @@ export function createImageProxy({fetcher=createImageTransport(),clock=Date.now,
           const chunks=[];let length=0;
           for await(const chunk of response.body){length+=chunk.length;if(length>2*1024*1024)throw Error('Image too large');chunks.push(chunk);}
           const candidate=Buffer.concat(chunks),mime=response.headers.get('content-type')?.split(';')[0];
-          const jpeg=candidate[0]===255&&candidate[1]===216&&candidate[2]===255;
-          const png=candidate.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
-          const webp=candidate.subarray(0,4).toString()==='RIFF'&&candidate.subarray(8,12).toString()==='WEBP';
-          if(!(mime==='image/jpeg'&&jpeg||mime==='image/png'&&png||mime==='image/webp'&&webp))throw Error('Invalid image');
+          if(!mime||imageMime(candidate)!==mime)throw Error('Invalid image');
           await response.confirm?.();
           body=candidate;type=mime;preferred=host;unavailable.delete(host);break;
         }catch(error){
@@ -53,9 +58,8 @@ export function createImageProxy({fetcher=createImageTransport(),clock=Date.now,
       }
       if(!body){if(missing&&!lastError)return {status:404};throw lastError||Error('Image providers temporarily unavailable');}
       const item={status:200,body,type,until:clock()+86400000};
-      if(cache.has(path)){bytes-=cache.get(path).body.length;cache.delete(path);}
-      if(body.length<=budget){cache.set(path,item);bytes+=body.length;}
-      while(bytes>budget||cache.size>128){const key=cache.keys().next().value;bytes-=cache.get(key).body.length;cache.delete(key);}
+      remember(path,item);
+      await diskCache?.put(path,item);
       return item;
     });
     pending.set(path,work);try{return await work;}finally{pending.delete(path);}

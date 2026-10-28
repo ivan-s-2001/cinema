@@ -220,7 +220,7 @@ class SearchViewModel @Inject constructor(
             metaPrefetchedIds.add(id)
             metaRepository.getMetaFromAllAddons(type = type, id = id)
                 .first { it !is com.nuvio.tv.core.network.NetworkResult.Loading }
-            watchProgressRepository.getAllEpisodeProgress(id.substringBefore(":")).first()
+            watchProgressRepository.getAllEpisodeProgress(com.nuvio.tv.core.streams.videoContentId(id)).first()
         }
     }
 
@@ -1176,7 +1176,15 @@ class SearchViewModel @Inject constructor(
                 .map { catalog -> addon to catalog }
         }
 
-        return allSearchTargets
+        // CinemaHall searches the whole server catalogue by type. Home shelves
+        // share that endpoint; searching every shelf repeats identical requests.
+        return allSearchTargets.distinctBy { (addon, catalog) ->
+            if (com.nuvio.tv.data.repository.CinemaHallSourcePolicy.isOwnCatalog(addon.baseUrl, addon.id)) {
+                "cinemahall:${catalog.apiType}"
+            } else {
+                catalogKey(addon.id, addon.baseUrl, catalog.apiType, catalog.id)
+            }
+        }
     }
 
     /**

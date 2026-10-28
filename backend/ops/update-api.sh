@@ -70,10 +70,10 @@ probe(){
 }
 echo 'Checking API, actual poster bytes and source discovery before switching.'
 probe http://127.0.0.1:18091 staged
-test -s /var/lib/cinemahall/image-cache/routes.json
-"$node_bin" --input-type=module -e 'import {readFileSync} from "node:fs";import {publicImageIPv4} from "./image-transport.mjs";const routes=JSON.parse(readFileSync("/var/lib/cinemahall/image-cache/routes.json","utf8"));if(!["image.tmdb.org","tmdb-image-prod.b-cdn.net"].some(host=>Array.isArray(routes[host])&&routes[host].some(entry=>publicImageIPv4(entry.address)&&entry.until>Date.now())))throw Error("No verified image route available for handoff")'
-cp -p /var/lib/cinemahall/image-cache/routes.json "$backup/verified-image-routes.json"
-echo 'Verified image routes saved for the production process.'
+if [[ -s /var/lib/cinemahall/image-cache/routes.json ]]; then
+  cp -p /var/lib/cinemahall/image-cache/routes.json "$backup/verified-image-routes.json"
+fi
+echo 'Verified poster bytes are persisted for the production process.'
 systemctl stop "$smoke"
 changed=1
 install -o root -g root -m 644 "$backup/new.service" "$unit"

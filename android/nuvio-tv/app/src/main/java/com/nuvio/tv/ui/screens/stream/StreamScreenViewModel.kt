@@ -153,7 +153,7 @@ class StreamScreenViewModel @Inject constructor(
     private val streamCacheKey: String = "${contentType.lowercase()}|$videoId"
     private val partyKey: String = com.nuvio.tv.core.party.partyMediaKey(
         metaType = contentType,
-        metaId = contentId ?: videoId.substringBefore(":"),
+        metaId = contentId ?: com.nuvio.tv.core.streams.videoContentId(videoId),
         season = season,
         episode = episode
     )
@@ -195,7 +195,7 @@ class StreamScreenViewModel @Inject constructor(
     )
     val uiState: StateFlow<StreamScreenUiState> = _uiState.asStateFlow()
     val watchProgress = run {
-        val id = contentId ?: videoId.substringBefore(":")
+        val id = contentId ?: com.nuvio.tv.core.streams.videoContentId(videoId)
         if (season != null && episode != null) {
             watchProgressRepository.getEpisodeProgress(id, season, episode, playbackProfileId)
         } else {
@@ -482,7 +482,7 @@ class StreamScreenViewModel @Inject constructor(
                                 infoHash = cached.infoHash,
                                 ytId = null,
                                 headers = cached.headers,
-                                contentId = contentId ?: videoId.substringBefore(":"),
+                                contentId = contentId ?: com.nuvio.tv.core.streams.videoContentId(videoId),
                                 contentType = contentType,
                                 contentName = contentName ?: title,
                                 poster = poster,
@@ -1038,7 +1038,7 @@ class StreamScreenViewModel @Inject constructor(
             } == true) return true
         if (contentType.equals("other", ignoreCase = true)) return true
 
-        val canonicalVideoMetaId = videoId.substringBefore(":")
+        val canonicalVideoMetaId = com.nuvio.tv.core.streams.videoContentId(videoId)
         return !metaId.equals(canonicalVideoMetaId, ignoreCase = true)
     }
 
@@ -1207,7 +1207,7 @@ class StreamScreenViewModel @Inject constructor(
 
     private fun loadMissingMetaDetailsIfNeeded() {
         val requiresMetadataLookup = genres.isNullOrBlank() || year.isNullOrBlank() || runtime == null
-        val metaId = contentId ?: videoId.substringBefore(":")
+        val metaId = contentId ?: com.nuvio.tv.core.streams.videoContentId(videoId)
         if (metaId.isBlank() || contentType.isBlank()) return
 
         viewModelScope.launch {
@@ -1560,7 +1560,7 @@ class StreamScreenViewModel @Inject constructor(
             infoHash = stream.getEffectiveInfoHash(),
             ytId = stream.ytId,
             headers = stream.behaviorHints?.proxyHeaders?.request,
-            contentId = contentId ?: videoId.substringBefore(":"),  // Use explicit contentId or extract from videoId
+            contentId = contentId ?: com.nuvio.tv.core.streams.videoContentId(videoId),  // Use explicit contentId or extract from videoId
             contentType = contentType,
             contentName = contentName ?: title,
             poster = poster,
@@ -1838,7 +1838,7 @@ class StreamScreenViewModel @Inject constructor(
         // Will be set to real timestamp right before the player intent is sent.
         externalPlayerLaunchTimeMs = Long.MAX_VALUE
 
-        val contentId = playbackInfo.contentId ?: videoId.substringBefore(":")
+        val contentId = playbackInfo.contentId ?: com.nuvio.tv.core.streams.videoContentId(videoId)
         val metadata = com.nuvio.tv.core.player.ExternalPlaybackMetadata(
             contentId = contentId,
             contentType = playbackInfo.contentType ?: "movie",

@@ -234,7 +234,7 @@ class LayoutPreferenceDataStore @Inject constructor(
     }
 
     val modernSidebarBlurEnabled: Flow<Boolean> = profileFlow { prefs ->
-        prefs[modernSidebarBlurEnabledKey] ?: false
+        false
     }
 
     val modernLandscapePostersEnabled: Flow<Boolean> = profileFlow { prefs ->
@@ -249,11 +249,7 @@ class LayoutPreferenceDataStore @Inject constructor(
         prefs[heroSectionEnabledKey] ?: true
     }
 
-    val discoverLocation: Flow<DiscoverLocation> = profileFlow { prefs ->
-        val stored = prefs[discoverLocationKey] ?: DiscoverLocation.IN_SEARCH.name
-        runCatching { DiscoverLocation.valueOf(stored) }
-            .getOrDefault(DiscoverLocation.IN_SEARCH)
-    }
+    val discoverLocation: Flow<DiscoverLocation> = kotlinx.coroutines.flow.flowOf(DiscoverLocation.IN_SIDEBAR)
 
     val lastNonOffDiscoverLocation: Flow<DiscoverLocation> = profileFlow { prefs ->
         val stored = prefs[lastNonOffDiscoverLocationKey]
@@ -282,7 +278,7 @@ class LayoutPreferenceDataStore @Inject constructor(
     }
 
     val focusedPosterBackdropExpandEnabled: Flow<Boolean> = profileFlow { prefs ->
-        prefs[focusedPosterBackdropExpandEnabledKey] ?: true
+        false
     }
 
     val focusedPosterBackdropExpandDelaySeconds: Flow<Int> = profileFlow { prefs ->
@@ -292,7 +288,7 @@ class LayoutPreferenceDataStore @Inject constructor(
     }
 
     val focusedPosterBackdropTrailerEnabled: Flow<Boolean> = profileFlow { prefs ->
-        prefs[focusedPosterBackdropTrailerEnabledKey] ?: false
+        false
     }
 
     val focusedPosterBackdropTrailerMuted: Flow<Boolean> = profileFlow { prefs ->
@@ -321,7 +317,7 @@ class LayoutPreferenceDataStore @Inject constructor(
 
     val cardDepthStyle: Flow<CardDepthStyle> = profileFlow { prefs ->
         CardDepthStyle(
-            enabled = prefs[cardDepthEnabledKey] ?: false,
+            enabled = false,
             edgeStrength = (prefs[cardDepthEdgeStrengthKey]
                 ?: DEFAULT_CARD_DEPTH_EDGE_STRENGTH).coerceIn(0, 100),
             sheenStrength = (prefs[cardDepthSheenStrengthKey]
@@ -397,7 +393,7 @@ class LayoutPreferenceDataStore @Inject constructor(
     }
 
     val detailPageTrailerButtonEnabled: Flow<Boolean> = profileFlow { prefs ->
-        prefs[detailPageTrailerButtonEnabledKey] ?: true
+        false
     }
 
     val preferExternalMetaAddonDetail: StateFlow<Boolean> = profileFlow { prefs ->

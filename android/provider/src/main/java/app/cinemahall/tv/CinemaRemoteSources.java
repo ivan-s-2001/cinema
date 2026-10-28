@@ -14,6 +14,13 @@ final class CinemaRemoteSources {
     private static final String BASE="https://cinemahome.duckdns.org/api/v2";
     private static long checkedAt;
     private static boolean enabled;
+    private static final java.util.Map<String,CachedSources> cache=new java.util.LinkedHashMap<String,CachedSources>(8,.75f,true){
+        @Override protected boolean removeEldestEntry(java.util.Map.Entry<String,CachedSources> entry){return size()>8;}
+    };
+    private static final class CachedSources {
+        final ArrayList<Sources.Candidate> items;final long until;
+        CachedSources(ArrayList<Sources.Candidate> items){this.items=new ArrayList<>(items);until=System.currentTimeMillis()+120000L;}
+    }
     private static final long CONFIG_TTL=10*60_000L;
     private CinemaRemoteSources() {}
     static JSONObject fetch(String path) throws Exception {
@@ -33,6 +40,9 @@ final class CinemaRemoteSources {
     }
     static synchronized ArrayList<Sources.Candidate> load(String titleId,String episode) {
         if(!titleId.matches("ch:[A-Za-z0-9:_-]{1,157}")||!episode.matches("|S[0-9]{1,3}E[0-9]{1,4}"))return null;
+        String cacheKey=titleId+"|"+episode;
+        CachedSources recent=cache.get(cacheKey);
+        if(recent!=null&&recent.until>System.currentTimeMillis())return new ArrayList<>(recent.items);
         if(System.currentTimeMillis()-checkedAt>(enabled?CONFIG_TTL:15000L) || checkedAt==0){
             try {enabled=fetch("/config").getJSONObject("capabilities").optBoolean("sourceDiscovery",false);}
             catch(Exception unavailable){enabled=false;}
@@ -48,6 +58,7 @@ final class CinemaRemoteSources {
                 JSONObject item=items.optJSONObject(i);
                 if(item!=null&&Logic.validLink(item.optString("torrent_download_link")))candidates.add(new Sources.Candidate(item));
             }
+            if(!candidates.isEmpty())cache.put(cacheKey,new CachedSources(candidates));
             return candidates;
         }catch(Exception unavailable){return null;}
     }

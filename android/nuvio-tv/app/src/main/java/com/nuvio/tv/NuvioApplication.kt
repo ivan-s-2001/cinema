@@ -42,12 +42,9 @@ import javax.inject.Inject
 @HiltAndroidApp
 class NuvioApplication : Application(), SingletonImageLoader.Factory {
 
-    @Inject lateinit var startupSyncService: StartupSyncService
-    @Inject lateinit var androidTvChannelSyncService: AndroidTvChannelSyncService
     @Inject lateinit var sentrySettingsDataStore: SentrySettingsDataStore
     @Inject lateinit var imagePerformancePreferences: ImagePerformancePreferences
     @Inject lateinit var simklAnimeIdPreferenceHolder: SimklAnimeIdPreferenceHolder
-    @Inject lateinit var serverUserStateProjection: ServerUserStateProjection
 
     companion object {
         /**
@@ -83,8 +80,6 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
         super.onCreate()
         SentryInitializer.start(this, sentrySettingsDataStore)
         if (com.nuvio.tv.core.build.AppFeaturePolicy.pluginsEnabled) PluginRuntimeHooks.onApplicationCreate(this)
-        androidTvChannelSyncService.start()
-        serverUserStateProjection.start()
         // Load locale synchronously so it's available before Activity.attachBaseContext.
         // SharedPreferences reads are fast (cached in memory after first access).
         val tag = getSharedPreferences("app_locale", Context.MODE_PRIVATE)

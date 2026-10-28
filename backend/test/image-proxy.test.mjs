@@ -7,7 +7,7 @@ async function request(handler,path='/api/v2/images/tmdb/w342/poster.jpg',method
   let status,headers,body;const handled=await handler({method},{writeHead(s,h){status=s;headers=h;},end(b){body=b;}},new URL('http://localhost'+path));return {handled,status,headers,body};
 }
 test('image proxy fetches only fixed TMDB paths, shares downloads and supports cached HEAD',async()=>{
-  let calls=0,confirmed=0;const handler=createImageProxy({fetcher:async(url,options)=>{calls++;assert.equal(url,'https://image.tmdb.org/t/p/w342/poster.jpg');assert.equal(options.redirect,'error');await new Promise(resolve=>setTimeout(resolve,5));const value=response();value.confirm=async()=>{confirmed++;};return value;}});
+  let calls=0,confirmed=0;const handler=createImageProxy({diskCache:null,fetcher:async(url,options)=>{calls++;assert.equal(url,'https://image.tmdb.org/t/p/w342/poster.jpg');assert.equal(options.redirect,'error');await new Promise(resolve=>setTimeout(resolve,5));const value=response();value.confirm=async()=>{confirmed++;};return value;}});
   for(const result of await Promise.all(Array.from({length:10},()=>request(handler)))){assert.equal(result.status,200);assert.deepEqual(result.body,jpeg);assert.equal(result.headers['content-type'],'image/jpeg');}
   assert.equal(calls,1);assert.equal(confirmed,1);assert.equal((await request(handler,undefined,'HEAD')).body,undefined);assert.equal(calls,1);
   for(const path of ['/api/v2/images/tmdb/original/poster.jpg','/api/v2/images/tmdb/w342/%2Fetc%2Fpasswd','/api/v2/images/tmdb/w342/poster.jpg?url=https://localhost'])assert.equal((await request(handler,path)).status,404);
@@ -15,18 +15,18 @@ test('image proxy fetches only fixed TMDB paths, shares downloads and supports c
 });
 test('image cache has a byte budget and cold downloads have bounded concurrency',async()=>{
   let calls=0,active=0,peak=0;
-  const handler=createImageProxy({budget:4,fetcher:async()=>{calls++;active++;peak=Math.max(peak,active);await new Promise(resolve=>setTimeout(resolve,3));active--;return response();}});
+  const handler=createImageProxy({diskCache:null,budget:4,fetcher:async()=>{calls++;active++;peak=Math.max(peak,active);await new Promise(resolve=>setTimeout(resolve,3));active--;return response();}});
   await request(handler);await request(handler,'/api/v2/images/tmdb/w342/second.jpg');await request(handler);assert.equal(calls,3);
   const results=await Promise.all(Array.from({length:12},(_,i)=>request(handler,'/api/v2/images/tmdb/w342/image'+i+'.jpg')));
   assert.ok(results.every(result=>result.status===200));assert.equal(peak,2);
 });
 test('proxy rejects HTML masquerading as images and retries failed responses',async()=>{
-  let calls=0,confirmed=0;const handler=createImageProxy({fetcher:async()=>{calls++;const value=new Response('<html>error</html>',{headers:{'content-type':'image/jpeg'}});value.confirm=async()=>{confirmed++;};return value;}});
+  let calls=0,confirmed=0;const handler=createImageProxy({diskCache:null,fetcher:async()=>{calls++;const value=new Response('<html>error</html>',{headers:{'content-type':'image/jpeg'}});value.confirm=async()=>{confirmed++;};return value;}});
   assert.equal((await request(handler)).status,503);assert.equal((await request(handler)).status,503);assert.equal(calls,4);assert.equal(confirmed,0);
 });
 test('TLS hostname failure uses the other fixed HTTPS origin and remembers the working one',async()=>{
   const calls=[];
-  const handler=createImageProxy({fetcher:async(url,options)=>{
+  const handler=createImageProxy({diskCache:null,fetcher:async(url,options)=>{
     calls.push(url);assert.deepEqual(Object.keys(options).sort(),['redirect','signal']);
     assert.equal(options.redirect,'error');
     if(url.startsWith('https://image.tmdb.org/'))throw Object.assign(new TypeError('fetch failed'),{cause:{code:'ERR_TLS_CERT_ALTNAME_INVALID'}});
@@ -43,6 +43,6 @@ test('TLS hostname failure uses the other fixed HTTPS origin and remembers the w
 test('a persisted working CDN is preferred over probing a failed primary domain again',async()=>{
   const calls=[];const fetcher=async url=>{calls.push(url);return response();};
   fetcher.preferredHost=async()=> 'https://tmdb-image-prod.b-cdn.net';
-  assert.equal((await request(createImageProxy({fetcher}))).status,200);
+  assert.equal((await request(createImageProxy({diskCache:null,fetcher}))).status,200);
   assert.deepEqual(calls,['https://tmdb-image-prod.b-cdn.net/t/p/w342/poster.jpg']);
 });

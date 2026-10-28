@@ -41,6 +41,15 @@ test('TV cards exclude heavy fields and use appropriately sized TMDB artwork',()
   assert.equal(card.description.length,400);
   assert.equal(imageFor('https://example.org/original.jpg','poster'),'https://example.org/original.jpg');
 });
+test('snapshot actor image and profile paths are returned as server-hosted portraits',()=>{
+  const value=titleDetail({id:'ch:actor-test',kind:'movie',title:'Title',payload:{details:{cast:[
+    {name:'First',image:'https://image.tmdb.org/t/p/original/actor.jpg'},
+    {name:'Second',profile_path:'/second.png'},
+    {name:'Third',photo:'javascript:bad'}]}}});
+  assert.equal(value.cast[0].photo,'https://cinemahome.duckdns.org/api/v2/images/tmdb/w185/actor.jpg');
+  assert.equal(value.cast[1].photo,'https://cinemahome.duckdns.org/api/v2/images/tmdb/w185/second.png');
+  assert.equal(value.cast[2].photo,null);
+});
 test('completed metadata gets a finite refresh interval',()=>{
   assert.equal(refreshDelayMs({status:'Ended',description:'Full',images:{poster:'https://example.org/p.jpg'}}),30*24*3600000);
   assert.equal(refreshDelayMs({type:'tv',status:'Returning Series',description:'Full',images:{poster:'https://example.org/p.jpg'}}),6*3600000);

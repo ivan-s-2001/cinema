@@ -58,7 +58,9 @@ export function titleCard(row, now) {
 function credit(value) {
   if (typeof value === 'string') return { id: null, name: text(value), character: null, photo: null };
   const c = object(value);
-  return { id: text(c.id) || (c.tmdbId ? 'tmdb:' + c.tmdbId : null), name: text(c.name), character: text(c.character), photo: imageFor(c.photo,'person') };
+  const photo = text(c.photo) || text(c.image) || text(c.profile_path);
+  return { id: text(c.id) || (c.tmdbId ? 'tmdb:' + c.tmdbId : null), name: text(c.name), character: text(c.character),
+    photo: imageFor(photo?.startsWith('/') ? 'https://image.tmdb.org/t/p/w185' + photo : photo,'person') };
 }
 export function titleDetail(row) {
   const p = object(row.payload), details = object(p.details);
