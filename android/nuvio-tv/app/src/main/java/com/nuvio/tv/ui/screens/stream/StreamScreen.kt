@@ -1024,7 +1024,7 @@ internal fun CinemaHallQualityVoicePicker(
     }
     var quality by remember { mutableStateOf(groups.firstOrNull()?.first.orEmpty()) }
     LaunchedEffect(groups) { if (groups.none { it.first == quality }) quality = groups.firstOrNull()?.first.orEmpty() }
-    val voiceCount = remember(groups) { groups.sumOf { cinemaVoiceChoices(it.second).size } }
+    val voiceCount = remember(groups) { groups.filter { it.first != "Авто" }.sumOf { cinemaVoiceChoices(it.second).size } }
     val voices = groups.firstOrNull { it.first == quality }?.second.orEmpty()
         .let(::cinemaVoiceChoices)
     Column(

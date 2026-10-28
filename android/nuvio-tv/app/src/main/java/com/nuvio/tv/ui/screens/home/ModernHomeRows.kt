@@ -1381,19 +1381,33 @@ private fun ModernCarouselCard(
             ) {
                 val mediaLayerModifier = remember(hasLandscapeLogo) {
                     if (hasLandscapeLogo) {
-                    Column(Modifier.align(Alignment.BottomStart).fillMaxWidth(0.62f)
-                        .padding(start = 10.dp, end = 10.dp, bottom = NuvioTheme.spacing.sm), horizontalAlignment = Alignment.CenterHorizontally) {
-                        AsyncImage(
-                            model = logoModel,
-                            contentDescription = item.title,
-                            onError = { landscapeLogoLoadFailed = true },
-                            modifier = Modifier.fillMaxWidth().height(cardHeight * 0.34f),
-                            contentScale = ContentScale.Fit,
-                            alignment = if (item.metaPreview?.logoCaption.isNullOrBlank()) Alignment.CenterStart else Alignment.Center
-                        )
-                        com.nuvio.tv.ui.components.CinemaLogoCaption(item.metaPreview?.logoCaption)
+                        Modifier
+                            .fillMaxSize()
+                            .drawWithCache {
+                                onDrawWithContent {
+                                    drawContent()
+                                    drawRect(brush = MODERN_LANDSCAPE_LOGO_GRADIENT, size = size)
+                                }
+                            }
+                    } else {
+                        Modifier.fillMaxSize()
                     }
-                } else if (hasImage) {
+                }
+
+                Box(modifier = mediaLayerModifier) {
+                    val isPlaceholderItem = item.imageUrl.isPlaceholder()
+                    if (isPlaceholderItem) {
+                        // Horizontal sweeping shimmer for placeholder cards
+                        val effectivePlaceholderShimmerOffsetState =
+                            placeholderShimmerOffsetState ?: rememberPlaceholderShimmerOffsetState(
+                                label = "placeholderShimmer"
+                            )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .placeholderCardShimmer(effectivePlaceholderShimmerOffsetState)
+                        )
+                    } else if (hasImage) {
                         AsyncImage(
                             model = imageModel,
                             contentDescription = item.title,
@@ -1466,18 +1480,18 @@ private fun ModernCarouselCard(
                 }
 
                 if (hasLandscapeLogo) {
-                    AsyncImage(
-                        model = logoModel,
-                        contentDescription = item.title,
-                        onError = { landscapeLogoLoadFailed = true },
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .fillMaxWidth(0.62f)
-                            .height(cardHeight * 0.34f)
-                            .padding(start = 10.dp, end = 10.dp, bottom = NuvioTheme.spacing.sm),
-                        contentScale = ContentScale.Fit,
-                        alignment = Alignment.CenterStart
-                    )
+                    Column(Modifier.align(Alignment.BottomStart).fillMaxWidth(0.62f)
+                        .padding(start = 10.dp, end = 10.dp, bottom = NuvioTheme.spacing.sm), horizontalAlignment = Alignment.CenterHorizontally) {
+                        AsyncImage(
+                            model = logoModel,
+                            contentDescription = item.title,
+                            onError = { landscapeLogoLoadFailed = true },
+                            modifier = Modifier.fillMaxWidth().height(cardHeight * 0.34f),
+                            contentScale = ContentScale.Fit,
+                            alignment = if (item.metaPreview?.logoCaption.isNullOrBlank()) Alignment.CenterStart else Alignment.Center
+                        )
+                        com.nuvio.tv.ui.components.CinemaLogoCaption(item.metaPreview?.logoCaption)
+                    }
                 } else if ((useLandscapeOverlayTreatment || isBackdropExpanded) && !isCollectionFolder && !(useLandscapeAsExpanded && !trailerFirstFrameRendered) && (effectiveIgnoreLandscapePoster || item.metaPreview?.landscapePoster.isNullOrBlank() || customPosterLoadFailed)) {
                     Text(
                         text = item.title,
