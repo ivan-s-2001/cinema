@@ -16,8 +16,8 @@ final class CinemaRemoteCatalog {
         @Override protected boolean removeEldestEntry(java.util.Map.Entry<String,JSONObject> entry){return size()>24;}
     };
     private static final class Page {
-        final String json;final long expiresAt;
-        Page(String json,long expiresAt){this.json=json;this.expiresAt=expiresAt;}
+        final String json,nextCursor;final long expiresAt;
+        Page(String json,String nextCursor,long expiresAt){this.json=json;this.nextCursor=nextCursor;this.expiresAt=expiresAt;}
     }
     private final Map<String,Page> pages=Collections.synchronizedMap(new LinkedHashMap<String,Page>(16,.75f,true){
         @Override protected boolean removeEldestEntry(java.util.Map.Entry<String,Page> entry){return size()>16;}
@@ -49,18 +49,28 @@ final class CinemaRemoteCatalog {
         try{
             String cursor="",path;
             for(int index=0;index<=skip/24;index++){
+                String pageKey=type+"|"+rowId+"|"+query+"|"+(index*24);
+                Page previous=pages.get(pageKey);
+                if(previous!=null&&previous.expiresAt>System.currentTimeMillis()){
+                    if(index==skip/24)return new JSONObject(previous.json);
+                    cursor=previous.nextCursor;
+                    if(cursor.isEmpty())return new JSONObject().put("metas",new JSONArray()).put("hasMore",false);
+                    continue;
+                }
                 if(query.isEmpty())path="/rows/"+rowId+"/items?limit=24";
                 else path="/search?type="+type+"&q="+Net.enc(query)+"&limit=24";
                 if(!cursor.isEmpty())path+="&cursor="+Net.enc(cursor);
                 JSONObject response=CinemaRemoteSources.fetch(path);
-                if(index<skip/24){cursor=response.optString("nextCursor");if(cursor.isEmpty())return new JSONObject().put("metas",new JSONArray()).put("hasMore",false);continue;}
                 JSONArray items=response.getJSONArray("items"),result=new JSONArray();
                 for(int i=0;i<items.length();i++){
                     JSONObject card=items.getJSONObject(i);
                     if(validId(card.optString("id")))result.put(compact(card));
                 }
-                JSONObject resultPage=new JSONObject().put("metas",result).put("hasMore",!response.isNull("nextCursor"));
-                pages.put(key,new Page(resultPage.toString(),System.currentTimeMillis()+120000L));return resultPage;
+                cursor=response.isNull("nextCursor")?"":response.optString("nextCursor");
+                JSONObject resultPage=new JSONObject().put("metas",result).put("hasMore",!cursor.isEmpty());
+                pages.put(pageKey,new Page(resultPage.toString(),cursor,System.currentTimeMillis()+120000L));
+                if(index==skip/24)return resultPage;
+                if(cursor.isEmpty())return new JSONObject().put("metas",new JSONArray()).put("hasMore",false);
             }
         }catch(Exception unavailable){return fromCache(cached);}
         return fromCache(cached);
