@@ -13,9 +13,14 @@ internal fun cinemaVoiceChoices(streams: List<Stream>): List<Stream> = streams.d
 internal fun cinemaTechnologyLabel(stream: Stream): String? = stream.technologyHints.takeIf { it.isNotEmpty() }?.joinToString(" · ")
 
 
-/** Explicit launches of our titles always show quality/voice choices, including cached searches. */
-internal fun cinemaRequiresInitialSelection(videoId: String, requestedManual: Boolean): Boolean =
-    requestedManual || videoId.startsWith("ch:")
+/** Playback starts automatically; quality and voice choices are an explicit secondary action. */
+internal fun cinemaRequiresInitialSelection(requestedManual: Boolean): Boolean = requestedManual
+
+/** Keep an earlier voice when available, otherwise let the provider choose the best release. */
+internal fun cinemaPreferredAutoPlayStream(streams: List<Stream>, selectedGroup: String?): Stream? =
+    cinemaContinuationStream(streams, selectedGroup)
+        ?: streams.firstOrNull { it.addonName == "CinemaHall" && it.behaviorHints?.bingeGroup == "cinemahall:auto" }
+        ?: cinemaSelectableStreams(streams).firstOrNull()
 
 /** Continue the selected quality/studio, or ask again instead of silently changing the voice. */
 internal fun cinemaContinuationStream(streams: List<Stream>, selectedGroup: String?): Stream? =
