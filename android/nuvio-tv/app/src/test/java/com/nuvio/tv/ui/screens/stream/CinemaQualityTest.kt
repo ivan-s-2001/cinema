@@ -23,12 +23,23 @@ class CinemaQualityTest {
         assertEquals(2, cinemaVoiceChoices(listOf(mapped, other)).size)
         assertEquals("HDR10+ · Dolby Atmos", cinemaTechnologyLabel(mapped))
     }
-    @Test fun `new film and episode launches require a choice before any autoplay`() {
-        assertTrue(cinemaRequiresInitialSelection("ch:snapshot:movie:tmdb:550", false))
-        assertTrue(cinemaRequiresInitialSelection("ch:snapshot:tv:tmdb:1622:5:3", false))
-        assertTrue(cinemaRequiresInitialSelection("tt12345", true))
-        assertFalse(cinemaRequiresInitialSelection("tt12345", false))
+    @Test fun `play starts automatically and source choices are optional`() {
+        assertFalse(cinemaRequiresInitialSelection(false))
+        assertTrue(cinemaRequiresInitialSelection(true))
         assertEquals(listOf("CinemaHall · 1080p"), cinemaSelectableStreams(listOf(stream("Авто"), stream("1080p"))).map { it.name })
+    }
+
+    @Test fun `one click uses auto release while next episode keeps preferred voice`() {
+        val auto = stream("Авто").copy(behaviorHints = com.nuvio.tv.domain.model.StreamBehaviorHints(
+            notWebReady = null, bingeGroup = "cinemahall:auto", countryWhitelist = null, proxyHeaders = null))
+        val preferred = stream("1080p").copy(behaviorHints = com.nuvio.tv.domain.model.StreamBehaviorHints(
+            notWebReady = null, bingeGroup = "cinemahall:1080p:lostfilm", countryWhitelist = null, proxyHeaders = null))
+        val streams = listOf(auto, preferred)
+        assertEquals(auto, cinemaPreferredAutoPlayStream(streams, null))
+        assertEquals(preferred, cinemaPreferredAutoPlayStream(streams, "cinemahall:1080p:lostfilm"))
+        assertEquals(auto, cinemaPreferredAutoPlayStream(streams, "cinemahall:missing"))
+        assertEquals(preferred, cinemaPreferredAutoPlayStream(listOf(preferred), null))
+        assertNull(cinemaPreferredAutoPlayStream(listOf(stream("4K", addon = "Other")), null))
     }
     @Test fun `next episode keeps the exact chosen voice and quality or returns to selection`() {
         val picked = stream("1080p").copy(behaviorHints = com.nuvio.tv.domain.model.StreamBehaviorHints(notWebReady = null, bingeGroup = "cinemahall:1080p:lostfilm", countryWhitelist = null, proxyHeaders = null))
