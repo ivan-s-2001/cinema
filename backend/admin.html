@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>CinemaHall — управление каталогом</title>
+<link rel="stylesheet" href="/admin/app.css">
+<script src="/admin/app.js" defer></script>
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="brand"><span class="mark">C</span><div><strong>CinemaHall</strong><small>Управление каталогом</small></div></div>
+    <div class="topbar-right"><span class="private"><span class="status-dot"></span> Закрытая панель</span><button id="logout" class="button ghost" hidden>Выйти</button></div>
+  </header>
+  <main>
+    <section id="login-screen" class="auth-wrap">
+      <div class="auth-card">
+        <div class="eyebrow">CONTENT CONTROL</div>
+        <h1>Вход в редактор</h1>
+        <p>Управляйте каталогом, постерами, фонами и обновлениями. Медиа остаются на внешних серверах.</p>
+        <form id="login-form">
+          <label for="password">Пароль администратора</label>
+          <input id="password" type="password" required autocomplete="current-password" placeholder="Введите пароль">
+          <button class="button primary wide" type="submit">Войти</button>
+        </form>
+        <p class="form-message" id="login-error" role="alert"></p>
+      </div>
+    </section>
+    <section id="app" hidden>
+      <div class="page-heading"><div><div class="eyebrow">CONTROL CENTER / CINEMAHALL</div><h1>Каталог и источники</h1><p>Только метаданные и ссылки. Без загрузки изображений, видео и торрент-файлов на сервер.</p></div><div class="heading-actions"><button id="refresh" class="button ghost">Обновить данные</button><button id="create" class="button primary">+ Добавить тайтл</button></div></div>
+      <div class="metrics" aria-label="Состояние каталога">
+        <div class="metric"><span>Фильмы</span><strong id="movies-count">—</strong><small>записей в БД</small></div>
+        <div class="metric"><span>Сериалы</span><strong id="series-count">—</strong><small>записей в БД</small></div>
+        <div class="metric"><span>Синхронизация</span><strong id="sync-state">—</strong><small id="sync-time">Ожидание</small></div>
+      </div>
+      <nav class="tabs" aria-label="Разделы панели">
+        <button class="tab selected" data-tab="catalog" aria-pressed="true">Каталог</button>
+        <button class="tab" data-tab="sync" aria-pressed="false">Импорт и обновления</button>
+      </nav>
+      <section id="catalog-section" class="workspace">
+        <div class="catalog-pane">
+          <div class="pane-head"><div><h2>Все тайтлы</h2><span class="hint">Выберите запись для редактирования</span></div></div>
+          <label for="query" class="sr-only">Поиск по названию</label>
+          <input id="query" type="search" placeholder="Название фильма или сериала…">
+          <div id="title-list" class="title-list" aria-live="polite"></div>
+          <div class="pagination"><button id="previous" class="button ghost">Назад</button><span id="page-label">Страница 1</span><button id="next" class="button ghost">Далее</button></div>
+        </div>
+        <div class="editor-pane">
+          <div id="editor-empty" class="empty-state"><div class="empty-art">CH</div><h2>Выберите тайтл</h2><p>Здесь можно изменить описание, год, оценки и адреса изображений. Изменения сохраняются в MariaDB.</p></div>
+          <form id="editor" hidden>
+            <div class="editor-head"><div><div class="eyebrow" id="editor-type">РЕДАКТОР МЕТАДАННЫХ</div><h2 id="editor-heading">Карточка</h2><p id="editor-id" class="identifier"></p></div><span class="editor-badge">Редактирование</span></div>
+            <div class="form-grid">
+              <div class="field span-2"><label for="title">Название на русском</label><input id="title" maxlength="512" required></div>
+              <div class="field"><label for="kind">Тип</label><select id="kind"><option value="movie">Фильм</option><option value="series">Сериал</option></select></div>
+              <div class="field"><label for="year">Год</label><input id="year" type="number" min="1888" max="2100" placeholder="2026"></div>
+              <div class="field span-2"><label for="aliases">Другие названия</label><textarea id="aliases" rows="2" placeholder="Каждое название с новой строки"></textarea><small>Русские, английские, оригинальные и альтернативные названия</small></div>
+              <div class="field span-2"><label for="description">Описание</label><textarea id="description" rows="5" maxlength="30000"></textarea></div>
+              <div class="field span-2"><label for="poster">Вертикальный постер — HTTPS URL</label><input id="poster" type="url" placeholder="https://…"><small>Постер для карточек. Файл не копируется на сервер.</small></div>
+              <div class="field span-2"><label for="backdrop">Горизонтальный фон 16:9 — HTTPS URL</label><input id="backdrop" type="url" placeholder="https://…"><small>Широкая иллюстрация для страницы фильма. Не используйте растянутый постер.</small></div>
+              <div class="field span-2"><div class="image-pair"><div><span>Постер</span><div class="image-preview poster" id="poster-preview">Нет изображения</div></div><div><span>Фон 16:9</span><div class="image-preview backdrop" id="backdrop-preview">Нет изображения</div></div></div></div>
+              <div class="field span-2"><label for="ratings">Оценки площадок (JSON)</label><textarea id="ratings" class="monospace" rows="5" spellcheck="false">{}</textarea><small>Например: {"kinopoisk":7.8,"imdb":7.4}. Эти данные не заменяют друг друга.</small></div>
+            </div>
+            <div class="editor-footer"><span id="save-message" class="form-message" role="status"></span><button type="submit" class="button primary">Сохранить изменения</button></div>
+          </form>
+        </div>
+      </section>
+      <section id="sync-section" class="sync-grid" hidden>
+        <div class="panel"><div class="panel-heading"><div class="eyebrow">01 / ИСТОЧНИКИ</div><h2>Наполнение базы</h2><p>Загрузка непосредственно из KinoAPI в MariaDB. Лишь ID, названия, рейтинги и URL.</p></div>
+          <label for="bootstrap-pages">Глубина первоначального импорта, страниц на тип</label><input id="bootstrap-pages" type="number" min="1" max="200" value="50">
+          <button id="bootstrap" class="button primary wide">Запустить первоначальный импорт</button>
+          <hr>
+          <h3>Обновить актуальные записи</h3><p class="hint">Завершённые релизы пропускаются. Изменённые вручную поля сохраняют приоритет.</p>
+          <label for="daily-pages">Страниц на тип</label><input id="daily-pages" type="number" min="1" max="200" value="3">
+          <button id="sync-now" class="button secondary wide">Обновить сейчас</button>
+        </div>
+        <div class="panel"><div class="panel-heading"><div class="eyebrow">02 / ДОБАВЛЕНИЕ</div><h2>Импорт одного тайтла</h2><p>Введите внешний ID — система запросит метаданные и добавит запись без сохранения файлов.</p></div>
+          <label for="source">Источник ID</label><select id="source"><option value="kinopoisk">Кинопоиск</option><option value="tmdb">TMDB</option></select>
+          <label for="source-id">Числовой ID</label><input id="source-id" inputmode="numeric" pattern="[0-9]*" placeholder="Например, 535341">
+          <button id="import-one" class="button secondary wide">Добавить из API</button>
+          <hr>
+          <div class="eyebrow">03 / АВТОМАТИКА</div><h2>Расписание</h2><p class="hint">Время по Москве. Сервер запускает обновление самостоятельно.</p>
+          <label class="switch"><input type="checkbox" id="schedule-enabled"><span>Ежедневное обновление включено</span></label>
+          <div class="form-grid"><div class="field"><label for="schedule-time">Время (МСК)</label><input id="schedule-time" type="time" value="03:00"></div><div class="field"><label for="schedule-pages">Страниц на тип</label><input id="schedule-pages" type="number" min="1" max="50" value="3"></div></div>
+          <button id="save-schedule" class="button ghost wide">Сохранить расписание</button>
+        </div>
+        <div class="panel logs"><div class="panel-heading"><div class="eyebrow">04 / СОСТОЯНИЕ</div><h2>Последний запуск</h2><p id="job-status" class="hint">Запусков в этой сессии сервера ещё не было.</p></div><pre id="job-logs" aria-live="polite">Ожидание запуска…</pre></div>
+      </section>
+      <p id="global-message" class="global-message" role="status" aria-live="polite"></p>
+    </section>
+  </main>
+  <footer class="footer"><span>CinemaHall · Metadata Control</span><span>URL вместо файлов · Локальная БД MariaDB</span></footer>
+</div>
+</body>
+</html>
