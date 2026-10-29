@@ -785,6 +785,7 @@ fun PlayerScreen(
                 }
 
                 // When a side panel or dialog is open, let it handle all keys
+                val panelOrDialogOpen = uiState.showEpisodesPanel || uiState.showSourcesPanel ||
                         uiState.showChaptersPanel ||
                         uiState.showAudioOverlay || uiState.showSubtitleOverlay ||
                         uiState.showSubtitleStylePanel || uiState.showSpeedDialog ||
