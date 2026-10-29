@@ -116,7 +116,6 @@ fun LibraryScreen(
     var showDeleteConfirm by remember(uiState.showManageDialog) { mutableStateOf(false) }
     var expandedPicker by remember { mutableStateOf<String?>(null) }
     val primaryFocusRequester = remember { FocusRequester() }
-    val selectorFocusRequester = remember { FocusRequester() }
     val gridState = rememberLazyGridState()
     var pendingPrimaryFocus by remember { mutableStateOf(true) }
     var lastFocusedPosterKey by rememberSaveable { mutableStateOf<String?>(null) }
@@ -169,6 +168,7 @@ fun LibraryScreen(
             }
 
             if (!focused) {
+                runCatching { gridState.scrollToItem(0) }
                 focused = runCatching { primaryFocusRequester.requestFocus() }.isSuccess
             }
             if (!focused) {
@@ -299,8 +299,8 @@ fun LibraryScreen(
                     selectedGenre = uiState.selectedGenre,
                     selectedYear = uiState.selectedYear,
                     selectedWatchedFilter = uiState.selectedWatchedFilter,
-                    primaryFocusRequester = selectorFocusRequester,
-                    upFocusRequester = primaryFocusRequester,
+                    primaryFocusRequester = primaryFocusRequester,
+                    upFocusRequester = FocusRequester.Default,
                     expandedPicker = expandedPicker,
                     onExpandedChange = { picker, shouldExpand ->
                         expandedPicker = if (shouldExpand) picker else null
