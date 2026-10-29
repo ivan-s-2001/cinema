@@ -856,6 +856,7 @@ internal fun PlayerRuntimeController.switchToSourceStream(
     stream: Stream,
     recoveryPositionMs: Long? = null
 ) {
+    if (recoveryPositionMs == null) cinemaSourceRecoveryJob?.cancel()
     sourceStreamsScope?.cancel()
     sourceStreamsScope = null
     sourceStreamsJob = null

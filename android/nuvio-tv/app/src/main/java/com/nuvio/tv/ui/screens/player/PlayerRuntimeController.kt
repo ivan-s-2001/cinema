@@ -258,6 +258,7 @@ class PlayerRuntimeController(
     fun getCurrentHeaders(): Map<String, String> = currentHeaders
 
     fun stopAndRelease() {
+        cinemaSourceRecoveryJob?.cancel()
         leavePartyPlayback()
         // Cache counters only reach the card on a natural finish, so capture them when the user exits too.
         val diagnostics = lastPlaybackDiagnosticsForReport
@@ -819,6 +820,7 @@ class PlayerRuntimeController(
     }
 
     fun onCleared() {
+        cinemaSourceRecoveryJob?.cancel()
         playerSession.close()
         stopServerPlayback()
         releasePlayer()
