@@ -5,6 +5,7 @@ import org.json.*;
 /** Offline contract check: IDs, catalogue registration and detail collisions. No external services. */
 public final class ProviderCheck {
     public static void main(String[] args) throws Exception {
+        SourcePreparationCheck.main(args);
         JSONObject manifest=CinemaCatalog.manifest();
         if(!manifest.getString("id").equals("app.cinemahall.catalog"))throw new AssertionError("Provider identity");
         JSONArray catalogs=manifest.getJSONArray("catalogs");

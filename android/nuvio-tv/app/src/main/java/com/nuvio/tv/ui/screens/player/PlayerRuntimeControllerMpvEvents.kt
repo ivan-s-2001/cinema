@@ -260,8 +260,11 @@ internal fun PlayerRuntimeController.handleMpvPlaybackError(
         lastPlaybackDiagnosticsForReport =
             lastPlaybackDiagnosticsForReport.copy(result = "Error: $detailedError")
 
+        val cinemaSourceFailure = CinemaPlaybackPolicy.isProvider(currentStreamUrl) &&
+            (httpCode != null || mpvErrorCode == MPV_ERROR_LOADING_FAILED || source in listOf("startup_stall", "startup_absolute", "idle_active"))
+        if (cinemaSourceFailure && recoverCinemaSource()) return
         val startupFailed = !hasRenderedFirstFrame
-        if (startupFailed &&
+        if (!cinemaSourceFailure && startupFailed &&
             maybeAutoSwitchInternalPlayerOnStartupError(
                 detailedError = detailedError,
                 allowEngineFailover = allowEngineFailover
@@ -275,7 +278,7 @@ internal fun PlayerRuntimeController.handleMpvPlaybackError(
         } else {
             mpvView?.currentPositionMs()?.coerceAtLeast(0L) ?: 0L
         }
-        val retryCanHelp = httpCode == null || !isPermanentHttpStatus(httpCode)
+        val retryCanHelp = !cinemaSourceFailure && (httpCode == null || !isPermanentHttpStatus(httpCode))
         if (retryCanHelp && attemptMpvAutoRetry(detailedError = detailedError, savedPosition = savedPosition)) return
 
         finishLoadingDiagnostics("mpv_error")

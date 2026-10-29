@@ -22,9 +22,13 @@ final class Net {
         return requestUntil(url,body,limit,apiKey,System.nanoTime()+TimeUnit.SECONDS.toNanos(25));
     }
     static byte[] requestUntil(String url, JSONObject body, int limit, String apiKey, long deadline) throws Exception {
+        return requestUntil(url,body,limit,apiKey,deadline,true);
+    }
+    static byte[] requestUntil(String url, JSONObject body, int limit, String apiKey, long deadline, boolean followRedirects) throws Exception {
         long remaining=deadline-System.nanoTime();
         if(remaining<=0)throw new SocketTimeoutException("Video preparation timed out");
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        c.setInstanceFollowRedirects(followRedirects && apiKey.isEmpty());
         int timeout=(int)Math.min(15000,Math.max(1,TimeUnit.NANOSECONDS.toMillis(remaining)));
         c.setConnectTimeout(Math.min(10000,timeout)); c.setReadTimeout(timeout);
         ScheduledFuture<?> cancellation=deadlines.schedule(c::disconnect,remaining,TimeUnit.NANOSECONDS);
@@ -41,6 +45,7 @@ final class Net {
             }
             int status = c.getResponseCode();
             if (status < 200 || status >= 300) throw new IOException("Сервер ответил HTTP " + status);
+            if(c.getContentLengthLong()>limit)throw new IOException("Слишком большой ответ сервера");
             try (InputStream in = c.getInputStream(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
                 byte[] buf = new byte[8192]; int n;
                 while ((n = in.read(buf)) != -1) {

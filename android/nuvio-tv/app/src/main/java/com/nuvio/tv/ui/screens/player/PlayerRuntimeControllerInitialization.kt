@@ -1620,8 +1620,11 @@ internal fun PlayerRuntimeController.initializePlayer(
                             return
                         }
 
+                        // A failed local source needs another source before an engine retry.
+                        val cinemaSourceFailure = CinemaPlaybackPolicy.isProvider(currentStreamUrl) && error.errorCode in 2000..2999
+                        if (cinemaSourceFailure && recoverCinemaSource()) return
                         // ── Main Engine Failover ──
-                        if (maybeAutoSwitchInternalPlayerOnStartupError(detailedError = detailedError, allowEngineFailover = allowEngineFailover)) {
+                        if (!cinemaSourceFailure && maybeAutoSwitchInternalPlayerOnStartupError(detailedError = detailedError, allowEngineFailover = allowEngineFailover)) {
                             return
                         }
                         if (attemptAutoRetry(error, detailedError)) {

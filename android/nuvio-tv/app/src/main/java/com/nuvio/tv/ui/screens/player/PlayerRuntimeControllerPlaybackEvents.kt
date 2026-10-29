@@ -332,6 +332,7 @@ internal fun isShortPlaceholderDuration(duration: Long): Boolean = duration in 1
 internal fun PlayerRuntimeController.startProgressUpdates() {
     progressJob?.cancel()
     progressJob = scope.launch {
+        val cinemaBufferWatchdog = CinemaBufferWatchdog()
         while (isActive) {
             if (isUsingMpvEngine()) {
                 val view = mpvView
@@ -399,6 +400,20 @@ internal fun PlayerRuntimeController.startProgressUpdates() {
                         hasFatalError = !_uiState.value.error.isNullOrBlank(),
                         durationMs = effectiveDuration
                     )
+                    val cinemaBufferTimedOut = cinemaBufferWatchdog.timedOut(
+                        android.os.SystemClock.elapsedRealtime(),
+                        waiting = CinemaPlaybackPolicy.isProvider(currentStreamUrl) && firstFrameReady && cacheBuffering &&
+                            !isInBackground && !userPausedManually && !naturalEnded && !view.isLiveStreamNow() &&
+                            pendingSourceSwitchPositionMs == null && _uiState.value.pendingSeekPosition == null,
+                        bufferedPosition = pos + (view.demuxerCacheDurationSec() * 1000.0).toLong()
+                    )
+                    if (cinemaBufferTimedOut) {
+                        if (recoverCinemaSource()) return@launch
+                        view.setPaused(true)
+                        _uiState.update { it.copy(error = "Источник не передаёт видео. Попробуйте другое качество или озвучку.",
+                            isBuffering = false, showLoadingOverlay = false, showControls = true) }
+                        return@launch
+                    }
                     val wasEnded = _uiState.value.playbackEnded
                     _uiState.update { state ->
                         state.copy(
@@ -1810,6 +1825,10 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
             scheduleHideControls()
         }
         PlayerEvent.OnRetry -> {
+            if (CinemaPlaybackPolicy.isProvider(currentStreamUrl)) {
+                if (!recoverCinemaSource(manual = true)) showSourcesPanel()
+                return
+            }
             hasRenderedFirstFrame = false
             endDetectionArmed = false
             mpvEofSeenClear = false
