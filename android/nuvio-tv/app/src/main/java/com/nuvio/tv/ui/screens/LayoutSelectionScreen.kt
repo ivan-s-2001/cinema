@@ -48,7 +48,6 @@ import com.nuvio.tv.domain.model.HomeLayout
 import com.nuvio.tv.ui.components.ClassicLayoutPreview
 import com.nuvio.tv.ui.components.GridLayoutPreview
 import com.nuvio.tv.ui.components.ModernLayoutPreview
-import com.nuvio.tv.ui.screens.settings.LayoutSettingsEvent
 import com.nuvio.tv.ui.screens.settings.LayoutSettingsViewModel
 import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.R
@@ -58,12 +57,12 @@ fun LayoutSelectionScreen(
     viewModel: LayoutSettingsViewModel = hiltViewModel(),
     onContinue: () -> Unit
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val savedLayout by viewModel.selectedLayout.collectAsState()
     var selectedLayout by remember { mutableStateOf(HomeLayout.MODERN) }
     val continueFocusRequester = remember { FocusRequester() }
 
-    LaunchedEffect(uiState.selectedLayout) {
-        selectedLayout = uiState.selectedLayout
+    LaunchedEffect(savedLayout) {
+        selectedLayout = savedLayout
     }
 
     LaunchedEffect(Unit) {
@@ -131,7 +130,7 @@ fun LayoutSelectionScreen(
             // Continue button
             Button(
                 onClick = {
-                    viewModel.onEvent(LayoutSettingsEvent.SelectLayout(selectedLayout))
+                    viewModel.selectLayout(selectedLayout)
                     onContinue()
                 },
                 modifier = Modifier

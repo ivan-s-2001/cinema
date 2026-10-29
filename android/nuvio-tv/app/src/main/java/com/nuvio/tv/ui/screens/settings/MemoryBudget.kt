@@ -6,7 +6,7 @@ import com.nuvio.tv.data.local.PlayerSettings
 
 /**
  * Shared memory budget constants and helpers for buffer + parallel connection settings.
- * Used by both PlaybackSettingsViewModel and PlaybackBufferNetworkSettings UI.
+ * Shared by the native player and trailer player when choosing memory limits.
  */
 @UnstableApi
 object MemoryBudget {

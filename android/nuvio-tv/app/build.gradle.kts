@@ -554,8 +554,7 @@ dependencies {
     // Markdown rendering
     implementation(libs.markdown.renderer.m3)
 
-    // QR code + local server for addon management
-    implementation(libs.nanohttpd)
+    // QR encoding retained by the remaining native UI.
     implementation(libs.zxing.core)
 
 

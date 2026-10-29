@@ -31,14 +31,6 @@ public final class ProviderCheck {
         JSONArray missing=new JSONArray().put(new JSONObject());
         CinemaCatalog.fillEpisodeArtwork(missing,"https://example.org/poster.jpg","https://example.org/poster.jpg");
         if(missing.getJSONObject(0).has("thumbnail"))throw new AssertionError("Portrait cannot be used as episode still");
-        java.util.List<?> cacheKey=java.util.Arrays.asList("361","S1E1");
-        java.util.ArrayList<Sources.Candidate> candidates=new java.util.ArrayList<>();
-        candidates.add(new Sources.Candidate(new JSONObject().put("torrent_download_link","magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567")));
-        Sources.remember(cacheKey,candidates,1000);
-        java.util.ArrayList<Sources.Candidate> cached=Sources.cached(cacheKey,2000);
-        if(cached==null||cached.size()!=1)throw new AssertionError("Playback search should reuse its recent results");
-        cached.clear();
-        if(Sources.cached(cacheKey,2000).size()!=1||Sources.cached(cacheKey,181001)!=null)throw new AssertionError("Cache must isolate lists and expire");
         JSONObject metadata=new JSONObject();
         CinemaSnapshot.appendMetadata(metadata,new JSONObject().put("ids",new JSONObject().put("imdb","tt1234567"))
             .put("runtimeMinutes",125).put("genres",new JSONArray().put("драма"))
@@ -63,15 +55,6 @@ public final class ProviderCheck {
             .put(new JSONObject().put("Source","Metacritic").put("Value","88/100"))));
         JSONArray extraRatings=more.getJSONArray("cinemaRatings");
         if(extraRatings.length()!=3||!extraRatings.getJSONObject(0).getString("source").equals("shikimori")||extraRatings.getJSONObject(1).getDouble("value")!=94||extraRatings.getJSONObject(2).getDouble("value")!=88)throw new AssertionError("Shikimori and OMDb ratings must retain their own scale");
-        JSONObject artResult=new JSONObject();
-        JSONObject art=new JSONObject().put("poster", "https://example.org/poster.jpg")
-            .put("backdrop", "https://example.org/poster.jpg")
-            .put("backdrops",new JSONArray().put(JSONObject.NULL).put("invalid").put("https://example.org/poster.jpg").put("https://example.org/wide.jpg"));
-        KinoApi.enrich(artResult,new JSONObject().put("images",art),false);
-        if(!artResult.getString("background").equals("https://example.org/wide.jpg"))throw new AssertionError("Skip invalid/portrait backdrop candidates");
-        art.remove("backdrops");artResult=new JSONObject();
-        KinoApi.enrich(artResult,new JSONObject().put("images",art),false);
-        if(artResult.has("background"))throw new AssertionError("Poster cannot become background");
         if(!Logic.voiceKey("Lost Film многоголосый").equals(Logic.voiceKey("LostFilm"))||Logic.voiceKey("LostFilm / NovaFilm").equals(Logic.voiceKey("LostFilm")))throw new AssertionError("Normalize one studio without merging multiple studios");
         if(Logic.voiceKey("LostFilm / Jaskier").equals(Logic.voiceKey("LostFilm")))throw new AssertionError("Unknown second studio must not disappear");
         Sources.Candidate dv=new Sources.Candidate(new JSONObject().put("resolution","2160p").put("translate_info","LostFilm").put("name","Film 2160p Dolby Vision"));

@@ -145,22 +145,16 @@ sealed class Screen(val route: String) {
     data object Discover : Screen("discover")
     data object Library : Screen("library")
     data object Settings : Screen("settings")
-    data object Tracking : Screen("trakt")
     data object WatchParty : Screen("watch_party?code={code}") {
         fun createRoute(code: String = ""): String = "watch_party?code=$code"
     }
-    data object TmdbSettings : Screen("tmdb_settings")
-    data object ThemeSettings : Screen("theme_settings")
-    data object PlaybackSettings : Screen("playback_settings")
     data object About : Screen("about")
-    data object SupportersContributors : Screen("supporters_contributors")
     data object LicensesAttributions : Screen("licenses_attributions")
     data object AddonManager : Screen("addon_manager")
     data object CatalogOrder : Screen("catalog_order")
     data object Plugins : Screen("plugins")
     data object ExperienceModeSelection : Screen("experience_mode_selection")
     data object LayoutSelection : Screen("layout_selection")
-    data object LayoutSettings : Screen("layout_settings")
     data object Account : Screen("account")
     data object ManageProfiles : Screen("manage_profiles")
     data object AuthSignIn : Screen("auth_sign_in")

@@ -2,12 +2,12 @@
 
 ## Nuvio TV and Nuvio Mobile
 
-The native interfaces and players are the original Nuvio applications, adapted through checked-in patches rather than recreated screens.
+The native interfaces and players are the original Nuvio applications, adapted in the checked-in source trees.
 
 - https://github.com/NuvioMedia/NuvioTV — revision c3f68d84a5e0ec8fea7a027443a9beca50d32c31, GPL-3.0.
 - https://github.com/NuvioMedia/NuvioMobile — revision 61658f366f985fc7758f0942a14c1754c69aca68, GPL-3.0.
 
-Each upstream retains its licence, authorship and dependency notices in its submodule. Nuvio's optional cloud/API services are not supplied as CinemaHall services. Source and integration changes remain available under GPL-3.0.
+The vendored sources retain their licences, authorship and dependency notices. Nuvio's optional cloud/API services are not supplied as CinemaHall services. Source and integration changes remain available under GPL-3.0.
 
 ## TorrServer
 

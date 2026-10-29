@@ -87,29 +87,6 @@ foreach ($BuildTarget in $BuildTargets) {
     $AppRoot = Join-Path $RepoRoot ('android\' + $ProjectName)
     Write-Host "Preparing $ProjectName" -ForegroundColor Cyan
     if (-not (Test-Path (Join-Path $AppRoot 'gradlew.bat'))) { throw "Missing vendored $ProjectName sources" }
-    $Patch = Join-Path $RepoRoot ('android\' + $ProjectName + '.patch')
-    $Patches = @($Patch)
-    $LocalPatch = Join-Path $RepoRoot ('android\' + $ProjectName + '-local.patch')
-    if (Test-Path $LocalPatch) { $Patches += $LocalPatch }
-    $BuildPatch = Join-Path $RepoRoot ('android\' + $ProjectName + '-build.patch')
-    if (Test-Path $BuildPatch) { $Patches += $BuildPatch }
-    $ArtworkPatch = Join-Path $RepoRoot ('android\' + $ProjectName + '-artwork.patch')
-    if (Test-Path $ArtworkPatch) { $Patches += $ArtworkPatch }
-    if (Test-Path (Join-Path $RepoRoot '.gitmodules')) {
-    foreach ($Patch in $Patches) {
-        $ErrorActionPreference = 'Continue'
-        try {
-            git -C $AppRoot apply --reverse --check $Patch 2>$null
-            $AlreadyApplied = ($LASTEXITCODE -eq 0)
-            git -C $AppRoot apply --check $Patch 2>$null
-            $CanApply = ($LASTEXITCODE -eq 0)
-        } finally { $ErrorActionPreference = 'Stop' }
-        if (-not $AlreadyApplied) {
-            if (-not $CanApply) { throw "$ProjectName contains local changes. They were preserved; the integration patch could not be applied." }
-            Invoke-Checked { git -C $AppRoot apply $Patch }
-        }
-    }
-    }
     $PropertiesPath = Join-Path $AppRoot 'local.properties'
     $ExistingProperties = if (Test-Path $PropertiesPath) { @(Get-Content -LiteralPath $PropertiesPath) } else { @() }
     $Properties = @($ExistingProperties | Where-Object { $_ -notmatch '^\s*sdk\.dir\s*=' }) + ('sdk.dir=' + $SdkRoot.Replace('\','/'))

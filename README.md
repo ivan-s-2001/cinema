@@ -4,9 +4,9 @@ CinemaHall currently develops and ships **Android TV** on the Nuvio native inter
 
 - `android/nuvio-tv` — Nuvio Android TV, pinned to `c3f68d84a5e0ec8fea7a027443a9beca50d32c31`.
 - `android/nuvio-mobile` — Nuvio Mobile / Compose Multiplatform, pinned to `61658f366f985fc7758f0942a14c1754c69aca68`.
-- `android/nuvio-tv.patch`, `android/nuvio-mobile.patch` — CinemaHall branding, separate package identities, our built-in provider, and build integration. Upstream screens, profiles, library, playback and extension support remain in the upstream projects.
+- Both Nuvio trees are ordinary vendored sources with CinemaHall integration applied directly. Build preparation validates them and configures the SDK; it never downloads or reapplies upstream sources.
 - `android/provider` — **our** catalogue, metadata, search and playback API, shared by both apps.
-- `android/core` — our Zona/KinoAPI/Cinemeta/TVmaze adapters, source grouping, matching and embedded TorrServer.
+- `android/core` — playback grouping, matching, legacy cached artwork and embedded TorrServer. Live catalogue, metadata and source discovery are handled by our backend API.
 - `scripts/build_catalog.py` — our multi-API metadata aggregation pipeline (KinoAPI, optional TMDB, AniList, Cinemeta, TVmaze).
 
 The Electron-based Streambert shell and the text-only Android Preview are no longer application entry points. GPL notices and upstream source history are preserved. See [THIRD_PARTY.md](THIRD_PARTY.md).
@@ -15,11 +15,11 @@ The Electron-based Streambert shell and the text-only Android Preview are no lon
 
 The built-in provider is registered automatically, including for new local profiles. It supplies our home shelves, all-language search, title metadata, seasons/episodes and quality/voice choices through the clients' normal add-on contract. It is available on loopback only (`127.0.0.1:18991` for TV, `18992` for mobile); no server installation or manual manifest entry is required.
 
-If `android/core/app/src/main/assets/catalog/` contains our generated snapshot, the clients read that multi-API catalogue and load detail shards on demand. The snapshot preserves stable source IDs and collision suffixes. Without a bundled snapshot, live Zona is the catalogue fallback; opened titles can be enriched by our existing metadata adapters. We do not pass Kinopoisk IDs off as IMDb/TMDB IDs. A metadata voice label never becomes a playable track on its own.
+The TV reads catalogue, search, metadata and source candidates from CinemaHall API. A generated snapshot can preserve previously bundled metadata as a fallback. The client does not perform its own live Zona/KinoAPI/Cinemeta/TVmaze searches. Stable namespaced IDs remain intact.
 
 Playback uses our source resolver and embedded TorrServer MatriX.147.1, then passes the prepared HTTP video stream to the native Nuvio player. Source failures during preparation try up to four eligible alternatives of the selected quality/voice. Resolution/voice labels are provider claims until the actual media is inspected. HDR/Dolby Vision, 4K playback, focus behavior and memory usage still require device testing.
 
-Nuvio's optional third-party account/integration screens are retained, but CinemaHall does not inherit upstream backend credentials or service access. Use local storage mode for the base scenario; cloud sync, external accounts and integrations require their own configuration. Core catalogue playback does not require a Nuvio account. Source setup is not implied to be included merely because a settings screen exists.
+The current TV interface exposes local profiles, our catalogue, saved titles, playback and four settings sections: profiles, appearance, playback and about. Retired account, debrid, tracking, cloud-file-library and advanced-settings screens are removed, together with their unused web configuration servers. Shared runtime components still used by profiles, metadata contracts and the player remain until their callers can be removed safely.
 
 ## Windows: build and install on TV
 
@@ -42,16 +42,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-tv.ps1 -Ta
 TV output: `android/nuvio-tv/app/build/outputs/apk/full/debug/`.
 Package: `app.cinemahall.tv`. The local debug signing key lets subsequent builds on the same PC update without deleting data. APKs signed with a different key cannot replace it directly.
 
-The first TV build is substantial: Gradle 8.13 / Android SDK 36. The wrapper distribution hashes are pinned. The script accepts Android SDK licences. Features have not been removed to claim a small APK; device RAM/scroll performance must be measured.
+The first TV build is substantial: Gradle 8.13 / Android SDK 36. The wrapper distribution hashes are pinned. The script accepts Android SDK licences. Source deletion counts do not measure APK size or TV performance; device RAM/scroll performance must be measured.
 
 ## CI and local checks
 
-`.github/workflows/android.yml` compiles, tests and packages Android TV only. If the existing `KINOAPI_KEY` secret is available, a preceding job generates a multi-API snapshot and bundles it into the TV APK. API keys do not enter the JSON or APK. Without a key, both use the live fallback.
+`.github/workflows/android.yml` compiles, tests and packages Android TV only. If the existing `KINOAPI_KEY` secret is available, a preceding job generates a multi-API snapshot and bundles it into the TV APK. API keys do not enter the JSON or APK. Without a key, the TV uses the CinemaHall API.
 
 ```bash
-python scripts/prepare_nuvio.py --target both
+python scripts/prepare_nuvio.py --target tv
 python scripts/fetch_engine.py
 python -m unittest discover -s tests -p 'test_catalog_builder.py'
+python -m unittest discover -s tests -p 'test_prepare_nuvio.py'
 node --test tests/test_catalog_client.mjs
 ```
 
