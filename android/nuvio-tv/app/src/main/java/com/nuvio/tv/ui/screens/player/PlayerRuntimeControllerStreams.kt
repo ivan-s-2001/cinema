@@ -151,7 +151,7 @@ internal fun PlayerRuntimeController.showSourcesPanel() {
             showEpisodeStreams = false
         )
     }
-    loadSourceStreams(forceRefresh = false)
+    loadSourceStreams(forceRefresh = CinemaPlaybackPolicy.isProvider(currentStreamUrl))
 }
 
 internal fun PlayerRuntimeController.buildSourceRequestKey(type: String, videoId: String, season: Int?, episode: Int?): String {

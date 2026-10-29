@@ -1586,8 +1586,10 @@ internal fun PlayerRuntimeController.initializePlayer(
                             if (tryNextAudioFallbackStep(currentPosition)) return
                         }
 
+                        val cinemaSourceFailure = CinemaPlaybackPolicy.isProvider(currentStreamUrl) && error.errorCode in 2000..2999
+                        if (cinemaSourceFailure && recoverCinemaSource()) return
                         val timeoutError = error.findCause<SocketTimeoutException>()
-                        if (timeoutError != null && timeoutRecoveryAttempts < PlayerRuntimeController.MAX_TIMEOUT_RECOVERY_ATTEMPTS) {
+                        if (!cinemaSourceFailure && timeoutError != null && timeoutRecoveryAttempts < PlayerRuntimeController.MAX_TIMEOUT_RECOVERY_ATTEMPTS) {
                             retryCurrentStreamAfterTimeout(currentPosition)
                             return
                         }
@@ -1605,12 +1607,12 @@ internal fun PlayerRuntimeController.initializePlayer(
                         }
 
                         val responseCode = (error.cause as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.responseCode
-                        if (responseCode == 416 && !hasRetriedCurrentStreamAfter416) {
+                        if (!cinemaSourceFailure && responseCode == 416 && !hasRetriedCurrentStreamAfter416) {
                             retryCurrentStreamFromStartAfter416()
                             return
                         }
 
-                        if (tryParsingErrorProbeFallback(
+                        if (!cinemaSourceFailure && tryParsingErrorProbeFallback(
                             error = error,
                             detailedError = detailedError,
                             allowEngineFailover = allowEngineFailover,
@@ -1621,8 +1623,6 @@ internal fun PlayerRuntimeController.initializePlayer(
                         }
 
                         // A failed local source needs another source before an engine retry.
-                        val cinemaSourceFailure = CinemaPlaybackPolicy.isProvider(currentStreamUrl) && error.errorCode in 2000..2999
-                        if (cinemaSourceFailure && recoverCinemaSource()) return
                         // ── Main Engine Failover ──
                         if (!cinemaSourceFailure && maybeAutoSwitchInternalPlayerOnStartupError(detailedError = detailedError, allowEngineFailover = allowEngineFailover)) {
                             return
