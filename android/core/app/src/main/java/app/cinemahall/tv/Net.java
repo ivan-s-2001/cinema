@@ -8,7 +8,6 @@ import java.util.concurrent.*;
 
 final class Net {
     private static final ScheduledExecutorService deadlines=Executors.newSingleThreadScheduledExecutor(r->{Thread t=new Thread(r,"cinemahall-network-deadlines");t.setDaemon(true);return t;});
-    static final String CATALOG = "https://zsolr3.zonasearch.com/solr/";
     static int ENGINE_PORT = 18990;
     static String ENGINE = "http://127.0.0.1:18990";
     static String enc(String s) {
@@ -78,10 +77,6 @@ final class Net {
     static JSONObject json(String url, String apiKey) throws Exception {
         byte[] bytes = request(url, null, 8 * 1024 * 1024, apiKey);
         return new JSONObject(new String(bytes, StandardCharsets.UTF_8));
-    }
-    static JSONObject select(String core, String query, String sort, int start, int rows, String fields) throws Exception {
-        return json(CATALOG + core + "/select?wt=json&q=" + enc(query) + "&sort=" + enc(sort)
-            + "&start=" + start + "&rows=" + rows + "&fl=" + enc(fields), (JSONObject) null).getJSONObject("response");
     }
     static JSONObject action(String path, String action) throws Exception {
         return json(ENGINE + path, new JSONObject().put("action", action));

@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -31,7 +30,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -43,7 +41,6 @@ import com.nuvio.tv.R
 
 @Composable
 fun AboutScreen(
-    onNavigateToSupportersContributors: () -> Unit = {},
     onNavigateToLicensesAttributions: () -> Unit = {},
     onBackPress: () -> Unit = {}
 ) {
@@ -54,7 +51,6 @@ fun AboutScreen(
         subtitle = stringResource(R.string.about_subtitle)
     ) {
         AboutSettingsContent(
-            onNavigateToSupportersContributors = onNavigateToSupportersContributors,
             onNavigateToLicensesAttributions = onNavigateToLicensesAttributions
         )
     }
@@ -62,7 +58,6 @@ fun AboutScreen(
 
 @Composable
 fun AboutSettingsContent(
-    onNavigateToSupportersContributors: () -> Unit = {},
     onNavigateToLicensesAttributions: () -> Unit = {},
     initialFocusRequester: FocusRequester? = null
 ) {

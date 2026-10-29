@@ -17,14 +17,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
-import com.nuvio.tv.core.build.AppFeaturePolicy
 import com.nuvio.tv.core.party.PartyMedia
 import com.nuvio.tv.domain.model.ExperienceMode
 import com.nuvio.tv.data.mediaserver.ServerCatalog
@@ -42,14 +40,8 @@ import com.nuvio.tv.ui.screens.party.PartyScreen
 import com.nuvio.tv.ui.screens.search.DiscoverScreen
 import com.nuvio.tv.ui.screens.search.SearchScreen
 import com.nuvio.tv.ui.screens.settings.AboutScreen
-import com.nuvio.tv.ui.screens.settings.LayoutSettingsScreen
 import com.nuvio.tv.ui.screens.settings.LicensesAttributionsScreen
-import com.nuvio.tv.ui.screens.settings.PlaybackSettingsScreen
 import com.nuvio.tv.ui.screens.settings.SettingsScreen
-import com.nuvio.tv.ui.screens.settings.SupportersContributorsScreen
-import com.nuvio.tv.ui.screens.settings.ThemeSettingsScreen
-import com.nuvio.tv.ui.screens.settings.TrackingSettingsScreen
-import com.nuvio.tv.ui.screens.settings.TmdbSettingsScreen
 import com.nuvio.tv.ui.screens.stream.StreamScreen
 import com.nuvio.tv.ui.screens.home.ContinueWatchingItem
 import com.nuvio.tv.ui.screens.cast.CastDetailScreen
@@ -1213,30 +1205,6 @@ private fun PlaybackNavHost(
                 showBuiltInHeader = !hideBuiltInHeaders,
                 onNavigateToDetail = { itemId, itemType, addonBaseUrl ->
                     navController.navigate(Screen.Detail.createRoute(itemId, itemType, addonBaseUrl))
-                },
-                onNavigateToCatalogSeeAll = { catalogId, addonId, type ->
-                    navController.navigate(Screen.CatalogSeeAll.createRoute(catalogId, addonId, type))
-                },
-                onCloudPlaybackResolved = { info ->
-                    val filename = info.filename ?: info.file.name
-                    navController.navigate(
-                        Screen.Player.createRoute(
-                            streamUrl = info.url,
-                            title = filename,
-                            streamName = filename,
-                            contentType = "cloud",
-                            contentName = info.item.name,
-                            videoId = "${info.item.stableKey}:${info.file.stableKey}",
-                            season = 1,
-                            episode = info.sequenceIndex + 1,
-                            episodeTitle = filename,
-                            filename = filename,
-                            videoSize = info.videoSizeBytes,
-                            addonName = info.item.providerName,
-                            streamDescription = info.item.name,
-                            cloudSessionToken = info.sessionToken
-                        )
-                    )
                 }
             )
         }
@@ -1244,17 +1212,10 @@ private fun PlaybackNavHost(
         composable(Screen.Settings.route) {
             SettingsScreen(
                 showBuiltInHeader = !hideBuiltInHeaders,
-                onNavigateToAddons = {},
-                onNavigateToPlugins = {},
-                onNavigateToAuthQrSignIn = { navController.navigate(Screen.ManageProfiles.route) },
                 onNavigateToManageProfiles = { navController.navigate(Screen.ManageProfiles.route) },
-                onNavigateToSupportersContributors = {
-                    navController.navigate(Screen.SupportersContributors.route)
-                },
                 onNavigateToLicensesAttributions = {
                     navController.navigate(Screen.LicensesAttributions.route)
-                },
-                onNavigateToWatchParty = { navController.navigate(Screen.WatchParty.createRoute()) }
+                }
             )
         }
 
@@ -1282,48 +1243,13 @@ private fun PlaybackNavHost(
             )
         }
 
-        composable(Screen.Tracking.route) {
-            TrackingSettingsScreen(
-                onBackPress = { navController.popBackStack() }
-            )
-        }
-
-        composable(Screen.TmdbSettings.route) {
-            TmdbSettingsScreen(
-                onBackPress = { navController.popBackStack() }
-            )
-        }
-
-        composable(Screen.ThemeSettings.route) {
-            ThemeSettingsScreen(
-                onBackPress = { navController.popBackStack() }
-            )
-        }
-
-        composable(Screen.PlaybackSettings.route) {
-            PlaybackSettingsScreen(
-                onBackPress = { navController.popBackStack() }
-            )
-        }
-
         composable(Screen.About.route) {
             AboutScreen(
                 onBackPress = { navController.popBackStack() },
-                onNavigateToSupportersContributors = {
-                    navController.navigate(Screen.SupportersContributors.route)
-                },
                 onNavigateToLicensesAttributions = {
                     navController.navigate(Screen.LicensesAttributions.route)
                 }
             )
-        }
-
-        if (AppFeaturePolicy.supportNuvioEnabled) {
-            composable(Screen.SupportersContributors.route) {
-                SupportersContributorsScreen(
-                    onBackPress = { navController.popBackStack() }
-                )
-            }
         }
 
         composable(Screen.LicensesAttributions.route) {
@@ -1369,12 +1295,6 @@ private fun PlaybackNavHost(
                     navController.navigate(Screen.Detail.createRoute(itemId, itemType, addonBaseUrl, heroBackdropUrl = heroBackdrop))
                 },
                 onBack = { navController.popBackStack() }
-            )
-        }
-
-        composable(Screen.LayoutSettings.route) {
-            LayoutSettingsScreen(
-                onBackPress = { navController.popBackStack() }
             )
         }
 
