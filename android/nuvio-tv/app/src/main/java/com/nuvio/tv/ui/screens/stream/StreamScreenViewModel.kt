@@ -6,11 +6,9 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.R
-import com.nuvio.tv.core.debrid.DebridStreamPresentation
 import com.nuvio.tv.core.debrid.DirectDebridResolveResult
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.debrid.DirectDebridStreamPreparer
-import com.nuvio.tv.core.plugin.PluginManager
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.torrent.TorrentSettings
 import com.nuvio.tv.core.torrent.TorrentService
@@ -24,13 +22,11 @@ import com.nuvio.tv.core.tracking.TrackingScrobbleCoordinator
 import com.nuvio.tv.core.tracking.TrackingScrobbleEvent
 import com.nuvio.tv.core.tracking.buildTrackingMediaReference
 import com.nuvio.tv.core.util.parseRuntimeMinutes
-import com.nuvio.tv.core.streams.StreamBadgePresentation
 import com.nuvio.tv.core.streams.YouTubeStreamResolver
 import com.nuvio.tv.data.local.PlayerPreference
 import com.nuvio.tv.data.local.PlayerSettings
 import com.nuvio.tv.data.local.PlayerSettingsDataStore
 import com.nuvio.tv.data.local.StreamAutoPlayMode
-import com.nuvio.tv.data.local.StreamBadgeSettingsDataStore
 import com.nuvio.tv.data.local.StreamLinkCacheDataStore
 import com.nuvio.tv.data.local.BingeGroupCacheDataStore
 import com.nuvio.tv.data.mediaserver.ServerPlayback
@@ -48,8 +44,6 @@ import com.nuvio.tv.domain.repository.AddonRepository
 import com.nuvio.tv.domain.repository.MetaRepository
 import com.nuvio.tv.domain.repository.StreamRepository
 import com.nuvio.tv.domain.repository.WatchProgressRepository
-import com.nuvio.tv.ui.components.SourceChipItem
-import com.nuvio.tv.ui.components.SourceChipStatus
 import com.nuvio.tv.ui.screens.player.StreamSidecarSubtitles
 import com.nuvio.tv.ui.util.localizedGenreLabel
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -65,7 +59,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -76,26 +69,21 @@ import javax.inject.Inject
 
 private const val TAG = "StreamScreenViewModel"
 private const val DIRECT_AUTOPLAY_HARD_TIMEOUT_MS = 60_000L
-private const val STREAM_FILTER_PAGE_SIZE = 100
 
 @HiltViewModel
 class StreamScreenViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val streamRepository: StreamRepository,
     private val addonRepository: AddonRepository,
-    private val pluginManager: PluginManager,
     private val metaRepository: MetaRepository,
     private val playerSettingsDataStore: PlayerSettingsDataStore,
     private val streamLinkCacheDataStore: StreamLinkCacheDataStore,
-    private val streamBadgePresentation: StreamBadgePresentation,
-    streamBadgeSettingsDataStore: StreamBadgeSettingsDataStore,
     private val bingeGroupCacheDataStore: BingeGroupCacheDataStore,
     private val torrentSettings: TorrentSettings,
     private val watchProgressRepository: WatchProgressRepository,
     private val trackingScrobbleCoordinator: TrackingScrobbleCoordinator,
     private val directDebridResolver: DirectDebridResolver,
     private val directDebridStreamPreparer: DirectDebridStreamPreparer,
-    private val debridStreamPresentation: DebridStreamPresentation,
     private val youTubeStreamResolver: YouTubeStreamResolver,
     private val externalPlaybackTracker: com.nuvio.tv.core.player.ExternalPlaybackTracker,
     private val subtitleRepository: com.nuvio.tv.domain.repository.SubtitleRepository,
@@ -103,7 +91,6 @@ class StreamScreenViewModel @Inject constructor(
     private val torrentService: TorrentService,
     private val serverStreams: ServerStreams,
     private val serverPlayback: ServerPlayback,
-    party: com.nuvio.tv.core.party.PartyRepository,
     profileManager: com.nuvio.tv.core.profile.ProfileManager,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -114,13 +101,7 @@ class StreamScreenViewModel @Inject constructor(
     private var streamLoadJob: Job? = null
     private var streamLoadScope: kotlinx.coroutines.CoroutineScope? = null
     private var streamLoadCompleted = false
-    private var sourceChipErrorDismissJob: Job? = null
     private var pendingCacheSaveJob: Job? = null
-    private var streamBadgePresentationJob: Job? = null
-    private var streamFilterExpandJob: Job? = null
-    private var streamFilterFullList: List<Stream> = emptyList()
-    private var streamBadgePresentationRequestId = 0L
-    private var badgedAddonNames: Set<String> = emptySet()
     private var playbackMetaVideos: List<Video>? = null
 
     private val embeddedStreamGroupName: String by lazy {
@@ -151,32 +132,6 @@ class StreamScreenViewModel @Inject constructor(
         videoId, savedStateHandle.get<String>("manualSelection")?.toBooleanStrictOrNull() ?: false
     )
     private val streamCacheKey: String = "${contentType.lowercase()}|$videoId"
-    private val partyKey: String = com.nuvio.tv.core.party.partyMediaKey(
-        metaType = contentType,
-        metaId = contentId ?: com.nuvio.tv.core.streams.videoContentId(videoId),
-        season = season,
-        episode = episode
-    )
-
-    val partySource: StateFlow<com.nuvio.tv.core.party.PartySource?> = party.state
-        .map { state -> state.party?.media?.takeIf { it.key == partyKey }?.source }
-        .distinctUntilChanged()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-
-    val sharedStream: StateFlow<SharedStream?> = combine(party.state, party.sharedStream) { state, stream ->
-        val current = state.party
-        if (current == null || current.isHost || stream == null || stream.mediaKey != partyKey) {
-            null
-        } else {
-            SharedStream(
-                hostName = current.member(current.hostMemberId)?.displayName.orEmpty(),
-                stream = stream.toStream()
-            )
-        }
-    }
-        .distinctUntilChanged()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-
     private val _uiState = MutableStateFlow(
         StreamScreenUiState(
             videoId = videoId,
@@ -203,8 +158,6 @@ class StreamScreenViewModel @Inject constructor(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    val streamBadgeSettings = streamBadgeSettingsDataStore.settings
-
     val playerPreference = playerSettingsDataStore.playerSettings
         .map { it.playerPreference }
         .distinctUntilChanged()
@@ -221,69 +174,6 @@ class StreamScreenViewModel @Inject constructor(
         _uiState.update { state ->
             val next = transform(state)
             if (next == state) state else next
-        }
-    }
-
-    private fun scheduleStreamBadgePresentation(groups: List<AddonStreams>) {
-        // Only process addon groups that haven't been badged yet
-        val newGroups = groups.filter { it.addonName !in badgedAddonNames }
-        if (newGroups.isEmpty()) return
-
-        // Don't cancel a running job — let it finish its current addons.
-        // After it completes, it will check for any new addons that arrived.
-        if (streamBadgePresentationJob?.isActive == true) return
-
-        streamBadgePresentationJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
-            // Nothing can match without active filters, so skip rebuilding the
-            // stream lists for every chunk.
-            if (!streamBadgePresentation.hasActiveFilters()) {
-                badgedAddonNames = badgedAddonNames + newGroups.map { it.addonName }.toSet()
-                return@launch
-            }
-            var pending = newGroups
-            while (pending.isNotEmpty()) {
-                val allNewStreams = pending.flatMap { it.streams }
-                val chunks = allNewStreams.chunked(5)
-                for (chunk in chunks) {
-                    ensureActive()
-                    val chunkGroup = AddonStreams(addonName = "", addonLogo = null, streams = chunk)
-                    val badgedChunk = streamBadgePresentation.apply(listOf(chunkGroup))
-                        .firstOrNull()?.streams ?: chunk
-                    ensureActive()
-                    val badgedByKey = badgedChunk.associateBy { it.badgeMergeKey() }
-                    updateUiStateIfChanged { state ->
-                        val updatedAddonStreams = state.addonStreams.map { group ->
-                            group.copy(
-                                streams = group.streams.map { stream ->
-                                    badgedByKey[stream.badgeMergeKey()] ?: stream
-                                }
-                            )
-                        }
-                        val updatedAllStreams = updatedAddonStreams.flatMap { it.streams }
-                        val currentFilter = state.selectedAddonFilter
-                        val fullFiltered = if (currentFilter == null) {
-                            updatedAllStreams
-                        } else {
-                            updatedAllStreams.filter { it.addonName == currentFilter }
-                        }
-                        streamFilterFullList = fullFiltered
-                        val pageEnd = state.filteredStreams.size
-                            .coerceAtLeast(STREAM_FILTER_PAGE_SIZE.coerceAtMost(fullFiltered.size))
-                            .coerceAtMost(fullFiltered.size)
-                        state.copy(
-                            addonStreams = updatedAddonStreams,
-                            allStreams = updatedAllStreams,
-                            filteredStreams = if (pageEnd >= fullFiltered.size) fullFiltered
-                                else fullFiltered.subList(0, pageEnd)
-                        )
-                    }
-                }
-                // Mark processed addons as done
-                badgedAddonNames = badgedAddonNames + pending.map { it.addonName }.toSet()
-                // Check if new addons arrived while we were processing
-                val currentAddons = _uiState.value.addonStreams
-                pending = currentAddons.filter { it.addonName !in badgedAddonNames }
-            }
         }
     }
 
@@ -322,7 +212,6 @@ class StreamScreenViewModel @Inject constructor(
 
     fun onEvent(event: StreamScreenEvent) {
         when (event) {
-            is StreamScreenEvent.OnAddonFilterSelected -> filterByAddon(event.addonName)
             is StreamScreenEvent.OnStreamSelected -> {
                 cancelStreamsLoad()
             }
@@ -348,17 +237,6 @@ class StreamScreenViewModel @Inject constructor(
                     )
                 }
             }
-            StreamScreenEvent.OnRefresh -> {
-                updateUiStateIfChanged {
-                    it.copy(
-                        isLoading = true,
-                        error = null,
-                        selectedAddonFilter = null,
-                        filteredStreams = emptyList()
-                    )
-                }
-                loadStreams(forceRefresh = true)
-            }
             StreamScreenEvent.OnRetry -> loadStreams()
             StreamScreenEvent.OnBackPress -> { /* Handle in screen */ }
             StreamScreenEvent.OnResume -> {
@@ -379,8 +257,6 @@ class StreamScreenViewModel @Inject constructor(
         streamLoadScope?.cancel()
         streamLoadScope = null
         streamLoadJob = null
-        streamBadgePresentationJob?.cancel()
-        streamBadgePresentationRequestId += 1
         updateUiStateIfChanged { it.copy(isLoading = false) }
     }
 
@@ -396,12 +272,6 @@ class StreamScreenViewModel @Inject constructor(
         streamLoadScope?.cancel()
         streamLoadScope = null
         streamLoadJob = null
-        streamBadgePresentationJob?.cancel()
-        streamBadgePresentationRequestId += 1
-        if (forceRefresh || _uiState.value.addonStreams.isEmpty()) {
-            badgedAddonNames = emptySet()
-        }
-        sourceChipErrorDismissJob?.cancel()
         val newScope = kotlinx.coroutines.CoroutineScope(viewModelScope.coroutineContext + kotlinx.coroutines.SupervisorJob())
         streamLoadScope = newScope
         streamLoadJob = newScope.launch {
@@ -519,7 +389,6 @@ class StreamScreenViewModel @Inject constructor(
             }
 
             val isNativeServerRequest = serverStreams.isNativeRequest(videoId)
-            val serverSourceNames = serverStreams.sources(contentType, videoId, season, episode).map { it.name }
             val preferredServerNames = serverStreams.preferredSourceNames(contentType, videoId)
             val installedAddons = if (isNativeServerRequest) {
                 emptyList()
@@ -527,8 +396,6 @@ class StreamScreenViewModel @Inject constructor(
                 addonRepository.getInstalledAddons().first().enabledAddons()
             }
             val installedAddonOrder = installedAddons.map { it.displayName }
-            val directDebridSourceNames = emptyList<String>()
-            val directDebridAvailable = false
             val persistedBingeGroup = if (playerSettings.streamAutoPlayPreferBingeGroupForNextEpisode &&
                 playerSettings.streamAutoPlayReuseBingeGroup) {
                 contentId?.let { bingeGroupCacheDataStore.get(it) }
@@ -547,31 +414,7 @@ class StreamScreenViewModel @Inject constructor(
                     preferredServerNames
                 )
 
-                // Preserve badges already computed by prior badge jobs so they
-                // don't vanish when repository emits fresh (badge-less) streams.
-                val existingBadgedStreams = _uiState.value.allStreams
-                    .filter { it.badges.isNotEmpty() }
-                    .associateBy { it.badgeMergeKey() }
-
-                val mergedAddonStreams = if (existingBadgedStreams.isEmpty()) {
-                    orderedAddonStreams
-                } else {
-                    orderedAddonStreams.map { group ->
-                        group.copy(
-                            streams = group.streams.map { stream ->
-                                val existing = existingBadgedStreams[stream.badgeMergeKey()]
-                                if (existing != null && stream.badges.isEmpty()) {
-                                    stream.copy(badges = existing.badges)
-                                } else {
-                                    stream
-                                }
-                            }
-                        )
-                    }
-                }
-
-                val allStreams = mergedAddonStreams.flatMap { it.streams }
-                val availableAddons = mergedAddonStreams.map { it.addonName }
+                val allStreams = orderedAddonStreams.flatMap { it.streams }
 
                 // Early binge group match: if we have a persisted binge group, try to
                 // match it immediately on every emission without waiting for all addons.
@@ -651,32 +494,11 @@ class StreamScreenViewModel @Inject constructor(
                     resolvedAutoPlayTarget = true
                 }
 
-                val currentFilter = _uiState.value.selectedAddonFilter
-                val fullFiltered = if (currentFilter == null) {
-                    allStreams
-                } else {
-                    allStreams.filter { it.addonName == currentFilter }
-                }
-                streamFilterFullList = fullFiltered
-                val currentPageSize = _uiState.value.filteredStreams.size
-                val isFirstLoad = currentPageSize == 0
-                val paginatedStreams = if (isFirstLoad && fullFiltered.size > STREAM_FILTER_PAGE_SIZE) {
-                    fullFiltered.subList(0, STREAM_FILTER_PAGE_SIZE)
-                } else {
-                    fullFiltered
-                }
-
                 updateUiStateIfChanged {
                     it.copy(
                         isLoading = false,
-                        addonStreams = mergedAddonStreams,
+                        addonStreams = orderedAddonStreams,
                         allStreams = allStreams,
-                        filteredStreams = paginatedStreams,
-                        availableAddons = availableAddons,
-                        sourceChips = mergeSourceChipStatuses(
-                            existing = _uiState.value.sourceChips,
-                            succeededNames = mergedAddonStreams.map { it.addonName }
-                        ),
                         // Preserve an already-resolved stream: the post-collect
                         // "isAllLoaded=true" pass re-runs the selector with
                         // shouldAutoSelect=false once a target is resolved, and
@@ -691,7 +513,6 @@ class StreamScreenViewModel @Inject constructor(
                         }
                     )
                 }
-                scheduleStreamBadgePresentation(mergedAddonStreams)
             }
 
             if (shouldAttemptEmbeddedMetaStreamLookup()) {
@@ -701,7 +522,6 @@ class StreamScreenViewModel @Inject constructor(
                         "Using embedded video streams for videoId=$videoId count=${embeddedAddonStreams.streams.size}"
                     )
                     applySuccess(listOf(embeddedAddonStreams), isAllLoaded = true)
-                    updateSourceChipsForEmbedded(embeddedAddonStreams.addonName)
                     if (directAutoPlayFlowEnabledForSession && !resolvedAutoPlayTarget) {
                         directAutoPlayFlowEnabledForSession = false
                         updateUiStateIfChanged {
@@ -715,19 +535,6 @@ class StreamScreenViewModel @Inject constructor(
                     return@launch
                 }
             }
-
-            val alreadySucceededNames = if (forceRefresh) {
-                emptySet()
-            } else {
-                _uiState.value.addonStreams.mapTo(linkedSetOf()) { it.addonName }
-            }
-            updateSourceChipsForFetchStart(
-                installedAddons = installedAddons,
-                directDebridSourceNames = directDebridSourceNames,
-                serverSourceNames = serverSourceNames,
-                includePlugins = !isNativeServerRequest,
-                alreadySucceededNames = alreadySucceededNames
-            )
 
             var lastSuccessData: List<AddonStreams>? = null
             var autoSelectTriggered = false
@@ -760,21 +567,9 @@ class StreamScreenViewModel @Inject constructor(
                                 val updatedAllStreams = updatedGroups.flatMap { addonStreams ->
                                     addonStreams.streams
                                 }
-                                val currentFilter = state.selectedAddonFilter
-                                val fullFiltered = if (currentFilter == null) {
-                                    updatedAllStreams
-                                } else {
-                                    updatedAllStreams.filter { it.addonName == currentFilter }
-                                }
-                                streamFilterFullList = fullFiltered
-                                val pageEnd = state.filteredStreams.size
-                                    .coerceAtLeast(STREAM_FILTER_PAGE_SIZE.coerceAtMost(fullFiltered.size))
-                                    .coerceAtMost(fullFiltered.size)
                                 state.copy(
                                     addonStreams = updatedGroups,
                                     allStreams = updatedAllStreams,
-                                    filteredStreams = if (pageEnd >= fullFiltered.size) fullFiltered
-                                        else fullFiltered.subList(0, pageEnd)
                                 )
                             }
                         }
@@ -893,7 +688,6 @@ class StreamScreenViewModel @Inject constructor(
                     autoSelectTriggered = true
                     lastSuccessData?.let { applySuccess(it, isAllLoaded = true) }
                 }
-                markRemainingSourceChipsAsError()
                 if (directAutoPlayFlowEnabledForSession && !resolvedAutoPlayTarget) {
                     directAutoPlayFlowEnabledForSession = false
                     // All addons finished with no instant stream to auto-play: drop the loader and
@@ -924,9 +718,7 @@ class StreamScreenViewModel @Inject constructor(
                 delay(timeoutMs)
             }
             timeoutElapsed = true
-            val directDebridLoadedByTimeout = !directDebridAvailable ||
-                lastSuccessData?.any { it.addonName in directDebridSourceNames } == true
-            if (!autoSelectTriggered && lastSuccessData != null && directDebridLoadedByTimeout) {
+            if (!autoSelectTriggered && lastSuccessData != null) {
                 applySuccess(lastSuccessData, isAllLoaded = true)
                 if (resolvedAutoPlayTarget) {
                     autoSelectTriggered = true
@@ -1004,7 +796,6 @@ class StreamScreenViewModel @Inject constructor(
                         }
                         externalPlaybackTracker.releaseAutoNextOverlay(forceRelease = true)
                         streamLoadInner.cancel()
-                        markRemainingSourceChipsAsError()
                     }
                 }
             }
@@ -1036,142 +827,6 @@ class StreamScreenViewModel @Inject constructor(
 
         val canonicalVideoMetaId = com.nuvio.tv.core.streams.videoContentId(videoId)
         return !metaId.equals(canonicalVideoMetaId, ignoreCase = true)
-    }
-
-    private suspend fun updateSourceChipsForFetchStart(
-        installedAddons: List<com.nuvio.tv.domain.model.Addon>,
-        directDebridSourceNames: List<String>,
-        serverSourceNames: List<String>,
-        includePlugins: Boolean,
-        alreadySucceededNames: Set<String> = emptySet()
-    ) {
-        val addonNames = installedAddons
-            .filter { it.supportsStreamResourceForChip(contentType) }
-            .map { it.displayName }
-
-        val pluginNames = try {
-            if (includePlugins && pluginManager.pluginsEnabled.first()) {
-                val groupByRepository = pluginManager.groupStreamsByRepository.first()
-                val scrapers = pluginManager.enabledScrapers.first()
-                    .filter { it.supportsType(contentType) }
-                if (groupByRepository) {
-                    val repositoriesById = pluginManager.repositories.first().associateBy { it.id }
-                    scrapers
-                        .map { scraper ->
-                            repositoriesById[scraper.repositoryId]?.name?.takeIf { it.isNotBlank() } ?: scraper.name
-                        }
-                        .distinct()
-                } else {
-                    scrapers
-                        .map { it.name }
-                        .distinct()
-                }
-            } else {
-                emptyList()
-            }
-        } catch (_: Exception) {
-            emptyList()
-        }
-
-        val orderedNames = (directDebridSourceNames + serverSourceNames + addonNames + pluginNames).distinct()
-        if (orderedNames.isEmpty()) {
-            updateUiStateIfChanged { it.copy(sourceChips = emptyList()) }
-            return
-        }
-
-        updateUiStateIfChanged { state ->
-            state.copy(
-                sourceChips = orderedNames.map { name ->
-                    if (name in alreadySucceededNames) {
-                        SourceChipItem(name = name, status = SourceChipStatus.SUCCESS)
-                    } else {
-                        SourceChipItem(name = name, status = SourceChipStatus.LOADING)
-                    }
-                }
-            )
-        }
-    }
-
-    private fun updateSourceChipsForEmbedded(name: String) {
-        updateUiStateIfChanged { state ->
-            val chips = if (state.sourceChips.any { it.name == name }) {
-                state.sourceChips.map { chip ->
-                    if (chip.name == name) chip.copy(status = SourceChipStatus.SUCCESS) else chip
-                }
-            } else {
-                listOf(SourceChipItem(name = name, status = SourceChipStatus.SUCCESS))
-            }
-            state.copy(sourceChips = chips)
-        }
-    }
-
-    private fun mergeSourceChipStatuses(
-        existing: List<SourceChipItem>,
-        succeededNames: List<String>
-    ): List<SourceChipItem> {
-        if (succeededNames.isEmpty()) return existing
-        if (existing.isEmpty()) {
-            return succeededNames.distinct().map { name ->
-                SourceChipItem(name = name, status = SourceChipStatus.SUCCESS)
-            }
-        }
-
-        val successSet = succeededNames.toSet()
-        val updated = existing.map { chip ->
-            if (chip.name in successSet) chip.copy(status = SourceChipStatus.SUCCESS) else chip
-        }.toMutableList()
-
-        val knownNames = updated.map { it.name }.toSet()
-        succeededNames.forEach { name ->
-            if (name !in knownNames) {
-                updated += SourceChipItem(name = name, status = SourceChipStatus.SUCCESS)
-            }
-        }
-        return updated
-    }
-
-    private fun markRemainingSourceChipsAsError() {
-        var markedAnyError = false
-        updateUiStateIfChanged { state ->
-            val hasPending = state.sourceChips.any { it.status == SourceChipStatus.LOADING }
-            if (!hasPending) return@updateUiStateIfChanged state
-            markedAnyError = true
-            state.copy(
-                sourceChips = state.sourceChips.map { chip ->
-                    if (chip.status == SourceChipStatus.LOADING) {
-                        chip.copy(status = SourceChipStatus.ERROR)
-                    } else {
-                        chip
-                    }
-                }
-            )
-        }
-        if (markedAnyError) {
-            scheduleErrorChipRemoval()
-        }
-    }
-
-    private fun scheduleErrorChipRemoval() {
-        sourceChipErrorDismissJob?.cancel()
-        sourceChipErrorDismissJob = viewModelScope.launch {
-            delay(1600L)
-            updateUiStateIfChanged { state ->
-                val remaining = state.sourceChips.filterNot { it.status == SourceChipStatus.ERROR }
-                if (remaining.size == state.sourceChips.size) state else state.copy(sourceChips = remaining)
-            }
-        }
-    }
-
-    private fun com.nuvio.tv.domain.model.Addon.supportsStreamResourceForChip(type: String): Boolean {
-        return resources.any { resource ->
-            resource.name == "stream" &&
-                (resource.types.isEmpty() || resource.types.any { it.equals(type, ignoreCase = true) }) &&
-                run {
-                    val prefixes = resource.idPrefixes?.takeIf { it.isNotEmpty() }
-                        ?: idPrefixes.takeIf { it.isNotEmpty() }
-                    prefixes == null || prefixes.any { prefix -> videoId.startsWith(prefix) }
-                }
-        }
     }
 
     private suspend fun getEmbeddedStreamsFromMeta(): AddonStreams? {
@@ -1257,40 +912,6 @@ class StreamScreenViewModel @Inject constructor(
             return meta.videos.firstOrNull { it.season == season && it.episode == episode }?.runtime
         }
         return parseRuntimeMinutes(meta.runtime)
-    }
-
-    private fun filterByAddon(addonName: String?) {
-        streamFilterExpandJob?.cancel()
-        updateUiStateIfChanged { state ->
-            if (state.selectedAddonFilter == addonName) {
-                return@updateUiStateIfChanged state
-            }
-            val fullFiltered = if (addonName == null) {
-                state.allStreams
-            } else {
-                state.allStreams.filter { it.addonName == addonName }
-            }
-            streamFilterFullList = fullFiltered
-            val paginatedStreams = if (fullFiltered.size > STREAM_FILTER_PAGE_SIZE) {
-                fullFiltered.subList(0, STREAM_FILTER_PAGE_SIZE)
-            } else {
-                fullFiltered
-            }
-            state.copy(
-                selectedAddonFilter = addonName,
-                filteredStreams = paginatedStreams
-            )
-        }
-    }
-
-    fun expandFilteredStreamsIfNeeded() {
-        val current = _uiState.value.filteredStreams
-        val full = streamFilterFullList
-        if (current.size >= full.size) return
-        val nextEnd = (current.size + STREAM_FILTER_PAGE_SIZE).coerceAtMost(full.size)
-        updateUiStateIfChanged {
-            it.copy(filteredStreams = full.subList(0, nextEnd))
-        }
     }
 
     suspend fun resolveStreamForPlayback(stream: Stream, saveLastLink: Boolean = true): StreamPlaybackInfo? {
@@ -1634,7 +1255,6 @@ class StreamScreenViewModel @Inject constructor(
         streamLoadScope?.cancel()
         streamLoadScope = null
         streamLoadJob = null
-        sourceChipErrorDismissJob?.cancel()
     }
 
     /**
@@ -2081,21 +1701,6 @@ class StreamScreenViewModel @Inject constructor(
         }
     }
 
-}
-
-private fun Stream.badgeMergeKey(): String {
-    infoHash?.lowercase()?.let { hash -> return "$addonName|$hash:${fileIdx ?: ""}" }
-    // Use the playable URL as primary key - but for streams without a playable URL
-    // (e.g. statistic/informational entries that only have externalUrl), fall back
-    // to name+title+description to avoid all such streams collapsing to one key.
-    val playableUrl = url ?: clientResolve?.let { resolve ->
-        resolve.stream?.raw?.filename ?: resolve.infoHash
-    }
-    if (playableUrl != null) {
-        val nameSuffix = name?.takeIf { it.isNotBlank() }?.let { "|$it" } ?: ""
-        return "$addonName|$playableUrl$nameSuffix"
-    }
-    return "$addonName|${name}:${title}:${description?.hashCode() ?: 0}"
 }
 
 data class StreamPlaybackInfo(

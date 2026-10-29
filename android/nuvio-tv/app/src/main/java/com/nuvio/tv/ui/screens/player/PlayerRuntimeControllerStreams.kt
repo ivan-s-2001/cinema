@@ -10,7 +10,6 @@ import com.nuvio.tv.core.player.StreamAutoPlaySelector
 import com.nuvio.tv.data.local.PlayerSettings
 import com.nuvio.tv.data.local.StreamAutoPlayMode
 import com.nuvio.tv.data.local.StreamAutoPlaySource
-import com.nuvio.tv.data.local.toTrackPreference
 import com.nuvio.tv.domain.model.AddonStreams
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.model.StreamDebridCacheState
@@ -34,50 +33,6 @@ private const val NEXT_EPISODE_HARD_TIMEOUT_MS = 120_000L
 private const val CLOUD_LIBRARY_AUTO_NEXT_TIMEOUT_MS = 65_000L
 
 /**
- * Schedules incremental badge matching for source streams in the background.
- * Only processes addon groups not yet badged, emits UI update every 5 streams.
- */
-internal fun PlayerRuntimeController.scheduleSourceBadgeApplication() {
-    val state = _uiState.value
-    val newAddons = state.sourceAvailableAddons.filter { it !in sourceBadgedAddonNames }
-    if (newAddons.isEmpty()) return
-
-    sourceBadgeJob = scope.launch(kotlinx.coroutines.Dispatchers.Default) {
-        val allNewStreams = newAddons.flatMap { addonName ->
-            _uiState.value.sourceAllStreams.filter { it.addonName == addonName }
-        }
-        if (allNewStreams.isEmpty() || !streamBadgePresentation.hasActiveFilters()) {
-            sourceBadgedAddonNames = sourceBadgedAddonNames + newAddons.toSet()
-            return@launch
-        }
-        val chunks = allNewStreams.chunked(5)
-        for (chunk in chunks) {
-            val chunkGroup = com.nuvio.tv.domain.model.AddonStreams(addonName = "", addonLogo = null, streams = chunk)
-            val badgedChunk = streamBadgePresentation.apply(listOf(chunkGroup))
-                .firstOrNull()?.streams ?: chunk
-            val badgedByKey = badgedChunk.associateBy { it.sourceBadgeMergeKey() }
-            _uiState.update { current ->
-                val updatedAll = current.sourceAllStreams.map { s ->
-                    badgedByKey[s.sourceBadgeMergeKey()] ?: s
-                }
-                val selectedAddon = current.sourceSelectedAddonFilter
-                val fullFiltered = updatedAll.filterByAddon(selectedAddon)
-                sourceFilterFullList = fullFiltered
-                val pageEnd = current.sourceFilteredStreams.size.coerceAtMost(fullFiltered.size)
-                    .coerceAtLeast(SOURCE_FILTER_PAGE_SIZE.coerceAtMost(fullFiltered.size))
-                current.copy(
-                    sourceAllStreams = updatedAll,
-                    sourceFilteredStreams = if (pageEnd >= fullFiltered.size) fullFiltered
-                        else fullFiltered.subList(0, pageEnd)
-                )
-            }
-            val coveredAddons = chunk.map { it.addonName }.toSet()
-            sourceBadgedAddonNames = sourceBadgedAddonNames + coveredAddons
-        }
-    }
-}
-
-/**
  * Schedules badge matching for episode streams in the background.
  */
 internal fun PlayerRuntimeController.scheduleEpisodeBadgeApplication() {
@@ -97,15 +52,6 @@ internal fun PlayerRuntimeController.scheduleEpisodeBadgeApplication() {
             )
         }
     }
-}
-
-private fun Stream.sourceBadgeMergeKey(): String {
-    infoHash?.lowercase()?.let { return "$addonName|$it:${fileIdx ?: ""}" }
-    val playableUrl = url ?: clientResolve?.let { resolve ->
-        resolve.stream?.raw?.filename ?: resolve.infoHash
-    }
-    if (playableUrl != null) return "$addonName|$playableUrl"
-    return "$addonName|${name}:${title}:${description?.hashCode() ?: 0}"
 }
 
 internal fun PlayerRuntimeController.showEpisodesPanel() {
@@ -209,20 +155,14 @@ internal fun PlayerRuntimeController.loadSourceStreams(forceRefresh: Boolean) {
     sourceStreamsJob = null
     val newScope = kotlinx.coroutines.CoroutineScope(scope.coroutineContext + kotlinx.coroutines.SupervisorJob())
     sourceStreamsScope = newScope
-    sourceChipErrorDismissJob?.cancel()
     sourceStreamsJob = newScope.launch {
         sourceStreamsCacheRequestKey = requestKey
         sourceStreamsFetchCompleted = false
-        if (forceRefresh || targetChanged) sourceBadgedAddonNames = emptySet()
         _uiState.update {
             it.copy(
                 isLoadingSourceStreams = true,
                 sourceStreamsError = null,
                 sourceAllStreams = if (forceRefresh || targetChanged) emptyList() else it.sourceAllStreams,
-                sourceSelectedAddonFilter = if (forceRefresh || targetChanged) null else it.sourceSelectedAddonFilter,
-                sourceFilteredStreams = if (forceRefresh || targetChanged) emptyList() else it.sourceFilteredStreams,
-                sourceAvailableAddons = if (forceRefresh || targetChanged) emptyList() else it.sourceAvailableAddons,
-                sourceChips = if (forceRefresh || targetChanged) emptyList() else it.sourceChips
             )
         }
 
@@ -231,11 +171,6 @@ internal fun PlayerRuntimeController.loadSourceStreams(forceRefresh: Boolean) {
         val installedAddonNames = installedAddonOrder.toSet()
         val preferredServerNames = serverStreams.preferredSourceNames(type, vid)
         var debridPreparationLaunched = false
-
-        // On resume, skip chip reset — keep existing chip statuses
-        if (!isResume) {
-            updateSourceChipsForFetchStart(type, vid, installedAddons)
-        }
 
         streamRepository.getStreamsFromAllAddons(
             type = type,
@@ -248,7 +183,6 @@ internal fun PlayerRuntimeController.loadSourceStreams(forceRefresh: Boolean) {
                 is NetworkResult.Success -> {
                     val addonStreams = StreamAutoPlaySelector.orderAddonStreams(result.data, installedAddonOrder, preferredServerNames)
                     val allStreams = addonStreams.flatMap { it.streams }
-                    val availableAddons = addonStreams.map { it.addonName }
                     _uiState.update {
                         // On resume, merge fresh results with any previously cached streams
                         val mergedAllStreams = if (isResume && it.sourceAllStreams.isNotEmpty()) {
@@ -256,44 +190,9 @@ internal fun PlayerRuntimeController.loadSourceStreams(forceRefresh: Boolean) {
                         } else {
                             allStreams
                         }
-                        // Preserve badges already computed by prior badge jobs
-                        val existingBadged = it.sourceAllStreams
-                            .filter { s -> s.badges.isNotEmpty() }
-                            .associateBy { s -> s.sourceBadgeMergeKey() }
-                        val badgePreserved = if (existingBadged.isEmpty()) {
-                            mergedAllStreams
-                        } else {
-                            mergedAllStreams.map { s ->
-                                val existing = existingBadged[s.sourceBadgeMergeKey()]
-                                if (existing != null && s.badges.isEmpty()) s.copy(badges = existing.badges) else s
-                            }
-                        }
-                        val mergedAvailableAddons = if (isResume && it.sourceAvailableAddons.isNotEmpty()) {
-                            (it.sourceAvailableAddons + availableAddons).distinct()
-                        } else {
-                            availableAddons
-                        }
-                        val selectedAddon = it.sourceSelectedAddonFilter
-                        val filteredStreams = if (selectedAddon == null) {
-                            badgePreserved
-                        } else {
-                            badgePreserved.filter { stream -> stream.addonName == selectedAddon }
-                        }
-                        sourceFilterFullList = filteredStreams
-                        val paginatedStreams = if (filteredStreams.size > SOURCE_FILTER_PAGE_SIZE) {
-                            filteredStreams.subList(0, SOURCE_FILTER_PAGE_SIZE)
-                        } else {
-                            filteredStreams
-                        }
                         it.copy(
                             isLoadingSourceStreams = false,
-                            sourceAllStreams = badgePreserved,
-                            sourceFilteredStreams = paginatedStreams,
-                            sourceAvailableAddons = mergedAvailableAddons,
-                            sourceChips = mergeSourceChipStatuses(
-                                existing = it.sourceChips,
-                                succeededNames = addonStreams.map { group -> group.addonName }
-                            ),
+                            sourceAllStreams = mergedAllStreams,
                             sourceStreamsError = null
                         )
                     }
@@ -304,7 +203,6 @@ internal fun PlayerRuntimeController.loadSourceStreams(forceRefresh: Boolean) {
                         episode = episodeArg,
                         installedAddonNames = installedAddonNames,
                     ) { debridPreparationLaunched = true }
-                    scheduleSourceBadgeApplication()
                 }
 
                 is NetworkResult.Error -> {
@@ -322,7 +220,6 @@ internal fun PlayerRuntimeController.loadSourceStreams(forceRefresh: Boolean) {
             }
         }
         sourceStreamsFetchCompleted = true
-        markRemainingSourceChipsAsError()
     }
 }
 
@@ -380,15 +277,8 @@ private fun PlayerRuntimeController.replacePreparedSourceStream(
         if (updatedStreams == state.sourceAllStreams) {
             state
         } else {
-            val selectedAddon = state.sourceSelectedAddonFilter
-            val fullFiltered = updatedStreams.filterByAddon(selectedAddon)
-            sourceFilterFullList = fullFiltered
-            val pageEnd = state.sourceFilteredStreams.size.coerceAtMost(fullFiltered.size)
-                .coerceAtLeast(SOURCE_FILTER_PAGE_SIZE.coerceAtMost(fullFiltered.size))
             state.copy(
                 sourceAllStreams = updatedStreams,
-                sourceFilteredStreams = if (pageEnd >= fullFiltered.size) fullFiltered
-                    else fullFiltered.subList(0, pageEnd)
             )
         }
     }
@@ -398,7 +288,6 @@ internal fun PlayerRuntimeController.dismissSourcesPanel() {
     sourceStreamsScope?.cancel()
     sourceStreamsScope = null
     sourceStreamsJob = null
-    sourceChipErrorDismissJob?.cancel()
     streamRepository.setLocalPluginSearchPaused(true)
     _uiState.update {
         it.copy(
@@ -407,84 +296,6 @@ internal fun PlayerRuntimeController.dismissSourcesPanel() {
         )
     }
     scheduleHideControls()
-}
-
-internal fun PlayerRuntimeController.filterSourceStreamsByAddon(addonName: String?) {
-    val allStreams = _uiState.value.sourceAllStreams
-    val fullFiltered = if (addonName == null) {
-        allStreams
-    } else {
-        allStreams.filter { it.addonName == addonName }
-    }
-    sourceFilterFullList = fullFiltered
-    val paginatedStreams = if (fullFiltered.size > SOURCE_FILTER_PAGE_SIZE) {
-        fullFiltered.subList(0, SOURCE_FILTER_PAGE_SIZE)
-    } else {
-        fullFiltered
-    }
-    _uiState.update {
-        it.copy(
-            sourceSelectedAddonFilter = addonName,
-            sourceFilteredStreams = paginatedStreams
-        )
-    }
-}
-
-internal fun PlayerRuntimeController.expandSourceFilteredStreamsIfNeeded() {
-    val current = _uiState.value.sourceFilteredStreams
-    val full = sourceFilterFullList
-    if (current.size >= full.size) return
-    val nextEnd = (current.size + SOURCE_FILTER_PAGE_SIZE).coerceAtMost(full.size)
-    _uiState.update {
-        it.copy(sourceFilteredStreams = full.subList(0, nextEnd))
-    }
-}
-
-private const val SOURCE_FILTER_PAGE_SIZE = 100
-
-private suspend fun PlayerRuntimeController.updateSourceChipsForFetchStart(
-    type: String,
-    videoId: String,
-    installedAddons: List<com.nuvio.tv.domain.model.Addon>
-) {
-    val addonNames = installedAddons
-        .filter { it.supportsStreamResourceForChip(type, videoId) }
-        .map { it.displayName }
-
-    val pluginNames = try {
-        if (!serverStreams.isNativeRequest(videoId) && pluginManager.pluginsEnabled.first()) {
-            val mediaType = when (type.lowercase()) {
-                "series", "tv", "show" -> "tv"
-                else -> type.lowercase()
-            }
-            val groupByRepository = pluginManager.groupStreamsByRepository.first()
-            val scrapers = pluginManager.enabledScrapers.first()
-                .filter { it.supportsType(mediaType) }
-            if (groupByRepository) {
-                val repositoriesById = pluginManager.repositories.first().associateBy { it.id }
-                scrapers
-                    .map { scraper ->
-                        repositoriesById[scraper.repositoryId]?.name?.takeIf { it.isNotBlank() } ?: scraper.name
-                    }
-                    .distinct()
-            } else {
-                scrapers
-                    .map { it.name }
-                    .distinct()
-            }
-        } else {
-            emptyList()
-        }
-    } catch (_: Exception) {
-        emptyList()
-    }
-
-    val ordered = (serverSourceNames(type, videoId) + addonNames + pluginNames).distinct()
-    _uiState.update {
-        it.copy(
-            sourceChips = ordered.map { name -> SourceChipItem(name, SourceChipStatus.LOADING) }
-        )
-    }
 }
 
 private fun PlayerRuntimeController.mergeSourceChipStatuses(
@@ -506,34 +317,6 @@ private fun PlayerRuntimeController.mergeSourceChipStatuses(
         if (name !in known) updated += SourceChipItem(name, SourceChipStatus.SUCCESS)
     }
     return updated
-}
-
-private fun PlayerRuntimeController.markRemainingSourceChipsAsError() {
-    var markedAnyError = false
-    _uiState.update { state ->
-        if (!state.sourceChips.any { it.status == SourceChipStatus.LOADING }) return@update state
-        markedAnyError = true
-        state.copy(
-            sourceChips = state.sourceChips.map { chip ->
-                if (chip.status == SourceChipStatus.LOADING) {
-                    chip.copy(status = SourceChipStatus.ERROR)
-                } else {
-                    chip
-                }
-            }
-        )
-    }
-    if (!markedAnyError) return
-
-    sourceChipErrorDismissJob?.cancel()
-    sourceChipErrorDismissJob = scope.launch {
-        delay(1600L)
-        _uiState.update { state ->
-            state.copy(
-                sourceChips = state.sourceChips.filterNot { it.status == SourceChipStatus.ERROR }
-            )
-        }
-    }
 }
 
 private suspend fun PlayerRuntimeController.updateEpisodeSourceChipsForFetchStart(
@@ -1891,10 +1674,6 @@ internal fun PlayerRuntimeController.cancelNextEpisodePreload() {
 }
 
 internal fun PlayerRuntimeController.playNextEpisode(userInitiated: Boolean = false) {
-    if (isPartyControlLocked) {
-        if (userInitiated) partyBlocksControl()
-        return
-    }
     val nextVideo = nextEpisodeVideo ?: return
     val type = contentType ?: return
     nextEpisodePreloadTriggered = false

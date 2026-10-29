@@ -555,7 +555,6 @@ dependencies {
     implementation(libs.markdown.renderer.m3)
 
     // QR encoding retained by the remaining native UI.
-    implementation(libs.zxing.core)
 
 
     // Supabase

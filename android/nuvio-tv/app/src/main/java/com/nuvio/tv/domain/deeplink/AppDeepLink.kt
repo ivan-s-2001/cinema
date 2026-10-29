@@ -10,7 +10,4 @@ sealed interface AppDeepLink {
         val manifestUrl: String
     ) : AppDeepLink
 
-    data class Party(
-        val code: String
-    ) : AppDeepLink
 }
