@@ -49,7 +49,6 @@ class ServerDiscoveryPolicyTest {
         assertTrue(configuration.isCustom)
         assertTrue(configuration.capabilities.emailPasswordAuth)
         assertTrue(configuration.capabilities.tvLogin)
-        assertTrue(configuration.capabilities.watchParty)
     }
 
     @Test

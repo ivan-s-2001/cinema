@@ -65,7 +65,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -103,7 +102,6 @@ class StreamScreenViewModel @Inject constructor(
     private val torrentService: TorrentService,
     private val serverStreams: ServerStreams,
     private val serverPlayback: ServerPlayback,
-    party: com.nuvio.tv.core.party.PartyRepository,
     profileManager: com.nuvio.tv.core.profile.ProfileManager,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -151,32 +149,6 @@ class StreamScreenViewModel @Inject constructor(
         videoId, savedStateHandle.get<String>("manualSelection")?.toBooleanStrictOrNull() ?: false
     )
     private val streamCacheKey: String = "${contentType.lowercase()}|$videoId"
-    private val partyKey: String = com.nuvio.tv.core.party.partyMediaKey(
-        metaType = contentType,
-        metaId = contentId ?: com.nuvio.tv.core.streams.videoContentId(videoId),
-        season = season,
-        episode = episode
-    )
-
-    val partySource: StateFlow<com.nuvio.tv.core.party.PartySource?> = party.state
-        .map { state -> state.party?.media?.takeIf { it.key == partyKey }?.source }
-        .distinctUntilChanged()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-
-    val sharedStream: StateFlow<SharedStream?> = combine(party.state, party.sharedStream) { state, stream ->
-        val current = state.party
-        if (current == null || current.isHost || stream == null || stream.mediaKey != partyKey) {
-            null
-        } else {
-            SharedStream(
-                hostName = current.member(current.hostMemberId)?.displayName.orEmpty(),
-                stream = stream.toStream()
-            )
-        }
-    }
-        .distinctUntilChanged()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-
     private val _uiState = MutableStateFlow(
         StreamScreenUiState(
             videoId = videoId,

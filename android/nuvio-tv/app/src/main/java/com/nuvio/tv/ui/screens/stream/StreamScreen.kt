@@ -29,7 +29,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
@@ -41,7 +40,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
-import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,17 +47,13 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -77,8 +71,6 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import com.nuvio.tv.core.party.PartySource
-import com.nuvio.tv.core.party.matches
 import com.nuvio.tv.ui.util.contentTextDirection
 import com.nuvio.tv.ui.util.toAbsoluteAlignment
 import com.nuvio.tv.ui.util.localizeEpisodeTitle
@@ -144,8 +136,6 @@ fun StreamScreen(
         resumePercent != null -> stringResource(R.string.stream_resume_from_percent, (resumePercent * 100).toInt())
         else -> null
     }
-    val sharedStream by viewModel.sharedStream.collectAsStateWithLifecycle()
-    val partySource by viewModel.partySource.collectAsStateWithLifecycle()
     val playerPreference by viewModel.playerPreference.collectAsStateWithLifecycle(
         initialValue = null
     )
@@ -472,18 +462,6 @@ fun StreamScreen(
                     hasBadgeRules = streamBadgeSettings.rules.hasImport,
                     onAddonFilterSelected = { viewModel.onEvent(StreamScreenEvent.OnAddonFilterSelected(it)) },
                     onRefresh = { viewModel.onEvent(StreamScreenEvent.OnRefresh) },
-                    sharedStream = sharedStream,
-                    partySource = partySource,
-                    onSharedStreamSelected = { stream ->
-                        scope.coroutineLaunch {
-                            val playbackInfo = viewModel.resolveStreamForPlayback(stream, saveLastLink = false)
-                            if (playbackInfo != null) {
-                                pendingRestoreOnResume = true
-                                routePlayback(playbackInfo)
-                                viewModel.onEvent(StreamScreenEvent.OnAutoPlayConsumed)
-                            }
-                        }
-                    },
                     onStreamSelected = { stream ->
                         val currentIndex = uiState.filteredStreams.indexOfFirst {
                             it.url == stream.url &&
@@ -743,9 +721,6 @@ private fun RightStreamSection(
     hasBadgeRules: Boolean = false,
     onAddonFilterSelected: (String?) -> Unit,
     onRefresh: () -> Unit,
-    sharedStream: SharedStream?,
-    partySource: PartySource?,
-    onSharedStreamSelected: (Stream) -> Unit,
     onStreamSelected: (Stream) -> Unit,
     focusedStreamIndex: Int,
     shouldRestoreFocusedStream: Boolean,
@@ -933,16 +908,16 @@ private fun RightStreamSection(
                     contentAlignment = Alignment.Center
                 ) {
                     when {
-                        sharedStream == null && isLoading -> {
+                        isLoading -> {
                             LoadingState(showAddonLogo = showAddonLogo)
                         }
-                        sharedStream == null && error != null -> {
+                        error != null -> {
                             ErrorState(
                                 message = error,
                                 onRetry = onRetry
                             )
                         }
-                        sharedStream == null && cinemaChoices.isEmpty() -> {
+                        cinemaChoices.isEmpty() -> {
                             EmptyState()
                         }
                         else -> {
@@ -950,9 +925,6 @@ private fun RightStreamSection(
                                 CinemaHallQualityVoicePicker(streams = cinemaChoices, onStreamSelected = onStreamSelected)
                             } else StreamsList(
                                 streams = cinemaChoices,
-                                sharedStream = sharedStream,
-                                partySource = partySource,
-                                onSharedStreamSelected = onSharedStreamSelected,
                                 onStreamSelected = onStreamSelected,
                                 focusedStreamIndex = focusedStreamIndex,
                                 shouldRestoreFocusedStream = shouldRestoreFocusedStream,
@@ -1188,9 +1160,6 @@ private fun EmptyState() {
 @Composable
 private fun StreamsList(
     streams: List<Stream>,
-    sharedStream: SharedStream?,
-    partySource: PartySource?,
-    onSharedStreamSelected: (Stream) -> Unit,
     onStreamSelected: (Stream) -> Unit,
     focusedStreamIndex: Int = 0,
     shouldRestoreFocusedStream: Boolean = false,
@@ -1230,9 +1199,6 @@ private fun StreamsList(
         streamFocusRequesters.keys.retainAll(validKeys)
     }
     var firstCardHasFocus by remember(firstStreamKey) { mutableStateOf(false) }
-    val sharedFocusRequester = remember { FocusRequester() }
-    var sharedCardHasFocus by remember { mutableStateOf(false) }
-    val partySourceLabel = stringResource(R.string.party_source)
 
     var focusedStreamKey by remember { mutableStateOf<String?>(null) }
     val prevStreamKeysRef = remember { mutableStateOf(streamKeys) }
@@ -1268,22 +1234,10 @@ private fun StreamsList(
         streamListState.scrollToItem(0)
         repeat(30) {
             withFrameNanos { }
-            if (firstCardHasFocus || sharedCardHasFocus) return@LaunchedEffect
+            if (firstCardHasFocus) return@LaunchedEffect
             runCatching {
-                if (sharedStream != null) sharedFocusRequester.requestFocus()
-                else streamFocusRequesters.getValue(requestedKey).requestFocus()
+                streamFocusRequesters.getValue(requestedKey).requestFocus()
             }
-        }
-    }
-
-    val sharedStreamUrl = sharedStream?.stream?.url
-    LaunchedEffect(sharedStreamUrl) {
-        if (sharedStreamUrl == null || shouldRestoreFocusedStream) return@LaunchedEffect
-        streamListState.scrollToItem(0)
-        repeat(30) {
-            withFrameNanos { }
-            if (sharedCardHasFocus) return@LaunchedEffect
-            runCatching { sharedFocusRequester.requestFocus() }
         }
     }
 
@@ -1359,48 +1313,16 @@ private fun StreamsList(
         verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md),
         contentPadding = PaddingValues(start = NuvioTheme.spacing.sm, end = NuvioTheme.spacing.sm, top = NuvioTheme.spacing.sm, bottom = NuvioTheme.spacing.xxl)
     ) {
-        sharedStream?.let { shared ->
-            item(key = "party_shared_stream") {
-                Column(
-                    modifier = Modifier.padding(vertical = NuvioTheme.spacing.xs),
-                    verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
-                ) {
-                    Text(
-                        text = stringResource(R.string.party_shared_by, shared.hostName),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = NuvioTheme.colors.TextSecondary,
-                        modifier = Modifier.padding(start = NuvioTheme.spacing.xs)
-                    )
-                    StreamCard(
-                        stream = shared.stream,
-                        showFileSizeBadges = showFileSizeBadges,
-                        showAddonLogo = showAddonLogo,
-                        badgePlacement = badgePlacement,
-                        onClick = { onSharedStreamSelected(shared.stream) },
-                        focusRequester = sharedFocusRequester,
-                        onFocusChanged = { focused -> sharedCardHasFocus = focused },
-                        onUpKey = {
-                            val idx = if (selectedAddonFilter == null) 1
-                                      else orderedAddonNames.indexOf(selectedAddonFilter) + 2
-                            onRequestChipFocus(idx)
-                        },
-                        outlined = true
-                    )
-                }
-            }
-        }
         itemsIndexed(streams, key = { index, _ ->
             streamKeys[index]
         }) { index, stream ->
             Box(modifier = Modifier.padding(vertical = NuvioTheme.spacing.xs)) {
-                val isPartySource = partySource?.matches(stream) == true
                 StreamCard(
                     stream = stream,
                     showFileSizeBadges = showFileSizeBadges,
                     showAddonLogo = showAddonLogo,
                     badgePlacement = badgePlacement,
                     reserveBadgeSpace = hasBadgeRules && stream.badges.isEmpty(),
-                    label = partySourceLabel.takeIf { isPartySource },
                     onClick = { onStreamSelected(stream) },
                     focusRequester = when {
                         shouldRestoreFocusedStream && index == focusedStreamIndex.coerceIn(0, (streams.lastIndex).coerceAtLeast(0)) -> restoreFocusRequester
@@ -1415,7 +1337,7 @@ private fun StreamsList(
                             firstCardHasFocus = focused
                         }
                     },
-                    onUpKey = if (index == 0 && sharedStream == null) {{
+                    onUpKey = if (index == 0) {{
                         val idx = if (selectedAddonFilter == null) 1
                                   else orderedAddonNames.indexOf(selectedAddonFilter) + 2
                         onRequestChipFocus(idx)

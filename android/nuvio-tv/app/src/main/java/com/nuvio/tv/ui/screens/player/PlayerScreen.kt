@@ -7,14 +7,12 @@ package com.nuvio.tv.ui.screens.player
 
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.layout.boundsInWindow
-import com.nuvio.tv.ui.screens.detail.formatPlaybackTime
 import com.nuvio.tv.ui.theme.NuvioMotion
 import kotlinx.coroutines.delay
 
 import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.theme.accentBrush
 
-import android.util.Log
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
@@ -42,7 +40,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -56,26 +53,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Toc
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Forward10
-import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ClosedCaption
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.SwapHoriz
-import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -108,13 +96,11 @@ import androidx.compose.ui.layout.onPlaced
 import com.nuvio.tv.ui.screens.detail.requestFocusAfterFrames
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.progressBarRangeInfo
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -146,19 +132,11 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.R
-import com.nuvio.tv.core.party.PartyAction
-import com.nuvio.tv.core.party.PartyMedia
-import com.nuvio.tv.core.party.PartyNotice
-import com.nuvio.tv.core.party.PartySync
-import com.nuvio.tv.ui.screens.party.ConfirmDialog
-import com.nuvio.tv.ui.screens.party.PartyPanel
-import com.nuvio.tv.ui.screens.party.PartyStatusPill
 import com.nuvio.tv.core.player.PlayerWindowBackdrop
 import com.nuvio.tv.ui.util.localizeEpisodeTitle
 import com.nuvio.tv.data.local.InternalPlayerEngine
 import com.nuvio.tv.data.local.SubtitleStyleSettings
 import com.nuvio.tv.data.local.StreamAutoPlayMode
-import com.nuvio.tv.domain.model.StreamBadge
 import com.nuvio.tv.domain.model.Subtitle
 import com.nuvio.tv.domain.model.WatchProgress
 import com.nuvio.tv.ui.components.LoadingIndicator
@@ -176,7 +154,6 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.media3.exoplayer.ExoPlayer
 import com.nuvio.tv.libass.media.widget.AssSubtitleSurfaceView
 import kotlin.math.abs
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withContext
 
 private const val PLAYER_CONTROLS_FADE_DURATION_MS = 200
@@ -210,22 +187,8 @@ fun PlayerScreen(
     onPlaybackEnded: ((nextVideoId: String?, nextSeason: Int?, nextEpisode: Int?, exitReason: PlayerExitReason?) -> Unit)? = null,
     onPlayRecommendation: (PostPlayRecommendation, manualSelection: Boolean) -> Unit = { _, _ -> },
     onOpenRecommendationDetails: (PostPlayRecommendation) -> Unit = {},
-    onOpenPartyMedia: (PartyMedia) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val partyState by viewModel.party.state.collectAsState()
-    val partyPlayback by viewModel.party.playback.collectAsState()
-    val partyAvailable by viewModel.party.available.collectAsState()
-    val partyCanUse by viewModel.party.canUse.collectAsState()
-    val partyProfile by viewModel.party.profile.collectAsState()
-    var partyNotice by remember { mutableStateOf<PartyNotice?>(null) }
-    LaunchedEffect(Unit) {
-        viewModel.party.notices.collectLatest { next ->
-            partyNotice = next
-            kotlinx.coroutines.delay(3000)
-            partyNotice = null
-        }
-    }
     val postPlayRecommendationState by viewModel.postPlayRecommendationUiState.collectAsState()
     val effectiveAutoplayEnabled by viewModel.effectiveAutoplayEnabled.collectAsState(initial = false)
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -382,8 +345,6 @@ fun PlayerScreen(
             viewModel.onEvent(PlayerEvent.OnHideSubtitleDelayOverlay)
         } else if (uiState.showSubtitleStylePanel) {
             viewModel.onEvent(PlayerEvent.OnDismissSubtitleStylePanel)
-        } else if (uiState.showPartyPanel) {
-            viewModel.onEvent(PlayerEvent.OnDismissPartyPanel)
         } else if (uiState.showSourcesPanel) {
             if (uiState.currentStreamUrl.isNullOrBlank()) {
                 exitPlayer()
@@ -569,7 +530,6 @@ fun PlayerScreen(
         uiState.showEpisodesPanel,
         uiState.showSourcesPanel,
         uiState.showChaptersPanel,
-        uiState.showPartyPanel,
         uiState.showSubtitleStylePanel,
         uiState.showSubtitleDelayOverlay,
         uiState.showSubtitleTimingDialog,
@@ -581,7 +541,6 @@ fun PlayerScreen(
     ) {
         if (shouldConfirmNextEpisodeOnEnd || postPlayRecommendationState.isVisible) return@LaunchedEffect
         if (uiState.error != null) return@LaunchedEffect
-        if (uiState.showPartyPanel) return@LaunchedEffect
         if (uiState.showControls && !uiState.showEpisodesPanel && !uiState.showSourcesPanel && !uiState.showChaptersPanel &&
             !uiState.showAudioOverlay && !uiState.showSubtitleOverlay &&
             !uiState.showSubtitleStylePanel && !uiState.showSubtitleDelayOverlay &&
@@ -704,7 +663,6 @@ fun PlayerScreen(
                 } else if (
                     !uiState.showEpisodesPanel &&
                     !uiState.showSourcesPanel && !uiState.showChaptersPanel &&
-                    !uiState.showPartyPanel &&
                     !uiState.showAudioOverlay &&
                     !uiState.showSubtitleOverlay &&
                     !uiState.showSubtitleStylePanel &&
@@ -827,7 +785,6 @@ fun PlayerScreen(
                 }
 
                 // When a side panel or dialog is open, let it handle all keys
-                val panelOrDialogOpen = uiState.showEpisodesPanel || uiState.showSourcesPanel || uiState.showPartyPanel ||
                         uiState.showChaptersPanel ||
                         uiState.showAudioOverlay || uiState.showSubtitleOverlay ||
                         uiState.showSubtitleStylePanel || uiState.showSpeedDialog ||
@@ -1040,7 +997,6 @@ fun PlayerScreen(
                 !uiState.showStreamInfoOverlay &&
                 !uiState.showEpisodesPanel &&
                 !uiState.showSourcesPanel && !uiState.showChaptersPanel &&
-                !uiState.showPartyPanel &&
                 !uiState.showAudioOverlay &&
                 !uiState.showSubtitleOverlay &&
                 !uiState.showSubtitleStylePanel &&
@@ -1061,7 +1017,6 @@ fun PlayerScreen(
             !uiState.showSubtitleDelayOverlay &&
             !uiState.showEpisodesPanel &&
             !uiState.showSourcesPanel && !uiState.showChaptersPanel &&
-            !uiState.showPartyPanel &&
             !uiState.showAudioOverlay &&
             !uiState.showSubtitleOverlay &&
             !uiState.showSpeedDialog &&
@@ -1441,35 +1396,6 @@ fun PlayerScreen(
             StreamSourceIndicator(text = uiState.streamSourceIndicatorText)
         }
 
-        partyState.party?.let { party ->
-            val waitingNames = if (partyPlayback?.paused == true && partyPlayback?.waiting == true) {
-                PartySync.waitingMemberIds(party, emptySet())
-                    .filter { it != party.memberId }
-                    .mapNotNull { id -> party.member(id)?.displayName }
-            } else {
-                emptyList()
-            }
-            val noticeText = partyNotice?.let { notice -> partyNoticeText(notice) }
-            val partyPausedBehind = uiState.partyBehind && !uiState.isPlaying && !uiState.isBuffering
-            PartyStatusPill(
-                visible = (uiState.showControls || waitingNames.isNotEmpty() || !party.connected || noticeText != null || partyPausedBehind) &&
-                    !uiState.showPartyPanel && uiState.error == null,
-                members = party.members,
-                message = when {
-                    !party.connected -> stringResource(R.string.party_reconnecting)
-                    waitingNames.isNotEmpty() -> stringResource(R.string.party_waiting_for, waitingNames.joinToString())
-                    partyPlayback?.waiting == true -> stringResource(R.string.party_waiting)
-                    noticeText != null -> noticeText
-                    partyPausedBehind -> stringResource(R.string.party_paused_for_you)
-                    uiState.partyBehind -> uiState.partyBehindMs?.let { stringResource(R.string.party_behind, formatPlaybackTime(it)) }
-                    else -> null
-                },
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 28.dp)
-            )
-        }
-
         AnimatedVisibility(
             visible = uiState.showPlayerEngineSwitchInfo && uiState.error == null,
             enter = fadeIn(animationSpec = tween(NuvioMotion.tokens.durations.fast)),
@@ -1494,7 +1420,6 @@ fun PlayerScreen(
                 !uiState.showSubtitleStylePanel &&
                 !uiState.showEpisodesPanel &&
                 !uiState.showSourcesPanel && !uiState.showChaptersPanel &&
-                !uiState.showPartyPanel &&
                 !uiState.showAudioOverlay &&
                 !uiState.showSubtitleOverlay &&
                 !uiState.showSubtitleTimingDialog &&
@@ -1659,68 +1584,6 @@ fun PlayerScreen(
             }
         }
 
-        AnimatedVisibility(
-            visible = uiState.showPartyPanel && uiState.error == null,
-            enter = fadeIn(animationSpec = tween(120)),
-            exit = fadeOut(animationSpec = tween(120))
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.45f))
-            )
-        }
-
-        AnimatedVisibility(
-            visible = uiState.showPartyPanel && uiState.error == null,
-            enter = slideInHorizontally(
-                animationSpec = tween(220),
-                initialOffsetX = { it }
-            ),
-            exit = slideOutHorizontally(
-                animationSpec = tween(220),
-                targetOffsetX = { it }
-            )
-        ) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                PartyPanel(
-                    state = partyState,
-                    profile = partyProfile,
-                    playerMedia = viewModel.partyMedia,
-                    isSupported = partyAvailable,
-                    canStart = partyCanUse,
-                    canShareStream = viewModel.currentPartyStream() != null,
-                    onStart = { viewModel.startParty() },
-                    onSwitchParty = { viewModel.switchParty() },
-                    onWatchWithParty = {
-                        partyState.party?.media?.let { media ->
-                            viewModel.onEvent(PlayerEvent.OnDismissPartyPanel)
-                            viewModel.stopAndRelease()
-                            onOpenPartyMedia(media)
-                        }
-                    },
-                    onLeave = {
-                        viewModel.onEvent(PlayerEvent.OnDismissPartyPanel)
-                        viewModel.party.leave()
-                    },
-                    onEnd = {
-                        viewModel.onEvent(PlayerEvent.OnDismissPartyPanel)
-                        viewModel.party.end()
-                    },
-                    onRemove = { member -> viewModel.party.removeMember(member.id) },
-                    onHostOnlyChange = { enabled -> viewModel.party.setHostOnly(enabled) },
-                    onSharingChange = { enabled -> viewModel.party.setSharing(enabled) },
-                    behindMs = if (uiState.partyBehind) uiState.partyBehindMs ?: 0L else null,
-                    onCatchUp = {
-                        viewModel.catchUpParty()
-                        viewModel.onEvent(PlayerEvent.OnDismissPartyPanel)
-                    },
-                    onClose = { viewModel.onEvent(PlayerEvent.OnDismissPartyPanel) },
-                    modifier = Modifier.align(Alignment.CenterEnd)
-                )
-            }
-        }
-
         // Subtitle style panel scrim
         AnimatedVisibility(
             visible = uiState.showSubtitleStylePanel && uiState.error == null,
@@ -1810,7 +1673,6 @@ fun PlayerScreen(
                 !uiState.showPauseOverlay &&
                 !uiState.showEpisodesPanel &&
                 !uiState.showSourcesPanel && !uiState.showChaptersPanel &&
-                !uiState.showPartyPanel &&
                 !uiState.showAudioOverlay &&
                 !uiState.showSubtitleOverlay &&
                 !uiState.showSubtitleStylePanel &&
@@ -3883,17 +3745,6 @@ internal fun DialogButton(
         )
     }
 }
-
-@Composable
-private fun partyNoticeText(notice: PartyNotice): String = when (notice.action) {
-    PartyAction.Paused -> stringResource(R.string.party_action_paused, notice.name)
-    PartyAction.Resumed -> stringResource(R.string.party_action_resumed, notice.name)
-    PartyAction.Seeked -> stringResource(R.string.party_action_seeked, notice.name, formatTime(notice.positionMs))
-    PartyAction.Speed -> stringResource(R.string.party_action_speed, notice.name, formatSpeedLabel(notice.rate))
-}
-
-private fun formatSpeedLabel(rate: Float): String =
-    if (rate % 1f == 0f) "${rate.toInt()}x" else "${rate}x"
 
 internal fun formatTime(millis: Long): String {
     if (millis <= 0) return "0:00"

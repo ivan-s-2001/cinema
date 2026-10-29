@@ -15,9 +15,9 @@ class DeepLinkParserTest {
     }
 
     @Test
-    fun parsesPartyInviteDeepLink() {
-        assertEquals(AppDeepLink.Party("ABC234"), DeepLinkParser.parse("nuvio://party/abc234"))
-        assertEquals(AppDeepLink.Party("ABC234"), DeepLinkParser.parse("nuvio://party?code=ABC-234"))
+    fun ignoresRetiredPartyInviteDeepLinks() {
+        assertNull(DeepLinkParser.parse("nuvio://party/abc234"))
+        assertNull(DeepLinkParser.parse("nuvio://party?code=ABC-234"))
         assertNull(DeepLinkParser.parse("nuvio://party/ABC10"))
     }
 

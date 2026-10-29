@@ -212,10 +212,9 @@ internal fun PlayerRuntimeController.skipInterval(interval: SkipInterval): Boole
         SeekParameters.EXACT
     } else SeekParameters.NEXT_SYNC
     val requested = seekMs.coerceAtMost(duration)
-    val target = if (isPartyControlLocked) ownSeekTarget(requested) ?: return false else requested
+    val target = requested
     seekPlaybackTo(target, seekParameters)
     scheduleProgressSyncAfterSeek()
-    publishPartyPlayback(positionMs = target)
     _uiState.update { it.copy(activeSkipInterval = null, skipIntervalDismissed = true) }
     return true
 }
@@ -1186,7 +1185,6 @@ fun PlayerRuntimeController.scheduleHideControls() {
             !_uiState.value.showSubtitleTimingDialog &&
             !_uiState.value.showEpisodesPanel && !_uiState.value.showSourcesPanel &&
             !_uiState.value.showChaptersPanel &&
-            !_uiState.value.showPartyPanel &&
             !_uiState.value.showStreamInfoOverlay) {
             _uiState.update { it.copy(showControls = false) }
         }
@@ -1310,10 +1308,6 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
     }
     when (event) {
         PlayerEvent.OnPlayPause -> {
-            if (isPartyControlLocked) {
-                toggleOwnPlayback()
-                return
-            }
             if (isUsingMpvEngine()) {
                 val playing = isPlaybackCurrentlyPlaying()
                 if (playing) {
@@ -1332,7 +1326,6 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
                     scheduleHideControls()
                     emitScrobbleStart()
                 }
-                publishPartyPlayback(paused = playing)
             } else {
                 _exoPlayer?.let { player ->
                     if (player.isPlaying) {
@@ -1344,7 +1337,6 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
                         cancelPauseOverlay()
                         player.play()
                     }
-                    publishPartyPlayback(paused = !player.playWhenReady)
                 }
             }
             showControlsTemporarily()
@@ -1365,7 +1357,7 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
             val requested = (current + event.deltaMs)
                 .coerceAtLeast(0L)
                 .coerceAtMost(maxDuration)
-            val target = if (isPartyControlLocked) ownSeekTarget(requested) ?: return else requested
+            val target = requested
             val seekParameters = if (event.deltaMs < 0L) {
                 SeekParameters.PREVIOUS_SYNC
             } else {
@@ -1374,7 +1366,6 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
             seekPlaybackTo(target, seekParameters)
             updatePlaybackTimeline(currentPosition = target)
             scheduleProgressSyncAfterSeek()
-            publishPartyPlayback(positionMs = target)
             if (_uiState.value.showControls) {
                 showControlsTemporarily()
             } else {
@@ -1400,17 +1391,11 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
             if (_playbackTimeline.value.isLive) return
             val requested = pendingPreviewSeekPosition
             if (requested != null) {
-                val target = if (isPartyControlLocked) ownSeekTarget(requested) else requested
-                if (target == null) {
-                    pendingPreviewSeekPosition = null
-                    updatePlaybackTimeline(currentPosition = currentPlaybackPositionMs() ?: 0L)
-                    return
-                }
+                val target = requested
                 seekPlaybackTo(target, SeekParameters.CLOSEST_SYNC)
                 updatePlaybackTimeline(currentPosition = target)
                 pendingPreviewSeekPosition = null
                 scheduleProgressSyncAfterSeek()
-                publishPartyPlayback(positionMs = target)
                 if (_uiState.value.showControls) {
                     showControlsTemporarily()
                 } else {
@@ -1421,11 +1406,10 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
         is PlayerEvent.OnSeekTo -> {
             if (_playbackTimeline.value.isLive) return
             pendingPreviewSeekPosition = null
-            val target = if (isPartyControlLocked) ownSeekTarget(event.position) ?: return else event.position
+            val target = event.position
             seekPlaybackTo(target, SeekParameters.CLOSEST_SYNC)
             updatePlaybackTimeline(currentPosition = target)
             scheduleProgressSyncAfterSeek()
-            publishPartyPlayback(positionMs = target)
             if (_uiState.value.showControls) {
                 showControlsTemporarily()
             } else {
@@ -1585,8 +1569,6 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
             }
         }
         is PlayerEvent.OnSetPlaybackSpeed -> {
-            if (partyBlocksControl()) return
-            partyRateNudge = null
             if (isUsingMpvEngine()) {
                 setPlaybackSpeedInternal(event.speed)
             } else {
@@ -1608,7 +1590,6 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
             contentId?.takeIf { it.isNotBlank() }?.let { id ->
                 scope.launch { trackPreferenceDataStore.savePlaybackSpeed(id, event.speed) }
             }
-            publishPartyPlayback(rate = event.speed)
         }
         PlayerEvent.OnToggleControls -> {
             if (_uiState.value.showSubtitleTimingDialog) {
@@ -1779,12 +1760,6 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
         }
         PlayerEvent.OnDismissSourcesPanel -> {
             dismissSourcesPanel()
-        }
-        PlayerEvent.OnShowPartyPanel -> {
-            showPartyPanel()
-        }
-        PlayerEvent.OnDismissPartyPanel -> {
-            dismissPartyPanel()
         }
         PlayerEvent.OnReloadSourceStreams -> {
             loadSourceStreams(forceRefresh = true)

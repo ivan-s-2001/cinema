@@ -5,7 +5,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 data class ServerCapabilities(
     val emailPasswordAuth: Boolean,
     val tvLogin: Boolean,
-    val watchParty: Boolean = false
 )
 
 data class ServerConfiguration(
