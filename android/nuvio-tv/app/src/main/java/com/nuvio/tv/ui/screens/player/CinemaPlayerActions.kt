@@ -4,6 +4,6 @@ package com.nuvio.tv.ui.screens.player
 internal fun cinemaPlayerActionAllowed(event: PlayerEvent): Boolean = when (event) {
     PlayerEvent.OnShowAudioOverlay,
     is PlayerEvent.OnSelectAudioTrack,
-    PlayerEvent.OnShowStreamInfo,
+    PlayerEvent.OnShowStreamInfo -> false
     else -> true
 }
