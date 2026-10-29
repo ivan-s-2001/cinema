@@ -2,7 +2,6 @@ package com.nuvio.tv.ui.screens.stream
 
 import com.nuvio.tv.domain.model.AddonStreams
 import com.nuvio.tv.domain.model.Stream
-import com.nuvio.tv.ui.components.SourceChipItem
 
 data class StreamScreenUiState(
     val isLoading: Boolean = true,
@@ -29,10 +28,6 @@ data class StreamScreenUiState(
     val year: String? = null,
     val addonStreams: List<AddonStreams> = emptyList(),
     val allStreams: List<Stream> = emptyList(),
-    val selectedAddonFilter: String? = null, // null means "All"
-    val filteredStreams: List<Stream> = emptyList(),
-    val availableAddons: List<String> = emptyList(),
-    val sourceChips: List<SourceChipItem> = emptyList(),
     val autoPlayStream: Stream? = null,
     val autoPlayPlaybackInfo: StreamPlaybackInfo? = null,
     val error: String? = null,
@@ -42,10 +37,8 @@ data class StreamScreenUiState(
 }
 
 sealed class StreamScreenEvent {
-    data class OnAddonFilterSelected(val addonName: String?) : StreamScreenEvent()
     data class OnStreamSelected(val stream: Stream) : StreamScreenEvent()
     data object OnAutoPlayConsumed : StreamScreenEvent()
-    data object OnRefresh : StreamScreenEvent()
     data object OnRetry : StreamScreenEvent()
     data object OnBackPress : StreamScreenEvent()
     data object OnResume : StreamScreenEvent()

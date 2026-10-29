@@ -167,10 +167,6 @@ data class PlayerUiState(
     val isLoadingSourceStreams: Boolean = false,
     val sourceStreamsError: String? = null,
     val sourceAllStreams: List<Stream> = emptyList(),
-    val sourceSelectedAddonFilter: String? = null, // null means "All"
-    val sourceFilteredStreams: List<Stream> = emptyList(),
-    val sourceAvailableAddons: List<String> = emptyList(),
-    val sourceChips: List<SourceChipItem> = emptyList(),
     val showFileSizeBadges: Boolean = true,
     val showAddonLogo: Boolean = true,
     val streamBadgePlacement: StreamBadgePlacement = StreamBadgePlacement.BOTTOM,
@@ -350,7 +346,6 @@ sealed class PlayerEvent {
     data object OnShowSourcesPanel : PlayerEvent()
     data object OnDismissSourcesPanel : PlayerEvent()
     data object OnReloadSourceStreams : PlayerEvent()
-    data class OnSourceAddonFilterSelected(val addonName: String?) : PlayerEvent()
     data class OnSourceStreamSelected(val stream: Stream) : PlayerEvent()
     data object OnDismissTransientOverlay : PlayerEvent()
     data object OnRetry : PlayerEvent()

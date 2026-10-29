@@ -1764,9 +1764,6 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
         PlayerEvent.OnReloadSourceStreams -> {
             loadSourceStreams(forceRefresh = true)
         }
-        is PlayerEvent.OnSourceAddonFilterSelected -> {
-            filterSourceStreamsByAddon(event.addonName)
-        }
         is PlayerEvent.OnSourceStreamSelected -> {
             switchToSourceStream(event.stream)
         }

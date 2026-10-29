@@ -423,7 +423,7 @@ fun StreamScreen(
                     isLoading = uiState.isLoading,
                     resumeText = resumeText,
                     error = uiState.error,
-                    streams = uiState.filteredStreams,
+                    streams = uiState.allStreams,
                     onStreamSelected = { stream ->
                         scope.coroutineLaunch {
                             val playbackInfo = viewModel.resolveStreamForPlayback(stream)

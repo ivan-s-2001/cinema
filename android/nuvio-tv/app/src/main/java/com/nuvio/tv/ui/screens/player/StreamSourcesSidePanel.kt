@@ -25,10 +25,8 @@ internal fun StreamSourcesSidePanel(
     streamsFocusRequester: FocusRequester,
     onClose: () -> Unit,
     onReload: () -> Unit,
-    onAddonFilterSelected: (String?) -> Unit,
     onStreamSelected: (Stream) -> Unit,
     onVoiceSelected: (Int) -> Unit = {},
-    onExpandStreams: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val streams = remember(uiState.sourceAllStreams) {

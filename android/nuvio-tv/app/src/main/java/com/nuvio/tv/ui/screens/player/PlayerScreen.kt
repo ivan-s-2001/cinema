@@ -1576,10 +1576,8 @@ fun PlayerScreen(
                         }
                     },
                     onReload = { viewModel.onEvent(PlayerEvent.OnReloadSourceStreams) },
-                    onAddonFilterSelected = { viewModel.onEvent(PlayerEvent.OnSourceAddonFilterSelected(it)) },
                     onStreamSelected = { viewModel.onEvent(PlayerEvent.OnSourceStreamSelected(it)) },
                     onVoiceSelected = { viewModel.onEvent(PlayerEvent.OnSelectAudioTrack(it)) },
-                    onExpandStreams = { viewModel.controller.expandSourceFilteredStreamsIfNeeded() },
                     modifier = Modifier.align(Alignment.CenterEnd)
                 )
             }

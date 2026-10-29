@@ -454,13 +454,9 @@ class PlayerRuntimeController(
     internal var stillWatchingPromptJob: Job? = null
     internal var startupLoadingReportJob: Job? = null
     internal var sourceStreamsJob: Job? = null
-    internal var sourceBadgeJob: Job? = null
-    internal var sourceFilterFullList: List<com.nuvio.tv.domain.model.Stream> = emptyList()
-    internal var sourceBadgedAddonNames: Set<String> = emptySet()
     internal var sourceStreamsScope: kotlinx.coroutines.CoroutineScope? = null
     internal var episodeStreamsScope: kotlinx.coroutines.CoroutineScope? = null
     internal var episodeBadgeJob: Job? = null
-    internal var sourceChipErrorDismissJob: Job? = null
     internal var sourceStreamsCacheRequestKey: String? = null
     internal var sourceStreamsFetchCompleted: Boolean = false
     internal var hostActivityRef: WeakReference<Activity>? = null
@@ -822,7 +818,6 @@ class PlayerRuntimeController(
         startupLoadingReportJob?.cancel()
         vodTelemetryJob?.cancel()
         mediaSourceFactory.shutdown()
-        sourceChipErrorDismissJob?.cancel()
         sourceStreamsScope?.cancel()
         sourceStreamsScope = null
         episodeStreamsScope?.cancel()
