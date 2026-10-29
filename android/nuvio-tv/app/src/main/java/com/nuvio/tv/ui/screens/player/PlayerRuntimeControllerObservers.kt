@@ -795,8 +795,8 @@ internal fun PlayerRuntimeController.maybeScheduleStallWatchdog() {
 
     stallWatchdogJob = scope.launch {
         var lastBufferedPosition = player.bufferedPosition
-        var lastAdvanceAtMs = System.currentTimeMillis()
-        val cinemaWaitStartedAt = lastAdvanceAtMs
+        var lastAdvanceAtMs = android.os.SystemClock.elapsedRealtime()
+        var cinemaWaitStartedAt = lastAdvanceAtMs
 
         while (isActive) {
             delay(PlayerRuntimeController.STALL_WATCHDOG_POLL_INTERVAL_MS)
@@ -806,10 +806,15 @@ internal fun PlayerRuntimeController.maybeScheduleStallWatchdog() {
                 return@launch
             }
 
-            val nowMs = System.currentTimeMillis()
+            val nowMs = android.os.SystemClock.elapsedRealtime()
             val bufferedNow = livePlayer.bufferedPosition
+            if (CinemaPlaybackPolicy.isProvider(currentStreamUrl) && !livePlayer.playWhenReady) {
+                lastAdvanceAtMs = nowMs; cinemaWaitStartedAt = nowMs; lastBufferedPosition = bufferedNow
+                continue
+            }
             if (CinemaPlaybackPolicy.isProvider(currentStreamUrl) && CinemaPlaybackPolicy.timedOut(
                     nowMs - cinemaWaitStartedAt, nowMs - lastAdvanceAtMs, hasRenderedFirstFrame, !livePlayer.playWhenReady)) {
+                if (recoverCinemaSource()) return@launch
                 livePlayer.pause()
                 _uiState.update { it.copy(error = "Источник не передаёт видео. Попробуйте другое качество или озвучку.",
                     isBuffering = false, showLoadingOverlay = false, showControls = true) }

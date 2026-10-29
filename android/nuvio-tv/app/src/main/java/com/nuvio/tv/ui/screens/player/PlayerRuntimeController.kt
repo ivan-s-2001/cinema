@@ -258,6 +258,7 @@ class PlayerRuntimeController(
     fun getCurrentHeaders(): Map<String, String> = currentHeaders
 
     fun stopAndRelease() {
+        cinemaSourceRecoveryJob?.cancel()
         leavePartyPlayback()
         // Cache counters only reach the card on a natural finish, so capture them when the user exits too.
         val diagnostics = lastPlaybackDiagnosticsForReport
@@ -574,6 +575,7 @@ class PlayerRuntimeController(
     internal var mpvHardwareDecodeModeSetting: MpvHardwareDecodeMode = MpvHardwareDecodeMode.AUTO_SAFE
     internal var mpvPreferredAudioLanguages: List<String> = emptyList()
     internal var currentStreamBingeGroup: String? = navigationArgs.bingeGroup
+    internal var cinemaSourceRecoveryJob: Job? = null
     internal var cinemaAudioSelectionKey: String? = null
     // Per-device delay + current stream's behaviorHints.audioDelayMs + the user's tweak on that stream.
     internal var audioDelayParts: AudioDelayParts = AudioDelayParts().withStream(navigationArgs.audioDelayMs ?: 0, navigationArgs.audioDelayLanguage)
@@ -818,6 +820,7 @@ class PlayerRuntimeController(
     }
 
     fun onCleared() {
+        cinemaSourceRecoveryJob?.cancel()
         playerSession.close()
         stopServerPlayback()
         releasePlayer()

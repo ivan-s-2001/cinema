@@ -29,7 +29,7 @@ def main():
         resource.write_text("package app.cinemahall.tv; final class R { static final class drawable { static final int ch_engine_logo=1; } }")
         sources = list((ROOT / "android/core/app/src/main/java/app/cinemahall/tv").glob("*.java"))
         sources += list((ROOT / "android/provider/src/main/java/app/cinemahall/tv").glob("*.java"))
-        sources += [resource, ROOT / "tests/ProviderCheck.java"]
+        sources += [resource, ROOT / "tests/ProviderCheck.java", ROOT / "tests/SourcePreparationCheck.java"]
         subprocess.run([str(java / ("javac" + suffix)), "-encoding", "UTF-8", "-cp", str(platforms[-1]), "-d", str(work), *map(str, sources)], check=True)
         subprocess.run([str(java / ("java" + suffix)), "-cp", os.pathsep.join(map(str, [jar, work, platforms[-1]])), "app.cinemahall.tv.ProviderCheck"], check=True)
 

@@ -151,7 +151,7 @@ internal fun PlayerRuntimeController.showSourcesPanel() {
             showEpisodeStreams = false
         )
     }
-    loadSourceStreams(forceRefresh = false)
+    loadSourceStreams(forceRefresh = CinemaPlaybackPolicy.isProvider(currentStreamUrl))
 }
 
 internal fun PlayerRuntimeController.buildSourceRequestKey(type: String, videoId: String, season: Int?, episode: Int?): String {
@@ -853,8 +853,10 @@ private fun PlayerRuntimeController.openExternalStreamInBrowser(
 
 @androidx.annotation.OptIn(UnstableApi::class)
 internal fun PlayerRuntimeController.switchToSourceStream(
-    stream: Stream
+    stream: Stream,
+    recoveryPositionMs: Long? = null
 ) {
+    if (recoveryPositionMs == null) cinemaSourceRecoveryJob?.cancel()
     sourceStreamsScope?.cancel()
     sourceStreamsScope = null
     sourceStreamsJob = null
@@ -946,7 +948,7 @@ internal fun PlayerRuntimeController.switchToSourceStream(
         return
     }
 
-    val sourcePosition = cinemaSourceSwitchPosition(currentPlaybackPositionMs(), hasRenderedFirstFrame,
+    val sourcePosition = recoveryPositionMs ?: cinemaSourceSwitchPosition(currentPlaybackPositionMs(), hasRenderedFirstFrame,
         pendingSourceSwitchPositionMs ?: _uiState.value.pendingSeekPosition, playbackTimeline.value.currentPosition)
 
     // Stop any active torrent before switching to HTTP stream
@@ -955,7 +957,7 @@ internal fun PlayerRuntimeController.switchToSourceStream(
     nextEpisodeAutoPlayJob?.cancel()
     nextEpisodeAutoPlayJob = null
 
-    flushPlaybackSnapshotForSwitchOrExit()
+    if (recoveryPositionMs == null) flushPlaybackSnapshotForSwitchOrExit()
 
     val newHeaders = PlayerMediaSourceFactory.sanitizeHeaders(
         stream.behaviorHints?.proxyHeaders?.request

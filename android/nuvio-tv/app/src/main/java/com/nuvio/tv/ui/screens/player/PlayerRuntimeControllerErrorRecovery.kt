@@ -249,6 +249,7 @@ internal fun PlayerRuntimeController.attemptAutoRetry(
     error: PlaybackException,
     detailedError: String
 ): Boolean {
+    if (CinemaPlaybackPolicy.isProvider(currentStreamUrl) && error.errorCode in 2000..2999) return false
     if (currentVideoTrackIsLikelyVc1 ||
         Vc1VideoFormatHeuristics.isLikelyVc1(streamName = _uiState.value.currentStreamName ?: streamName)
     ) {
