@@ -128,7 +128,8 @@ fun SettingsScreen(
     onNavigateToManageProfiles: () -> Unit = {},
     onNavigateToLicensesAttributions: () -> Unit = {}
 ) {
-    val visibleSections = remember { visibleSettingsCategories() }.map { settingsSectionSpec(it) }
+    val visibleCategories = remember { visibleSettingsCategories() }
+    val visibleSections = visibleCategories.map { settingsSectionSpec(it) }
 
     val isRtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
     val isHorizonStyle = NuvioTheme.settingsUiStyle == SettingsUiStyle.HORIZON

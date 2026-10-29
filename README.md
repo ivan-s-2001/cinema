@@ -19,7 +19,7 @@ The TV reads catalogue, search, metadata and source candidates from CinemaHall A
 
 Playback uses our source resolver and embedded TorrServer MatriX.147.1, then passes the prepared HTTP video stream to the native Nuvio player. Source failures during preparation try up to four eligible alternatives of the selected quality/voice. Resolution/voice labels are provider claims until the actual media is inspected. HDR/Dolby Vision, 4K playback, focus behavior and memory usage still require device testing.
 
-The current TV interface exposes local profiles, our catalogue, saved titles, playback and four settings sections: profiles, appearance, playback and about. Retired account, debrid, tracking, cloud-file-library and advanced-settings screens are removed. Shared runtime components still used by profiles, metadata contracts and the player remain until their callers can be removed safely.
+The current TV interface exposes local profiles, our catalogue, saved titles, playback and four settings sections: profiles, appearance, playback and about. Retired account, debrid, tracking, cloud-file-library and advanced-settings screens are removed, together with their unused web configuration servers. Shared runtime components still used by profiles, metadata contracts and the player remain until their callers can be removed safely.
 
 ## Windows: build and install on TV
 
