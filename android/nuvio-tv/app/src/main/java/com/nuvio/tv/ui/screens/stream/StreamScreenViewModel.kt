@@ -148,7 +148,7 @@ class StreamScreenViewModel @Inject constructor(
     private val playbackProfileId: Int = savedStateHandle.get<String>("profileId")?.toIntOrNull()
         ?: profileManager.activeProfileId.value
     private val manualSelection: Boolean = cinemaRequiresInitialSelection(
-        videoId, savedStateHandle.get<String>("manualSelection")?.toBooleanStrictOrNull() ?: false
+        savedStateHandle.get<String>("manualSelection")?.toBooleanStrictOrNull() ?: false
     )
     private val streamCacheKey: String = "${contentType.lowercase()}|$videoId"
     private val partyKey: String = com.nuvio.tv.core.party.partyMediaKey(
@@ -529,8 +529,10 @@ class StreamScreenViewModel @Inject constructor(
             val installedAddonOrder = installedAddons.map { it.displayName }
             val directDebridSourceNames = emptyList<String>()
             val directDebridAvailable = false
-            val persistedBingeGroup = if (playerSettings.streamAutoPlayPreferBingeGroupForNextEpisode &&
-                playerSettings.streamAutoPlayReuseBingeGroup) {
+            val persistedBingeGroup = if (cinemaShouldReuseBingeGroup(
+                videoId, playerSettings.streamAutoPlayPreferBingeGroupForNextEpisode,
+                playerSettings.streamAutoPlayReuseBingeGroup
+            )) {
                 contentId?.let { bingeGroupCacheDataStore.get(it) }
             } else null
             val persistedFilename = if (persistedBingeGroup != null) {
@@ -629,11 +631,14 @@ class StreamScreenViewModel @Inject constructor(
                 // configured timeout has elapsed. This gives slower addons a
                 // chance to return higher-quality streams before the selector
                 // picks from whatever is available.
-                val shouldAutoSelect = !autoPlayHandledForSession && !resolvedAutoPlayTarget && isAllLoaded
+                val shouldAutoSelect = !autoPlayHandledForSession && !resolvedAutoPlayTarget &&
+                    (isAllLoaded || cinemaReadyForAutoPlay(videoId, allStreams))
                 val selectedAutoPlayStream = if (earlyBingeGroupMatch != null) {
                     earlyBingeGroupMatch
                 } else if (!shouldAutoSelect) {
                     null
+                } else if (videoId.startsWith("ch:")) {
+                    cinemaPreferredAutoPlayStream(allStreams, persistedBingeGroup)
                 } else {
                     StreamAutoPlaySelector.selectAutoPlayStream(
                         streams = allStreams,
